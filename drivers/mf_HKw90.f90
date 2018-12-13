@@ -18,7 +18,6 @@ program officina
   real(8) :: Uintra,Uinter,Delta_CF
   real(8) :: Uq,thop,err_hf
   complex(8),dimension(:,:),allocatable :: Hsb
-  complex(8),dimension(:,:,:),allocatable :: Hsbk
 
   complex(8),dimension(:),allocatable :: Uft
 
@@ -103,16 +102,10 @@ program officina
   !+- loop hartree-fock -+!
   allocate(delta_hf(Nso,Nso,Lk),H_hf(Nso,Nso,Lk),delta_hf_(Nso,Nso,Lk))
   !
-  !allocate(Hsb(Nso,Nso)); Hsb(1,2)=1.d-2; Hsb(2,1)=1.d-2  
-  ! allocate(Hsbk(Nso,Nso,Lk)); Hsbk=0.d0;Hsbk(1,2,:)=1.d-2; Hsbk(2,1,:)=1.d-2
-  ! call save_array('Hsb.conf',Hsbk)
-  ! stop
-  ! H_hf=Hk;mu_fix=0.1d0
-  ! forall(ik=1:Lk) H_hf(:,:,ik) =  H_hf(:,:,ik) + Hsb
-  ! call find_chem_pot(H_hf,delta_hf,mu_fix)
-  call init_var_params(delta_hf)
-  ! call save_array('test_')
-  ! stop
+  allocate(Hsb(Nso,Nso)); Hsb(1,2)=1.d-2; Hsb(2,1)=1.d-2
+  H_hf=Hk;mu_fix=0.1d0
+  forall(ik=1:Lk) H_hf(:,:,ik) =  H_hf(:,:,ik) + Hsb
+  call find_chem_pot(H_hf,delta_hf,mu_fix)
   delta_hf_=delta_hf
   !
   unit_err=free_unit()
@@ -125,21 +118,18 @@ program officina
      call local_single_particle_observables(delta_hf,obs_loc)
      write(unit_obs,'(20F18.10)') dble(ihf),dreal(obs_loc)
      call build_HF_hamiltonian(H_hf,delta_hf,Uloc)     
-     !
+     
      call find_chem_pot(H_hf,delta_hf,mu_fix)
      delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
      !
-     err_hf=check_conv(delta_hf,delta_hf_)      
+     err_hf=check_conv(delta_hf,delta_hf_)     
+ 
      !
      delta_hf_=delta_hf
-     !
+     
   end do
   close(unit_err)
   close(unit_obs)
-
-  call save_array('delta.out',delta_hf)
-  stop
-
   !
   !
   !
@@ -173,13 +163,6 @@ program officina
   close(unit_obs)
 
   
-  call save_array('delta.out',delta_hf)
-
-  delta_hf=0.d0
-
-  call read_array('delta.out',delta_hf)
-  call save_array('delta_.out',delta_hf)
-  stop
 
 
   H_hf=Hk;mu_fix=0.1d0
