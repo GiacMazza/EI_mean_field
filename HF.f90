@@ -37,11 +37,10 @@ contains
        !       
        !
     end if
-    
+    !
     mu_fix=0.1d0
     call find_chem_pot(Hhf,delta_hf,mu_fix)       
-
-    
+    !
     inquire(file=trim(init_HF),exist=IOfile)
     if(IOfile) then
        flen = file_length(trim(init_HF))
@@ -50,8 +49,7 @@ contains
           call read_array(trim(init_HF),delta_hf)
        end if
     end if
-
-
+    !
   end subroutine init_var_params
 
 

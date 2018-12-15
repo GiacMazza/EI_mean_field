@@ -3,7 +3,8 @@ FC=mpif90
 #PRECOMPILATION FLAG (leave blank for serial code)
 FPP=
 
-EXE=q_dep_EI
+#EXE=q_dep_EI
+EXE=mf_HKw90
 
 HERE=`pwd`
 DIR=${HERE}/drivers
@@ -14,24 +15,26 @@ DIREXE=${HOME}/.project_bin
 #
 OBJS=VARS_GLOBAL.o HF.o 
 
-#GALLIBDIR  = /home/mazza/opt_local/galahad/objects/pc64.lnx.gfo/double
-# GALLIBDIR  = /opt/galahad/objects/pc64.lnx.gfo/double
-# GALLIBS1   = -lgalahad -lgalahad_hsl 
-# GALLIBS2   = -lgalahad_metis 
-
-MKLARGS=-lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm
-
-#FFLAG +=-fpp -D_$(FPP)
 LIBDIR=$(HOME)/opt_local
 #LIBDIR=/opt/
 
-INCARGS=-I$(LIBDIR)/update/SciFortran/gnu/include -L$(LIBDIR)/update/SciFortran/gnu/lib 
-INCARGS+=-I$(LIBDIR)/update/DMFTtools/gnu/include -L$(LIBDIR)/update/DMFTtools/gnu/lib 
-FFLAG += -ffree-line-length-none -cpp $(INCARGS)
-FFLAG+=-O0 -p -g -Wall -fbounds-check -fbacktrace -Wuninitialized
+#INCARGS=$(shell pkg-config --cflags --libs dmft_tools)
+#INCARGS= -L/home/mazza/opt/dmft_tools/1.2.1/gnu/lib -ldmft_tools -I/home/mazza/opt/dmft_tools/1.2.1/gnu/include 
+# INCARGS=-I$(LIBDIR)/update/SciFortran/gnu/include -L$(LIBDIR)/update/SciFortran/gnu/lib  -lscifor
+# INCARGS+=$(shell pkg-config --cflags --libs dmft_tools)
+#ARGS=-lscifor  
 
-#ARGS=  $(GALLIBS1) $(GALLIBS2) -I/home/mazza/opt_local/galahad/modules/pc64.lnx.gfo/double -lscifor $(MKLARGS) -lminpack -larpack -lparpack   
-ARGS=-ldmft_tools -lscifor  
+LIBARGS=$(shell pkg-config --libs   dmft_tools scifor)
+INCARGS=$(shell pkg-config --cflags dmft_tools scifor)
+
+#$(FC) $(FPPFLAG) $(FFLAG) $(INCARGS) $(OBJS) $(DIR)/$(EXE).f90 -o $(DIREXE)/$(EXE)$(BRANCH) $(LIBARGS)
+
+# Makefile.inc:INCARGS=$(shell pkg-config --cflags dmft_tools scifor)
+# Makefile.inc:	$(FC) $(FPPFLAG) $(FFLAG) $(INCARGS) $(OBJS) $(DIR)/$(EXE).f90 -o $(DIREXE)/$(EXE)$(BRANCH) $(LIBARGS)
+# Makefile.inc:	$(FC) $(FPPFLAG) $(FFLAG) $(INCARGS) -c $<
+
+
+FFLAG += -ffree-line-length-none  $(INCARGS) 
 
 
 BRANCH=_$(shell git rev-parse --abbrev-ref HEAD)
@@ -48,7 +51,7 @@ compile: version $(OBJS)
 	@echo " !+------------------------------------------------- "
 	@echo " ..................... compile ..................... "
 	@echo " !+------------------------------------------------- "
-	$(FC) $(FFLAG) $(OBJS) $(DIR)/$(EXE).f90 -o $(DIREXE)/$(EXE)$(BRANCH) $(ARGS)
+	$(FC)  $(FFLAG) $(INCARGS) $(OBJS) $(DIR)/$(EXE).f90 -o $(DIREXE)/$(EXE)$(BRANCH) $(LIBARGS)
 	@echo " !+--------------------------------------+! "
 	@echo " .................. done .................. "
 	@echo " !+--------------------------------------+! "
@@ -60,7 +63,7 @@ ed_solver:
 	@make -C ED_SOLVER/
 
 .f90.o:	
-	$(FC) $(FFLAG)  -c $< 
+	$(FC) $(FPPFLAG) $(FFLAG) $(INCARGS) -c $<	
 
 completion:
 	sf_lib_completion.sh $(DIR)/$(EXE).f90

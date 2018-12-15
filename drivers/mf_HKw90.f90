@@ -1,4 +1,5 @@
 program officina
+  !
   USE SCIFOR
   USE DMFT_TOOLS
   !
@@ -6,10 +7,14 @@ program officina
   USE DMFT_VECTORS
   USE HF
   !
+  !USE DMFT_TIGHT_BINDING
+  !USE DMFT_MISC
+  !USE SF_IOTOOLS
+  !
   USE MPI
   !
   implicit none
-  integer :: Nx
+  integer :: Nx,Ny,Nz
   type(vect2D) :: KK
 
   real(8) :: KKx,KKy
@@ -17,15 +22,26 @@ program officina
   real(8) :: mu_fix
   real(8) :: Uintra,Uinter,Delta_CF
   real(8) :: Uq,thop,err_hf
+  real(8),dimension(3) :: R1,R2,R3
   complex(8),dimension(:,:),allocatable :: Hsb
 
   complex(8),dimension(:),allocatable :: Uft
 
+  complex(8),dimension(:,:),allocatable :: Hloc
+  complex(8),dimension(:,:,:),allocatable :: Hk_w90
+  real(8),dimension(:,:),allocatable :: kpts
+
   integer :: iso,jso,ispin,jspin,iorb,jorb,ik
   integer :: Nhf,ihf,unit_err,unit_obs,unit_in
+  integer :: flen,iread
 
   complex(8),dimension(:),allocatable :: obs_loc
   real(8) :: wmix
+  
+  character(len=100) :: fileRlattice
+
+  integer,allocatable :: Nkvect(:)
+
 
   !+- START MPI -+!
   call init_MPI()
@@ -37,186 +53,234 @@ program officina
 
   !+- PARSE INPUT DRIVER -+!
   call parse_input_variable(Nx,"Nx","input.conf",default=10)
+  call parse_input_variable(Ny,"Ny","input.conf",default=10)
+  call parse_input_variable(Nz,"Nz","input.conf",default=10)
   call parse_input_variable(Uintra,"Uintra","input.conf",default=1.d0)
   call parse_input_variable(Uinter,"Uinter","input.conf",default=1.d0)
   call parse_input_variable(thop,"thop","input.conf",default=0.25d0)
   call parse_input_variable(Delta_CF,"delta","input.conf",default=1.d0)
   call parse_input_variable(Nhf,"Nhf","input.conf",default=100)
   call parse_input_variable(wmix,"wmix","input.conf",default=0.5d0)
-
+  call parse_input_variable(fileRlattice,"R_unit_cell","input.conf",default='R_unit_cell.conf')
+  !
   call get_global_vars
   !
   Nso=Norb*Nspin
   !
   !
-  call build_2d_bz(Nx)
-  allocate(Umat(Nso,Nso),Umat_loc(Nso,Nso))
-  
-  Umat=0.d0
-  Umat_loc=0.d0
-  unit_in=free_unit()
-  open(unit=unit_in,file='Umat_loc.in')
-  do ispin=1,Nspin
-     do iorb=1,Norb
-        iso=(ispin-1)*Nspin+iorb
-        do jspin=1,Nspin
-           do jorb=1,Norb
-              jso=(jspin-1)*Nspin+jorb
-              !
-              if(iorb.eq.jorb) then
-                 Umat(iso,jso) = Uintra
-                 if(ispin.ne.jspin) Umat_loc(iso,jso)=Uintra
-              else
-                 Umat(iso,jso) = Uinter
-                 Umat_loc(iso,jso) = Uinter
-              end if
-              !
-           end do
-        end do
-        write(unit_in,*) Umat_loc(iso,:),'',Umat(iso,:)
-     end do
-  end do
+  !+- read primitive cell lattice vectors -+!
+  flen=file_length(trim(fileRlattice))
+  if(flen.ne.3) stop "error in reading unit cell vectors"
+  unit_in=free_unit(); 
+  open(unit=unit_in,file=trim(fileRlattice),status="old",action="read")  
+  read(unit_in,*) R1(:)
+  read(unit_in,*) R2(:)
+  read(unit_in,*) R3(:)
   close(unit_in)
+  write(*,*) R1
+  write(*,*) R2
+  write(*,*) R3
 
-  open(unit=unit_in,file='Hk.in')
+  Lk=Nx*Ny*Nz
+  allocate(Hk_w90(Nso,Nso,Lk),Hloc(Nso,Nso),kpts(Lk,3))
+  Nkvect(1)=Nx
+  Nkvect(2)=Ny
+  Nkvect(3)=Nz
+  call dmft_tools_version()
 
-  allocate(Hk(Nso,Nso,Lk))
-  Hk=0.d0
-  do ik=1,Lk
-     !
-     iorb=1
-     do ispin=1,Nspin
-        iso=(ispin-1)*Nspin+iorb
-        Hk(iso,iso,ik) = -Delta_CF*0.5d0+2.d0*thop*(cos(k_bz(ik)%x)+cos(k_bz(ik)%y))
-     end do
-     iorb=2
-     do ispin=1,Nspin
-        iso=(ispin-1)*Nspin+iorb
-        Hk(iso,iso,ik) = Delta_CF*0.5d0-2.d0*thop*(cos(k_bz(ik)%x)+cos(k_bz(ik)%y))
-     end do
-     write(unit_in,'(10F18.10)') k_bz(ik)%x,k_bz(ik)%y,dreal(Hk(1,1,ik)),dreal(Hk(2,2,ik))
-     !     
-  end do
-  close(unit_in)
+  Nx=order_of_magnitude(wmix)
+  
+  call foo_tb(wmix)
+  
+  !+- questa funzione dove cazzo e' presa!!!! -+!
+  !call hk_from_w90_hr(Hk_w90)!,w90_file='TNS_HK.out',Nspin=1,Norb=2,Nlat=1,Nkvec=Nkvect)
 
-  !+- loop hartree-fock -+!
-  allocate(delta_hf(Nso,Nso,Lk),H_hf(Nso,Nso,Lk),delta_hf_(Nso,Nso,Lk))
+  call hk_from_w90_hr(R1,R2,R3,Hk_w90,Hloc,'TNS_HK.out',1,2,1,Nkvect)
+
+
+  ! subroutine hk_from_w90_hr(R1,R2,R3,ham_k,ham_loc,w90_file,Nspin,Norb,Nlat,Nkvec,kpt_latt,Hkfile,Kpointfile)
+  !   implicit none
+  !   real(8)               ,intent(in)            ::   R1(:),R2(:),R3(:)
+  !  complex(8),allocatable,intent(inout)         ::   ham_k(:,:,:)
+  !   complex(8),allocatable,intent(inout)         ::   ham_loc(:,:)
+  !  character(len=*)      ,intent(in)            ::   w90_file
+  !  integer               ,intent(in)            ::   Nspin,Norb,Nlat
+  ! integer(4),allocatable,intent(in)            ::   Nkvec(:)             ![Nkx,Nky,Nkz]
+  ! real(8)   ,allocatable,intent(out),optional  ::   kpt_latt(:,:)        ![ik,3]
+  ! character(len=*)      ,intent(in) ,optional  ::   Hkfile
+  ! character(len=*)      ,intent(in) ,optional  ::   Kpointfile
   !
-  allocate(Hsb(Nso,Nso)); Hsb(1,2)=1.d-2; Hsb(2,1)=1.d-2
-  H_hf=Hk;mu_fix=0.1d0
-  forall(ik=1:Lk) H_hf(:,:,ik) =  H_hf(:,:,ik) + Hsb
-  call find_chem_pot(H_hf,delta_hf,mu_fix)
-  delta_hf_=delta_hf
-  !
-  unit_err=free_unit()
-  open(unit=unit_err,file='err_loc.err')
-  unit_obs=free_unit()
-  open(unit=unit_obs,file='obs_hf_loc.loop')
-  err_hf=1.d0  
-  do ihf=1,Nhf
-     write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix          
-     call local_single_particle_observables(delta_hf,obs_loc)
-     write(unit_obs,'(20F18.10)') dble(ihf),dreal(obs_loc)
-     call build_HF_hamiltonian(H_hf,delta_hf,Uloc)     
+
+
+
+  ! call build_2d_bz(Nx)
+  ! allocate(Umat(Nso,Nso),Umat_loc(Nso,Nso))
+  
+  ! Umat=0.d0
+  ! Umat_loc=0.d0
+  ! unit_in=free_unit()
+  ! open(unit=unit_in,file='Umat_loc.in')
+  ! do ispin=1,Nspin
+  !    do iorb=1,Norb
+  !       iso=(ispin-1)*Nspin+iorb
+  !       do jspin=1,Nspin
+  !          do jorb=1,Norb
+  !             jso=(jspin-1)*Nspin+jorb
+  !             !
+  !             if(iorb.eq.jorb) then
+  !                Umat(iso,jso) = Uintra
+  !                if(ispin.ne.jspin) Umat_loc(iso,jso)=Uintra
+  !             else
+  !                Umat(iso,jso) = Uinter
+  !                Umat_loc(iso,jso) = Uinter
+  !             end if
+  !             !
+  !          end do
+  !       end do
+  !       write(unit_in,*) Umat_loc(iso,:),'',Umat(iso,:)
+  !    end do
+  ! end do
+  ! close(unit_in)
+
+  ! open(unit=unit_in,file='Hk.in')
+
+  ! allocate(Hk(Nso,Nso,Lk))
+  ! Hk=0.d0
+  ! do ik=1,Lk
+  !    !
+  !    iorb=1
+  !    do ispin=1,Nspin
+  !       iso=(ispin-1)*Nspin+iorb
+  !       Hk(iso,iso,ik) = -Delta_CF*0.5d0+2.d0*thop*(cos(k_bz(ik)%x)+cos(k_bz(ik)%y))
+  !    end do
+  !    iorb=2
+  !    do ispin=1,Nspin
+  !       iso=(ispin-1)*Nspin+iorb
+  !       Hk(iso,iso,ik) = Delta_CF*0.5d0-2.d0*thop*(cos(k_bz(ik)%x)+cos(k_bz(ik)%y))
+  !    end do
+  !    write(unit_in,'(10F18.10)') k_bz(ik)%x,k_bz(ik)%y,dreal(Hk(1,1,ik)),dreal(Hk(2,2,ik))
+  !    !     
+  ! end do
+  ! close(unit_in)
+
+  ! !+- loop hartree-fock -+!
+  ! allocate(delta_hf(Nso,Nso,Lk),H_hf(Nso,Nso,Lk),delta_hf_(Nso,Nso,Lk))
+  ! !
+  ! allocate(Hsb(Nso,Nso)); Hsb(1,2)=1.d-2; Hsb(2,1)=1.d-2
+  ! H_hf=Hk;mu_fix=0.1d0
+  ! forall(ik=1:Lk) H_hf(:,:,ik) =  H_hf(:,:,ik) + Hsb
+  ! call find_chem_pot(H_hf,delta_hf,mu_fix)
+  ! delta_hf_=delta_hf
+  ! !
+  ! unit_err=free_unit()
+  ! open(unit=unit_err,file='err_loc.err')
+  ! unit_obs=free_unit()
+  ! open(unit=unit_obs,file='obs_hf_loc.loop')
+  ! err_hf=1.d0  
+  ! do ihf=1,Nhf
+  !    write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix          
+  !    call local_single_particle_observables(delta_hf,obs_loc)
+  !    write(unit_obs,'(20F18.10)') dble(ihf),dreal(obs_loc)
+  !    call build_HF_hamiltonian(H_hf,delta_hf,Uloc)     
      
-     call find_chem_pot(H_hf,delta_hf,mu_fix)
-     delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
-     !
-     err_hf=check_conv(delta_hf,delta_hf_)     
+  !    call find_chem_pot(H_hf,delta_hf,mu_fix)
+  !    delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
+  !    !
+  !    err_hf=check_conv(delta_hf,delta_hf_)     
  
-     !
-     delta_hf_=delta_hf
+  !    !
+  !    delta_hf_=delta_hf
      
-  end do
-  close(unit_err)
-  close(unit_obs)
-  !
-  !
-  !
-  !
-  H_hf=Hk;mu_fix=0.1d0
-  forall(ik=1:Lk) H_hf(:,:,ik) =  H_hf(:,:,ik) + Hsb
-  call find_chem_pot(H_hf,delta_hf,mu_fix)
-  delta_hf_=delta_hf
+  ! end do
+  ! close(unit_err)
+  ! close(unit_obs)
+  ! !
+  ! !
+  ! !
+  ! !
+  ! H_hf=Hk;mu_fix=0.1d0
+  ! forall(ik=1:Lk) H_hf(:,:,ik) =  H_hf(:,:,ik) + Hsb
+  ! call find_chem_pot(H_hf,delta_hf,mu_fix)
+  ! delta_hf_=delta_hf
 
-  unit_err=free_unit()
-  open(unit=unit_err,file='err_q.err')
-  unit_obs=free_unit()
-  open(unit=unit_obs,file='obs_hf_q.loop')
-  err_hf=1.d0  
-  do ihf=1,Nhf
-     write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix          
-     call local_single_particle_observables(delta_hf,obs_loc)
-     write(unit_obs,'(20F18.10)') dble(ihf),dreal(obs_loc)
-     call build_HF_hamiltonian(H_hf,delta_hf,Uq_jellium)     
+  ! unit_err=free_unit()
+  ! open(unit=unit_err,file='err_q.err')
+  ! unit_obs=free_unit()
+  ! open(unit=unit_obs,file='obs_hf_q.loop')
+  ! err_hf=1.d0  
+  ! do ihf=1,Nhf
+  !    write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix          
+  !    call local_single_particle_observables(delta_hf,obs_loc)
+  !    write(unit_obs,'(20F18.10)') dble(ihf),dreal(obs_loc)
+  !    call build_HF_hamiltonian(H_hf,delta_hf,Uq_jellium)     
      
-     call find_chem_pot(H_hf,delta_hf,mu_fix)
-     delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
-     !
-     err_hf=check_conv(delta_hf,delta_hf_)     
+  !    call find_chem_pot(H_hf,delta_hf,mu_fix)
+  !    delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
+  !    !
+  !    err_hf=check_conv(delta_hf,delta_hf_)     
  
-     !
-     delta_hf_=delta_hf
+  !    !
+  !    delta_hf_=delta_hf
      
-  end do
-  close(unit_err)
-  close(unit_obs)
+  ! end do
+  ! close(unit_err)
+  ! close(unit_obs)
 
   
 
 
-  H_hf=Hk;mu_fix=0.1d0
-  !forall(ik=1:Lk) H_hf(:,:,ik) =  H_hf(:,:,ik) + Hsb
-  call find_chem_pot(H_hf,delta_hf,mu_fix)
-  delta_hf_=delta_hf
-  unit_err=free_unit()
-  open(unit=unit_err,file='err_loc_normal.err')
-  unit_obs=free_unit()
-  open(unit=unit_obs,file='obs_hf_loc_normal.loop')
-  err_hf=1.d0  
-  do ihf=1,Nhf
-     write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix          
-     call local_single_particle_observables(delta_hf,obs_loc)
-     write(unit_obs,'(20F18.10)') dble(ihf),dreal(obs_loc)
-     call build_HF_hamiltonian(H_hf,delta_hf,Uloc)          
-     call find_chem_pot(H_hf,delta_hf,mu_fix)
-     delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
-     !
-     err_hf=check_conv(delta_hf,delta_hf_)     
-     !
-     delta_hf_=delta_hf     
-  end do
-  close(unit_err)
-  close(unit_obs)
+  ! H_hf=Hk;mu_fix=0.1d0
+  ! !forall(ik=1:Lk) H_hf(:,:,ik) =  H_hf(:,:,ik) + Hsb
+  ! call find_chem_pot(H_hf,delta_hf,mu_fix)
+  ! delta_hf_=delta_hf
+  ! unit_err=free_unit()
+  ! open(unit=unit_err,file='err_loc_normal.err')
+  ! unit_obs=free_unit()
+  ! open(unit=unit_obs,file='obs_hf_loc_normal.loop')
+  ! err_hf=1.d0  
+  ! do ihf=1,Nhf
+  !    write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix          
+  !    call local_single_particle_observables(delta_hf,obs_loc)
+  !    write(unit_obs,'(20F18.10)') dble(ihf),dreal(obs_loc)
+  !    call build_HF_hamiltonian(H_hf,delta_hf,Uloc)          
+  !    call find_chem_pot(H_hf,delta_hf,mu_fix)
+  !    delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
+  !    !
+  !    err_hf=check_conv(delta_hf,delta_hf_)     
+  !    !
+  !    delta_hf_=delta_hf     
+  ! end do
+  ! close(unit_err)
+  ! close(unit_obs)
 
 
 
-  H_hf=Hk;mu_fix=0.1d0
-  !forall(ik=1:Lk) H_hf(:,:,ik) =  H_hf(:,:,ik) + Hsb
-  call find_chem_pot(H_hf,delta_hf,mu_fix)
-  delta_hf_=delta_hf
-  unit_err=free_unit()
-  open(unit=unit_err,file='err_q_normal.err')
-  unit_obs=free_unit()
-  open(unit=unit_obs,file='obs_hf_q_normal.loop')
-  err_hf=1.d0  
-  do ihf=1,Nhf
-     write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix          
-     call local_single_particle_observables(delta_hf,obs_loc)
-     write(unit_obs,'(20F18.10)') dble(ihf),dreal(obs_loc)
-     call build_HF_hamiltonian(H_hf,delta_hf,Uq_jellium)     
+  ! H_hf=Hk;mu_fix=0.1d0
+  ! !forall(ik=1:Lk) H_hf(:,:,ik) =  H_hf(:,:,ik) + Hsb
+  ! call find_chem_pot(H_hf,delta_hf,mu_fix)
+  ! delta_hf_=delta_hf
+  ! unit_err=free_unit()
+  ! open(unit=unit_err,file='err_q_normal.err')
+  ! unit_obs=free_unit()
+  ! open(unit=unit_obs,file='obs_hf_q_normal.loop')
+  ! err_hf=1.d0  
+  ! do ihf=1,Nhf
+  !    write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix          
+  !    call local_single_particle_observables(delta_hf,obs_loc)
+  !    write(unit_obs,'(20F18.10)') dble(ihf),dreal(obs_loc)
+  !    call build_HF_hamiltonian(H_hf,delta_hf,Uq_jellium)     
      
-     call find_chem_pot(H_hf,delta_hf,mu_fix)
-     delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
-     !
-     err_hf=check_conv(delta_hf,delta_hf_)     
+  !    call find_chem_pot(H_hf,delta_hf,mu_fix)
+  !    delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
+  !    !
+  !    err_hf=check_conv(delta_hf,delta_hf_)     
  
-     !
-     delta_hf_=delta_hf
+  !    !
+  !    delta_hf_=delta_hf
      
-  end do
-  close(unit_err)
-  close(unit_obs)
+  ! end do
+  ! close(unit_err)
+  ! close(unit_obs)
 
 
 contains
