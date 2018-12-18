@@ -107,95 +107,6 @@ program officina
   !+- loop hartree-fock -+!
   allocate(delta_hf(Nso,Nso,Lk),H_hf(Nso,Nso,Lk),delta_hf_(Nso,Nso,Lk))
   !
-  !allocate(Hsb(Nso,Nso)); Hsb(1,2)=1.d-2; Hsb(2,1)=1.d-2  
-  ! allocate(Hsbk(Nso,Nso,Lk)); Hsbk=0.d0;Hsbk(1,2,:)=1.d-2; Hsbk(2,1,:)=1.d-2
-  ! call save_array('Hsb.conf',Hsbk)
-  ! stop
-  ! H_hf=Hk;mu_fix=0.1d0
-  ! forall(ik=1:Lk) H_hf(:,:,ik) =  H_hf(:,:,ik) + Hsb
-  ! call find_chem_pot(H_hf,delta_hf,mu_fix)
-  call init_var_params(delta_hf)
-  ! call save_array('test_')
-  ! stop
-  delta_hf_=delta_hf
-  !
-  unit_err=free_unit()
-  open(unit=unit_err,file='err_loc.err')
-  unit_obs=free_unit()
-  open(unit=unit_obs,file='obs_hf_loc.loop')
-  err_hf=1.d0  
-  do ihf=1,Nhf
-     write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix          
-     call local_single_particle_observables(delta_hf,obs_loc)
-     write(unit_obs,'(20F18.10)') dble(ihf),dreal(obs_loc)
-     call build_HF_hamiltonian(H_hf,delta_hf,Uloc)     
-     !
-     call find_chem_pot(H_hf,delta_hf,mu_fix)
-     delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
-     !
-     err_hf=check_conv(delta_hf,delta_hf_)      
-     !
-     delta_hf_=delta_hf
-     !
-  end do
-  close(unit_err)
-  close(unit_obs)
-
-  call save_array('delta.out',delta_hf)  
-  call store_HF_hamiltonian_BZgrid(Hhf_grid,delta_hf,mu_fix,Uloc)
-  allocate(Hhf_reshape(Nso,Nso,3*Nx,3*Nx))
-  allocate(kxx(3*Nx),kyy(3*Nx))
-  do ii=1,3
-     do ix=1,Nx
-        i=(ii-1)*Nx+ix
-        kxx(i) = kxgrid(ix)+(ii-2)*2*pi
-        !        write(*,*) kxx(i)
-     end do
-  end do
-  kyy=kxx
-  !
-  do ii=1,3
-     do jj=1,3
-        do ik=1,Lk
-           ix=ik2ii(ik,1)
-           iy=ik2ii(ik,2)
-           i=(ii-1)*Nx+ix
-           j=(jj-1)*Nx+iy
-           Hhf_reshape(:,:,i,j) = Hhf_grid(:,:,ik)     
-        end do
-     end do
-  end do
-
-  do ii=1,3*Nx
-     do jj=1,3*Nx
-        write(200,'(10F18.10)') kxx(ii),kyy(jj),Hhf_reshape(1,1,ii,jj)
-     end do
-  end do
-
-  !+- TEST inperpolate
-  do ik=1,Lk
-     write(204,'(10F18.10)') k_bz(ik,:),dreal(Hhf_grid(1,1,ik)),dreal(Hhf_grid(2,2,ik)),dreal(Hhf_grid(1,2,ik))
-  end do
- 
-  !+- interpolation -+!
-  allocate(Hkint(Nso,Nso))
-  dk=pi/dble(50)
-  kint=-dk
-  do ix=1,50
-     kint=kint+dk
-     ktest_int(1) = kint
-     ktest_int(2) = kint
-     Hkint=Hk_HF(ktest_int,Nso)
-     write(205,'(10F18.10)') ktest_int(:),dreal(Hkint(1,1)),dreal(Hkint(2,2)),dreal(Hkint(1,2))
-  end do
-
-  do ix=1,Nx
-     ik=igr2ik(ix,ix)
-     write(206,'(10F18.10)') k_bz(ik,:),dreal(Hhf_grid(1,1,ik)) 
-  end do
-
-
-  
   call init_var_params(delta_hf)
   delta_hf_=delta_hf
 
@@ -223,30 +134,112 @@ program officina
   close(unit_obs)
   !
   call store_HF_hamiltonian_BZgrid(Hhf_grid,delta_hf,mu_fix,Uq_jellium)
+  !
+  !
+  !
+  call init_var_params(delta_hf)
+  delta_hf_=delta_hf
+  !
+  unit_err=free_unit()
+  open(unit=unit_err,file='err_loc.err')
+  unit_obs=free_unit()
+  open(unit=unit_obs,file='obs_hf_loc.loop')
+  err_hf=1.d0  
+  do ihf=1,Nhf
+     write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix          
+     call local_single_particle_observables(delta_hf,obs_loc)
+     write(unit_obs,'(20F18.10)') dble(ihf),dreal(obs_loc)
+     call build_HF_hamiltonian(H_hf,delta_hf,Uloc)     
+     !
+     call find_chem_pot(H_hf,delta_hf,mu_fix)
+     delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
+     !
+     err_hf=check_conv(delta_hf,delta_hf_)      
+     !
+     delta_hf_=delta_hf
+     !
+  end do
+  close(unit_err)
+  close(unit_obs)
+
+  call save_array('delta.out',delta_hf)  
+  call store_HF_hamiltonian_BZgrid(Hhf_grid,delta_hf,mu_fix,Uloc)
+  ! allocate(Hhf_reshape(Nso,Nso,3*Nx,3*Nx))
+  ! allocate(kxx(3*Nx),kyy(3*Nx))
+  ! do ii=1,3
+  !    do ix=1,Nx
+  !       i=(ii-1)*Nx+ix
+  !       kxx(i) = kxgrid(ix)+(ii-2)*2*pi
+  !    end do
+  ! end do
+  ! kyy=kxx
+  ! !
+  ! do ii=1,3
+  !    do jj=1,3
+  !       do ik=1,Lk
+  !          ix=ik2ii(ik,1)
+  !          iy=ik2ii(ik,2)
+  !          i=(ii-1)*Nx+ix
+  !          j=(jj-1)*Nx+iy
+  !          Hhf_reshape(:,:,i,j) = Hhf_grid(:,:,ik)     
+  !       end do
+  !    end do
+  ! end do
+
+  ! do ii=1,3*Nx
+  !    do jj=1,3*Nx
+  !       write(200,'(10F18.10)') kxx(ii),kyy(jj),Hhf_reshape(1,1,ii,jj)
+  !    end do
+  ! end do
+
+  ! !+- TEST inperpolate
+  ! do ik=1,Lk
+  !    write(204,'(10F18.10)') k_bz(ik,:),dreal(Hhf_grid(1,1,ik)),dreal(Hhf_grid(2,2,ik)),dreal(Hhf_grid(1,2,ik))
+  ! end do
+ 
+  ! !+- interpolation -+!
+  ! allocate(Hkint(Nso,Nso))
+  ! dk=pi/dble(50)
+  ! kint=-dk
+  ! do ix=1,50
+  !    kint=kint+dk
+  !    ktest_int(1) = kint
+  !    ktest_int(2) = kint
+  !    Hkint=Hk_HF(ktest_int,Nso)
+  !    write(205,'(10F18.10)') ktest_int(:),dreal(Hkint(1,1)),dreal(Hkint(2,2)),dreal(Hkint(1,2))
+  ! end do
+
+  ! do ix=1,Nx
+  !    ik=igr2ik(ix,ix)
+  !    write(206,'(10F18.10)') k_bz(ik,:),dreal(Hhf_grid(1,1,ik)) 
+  ! end do
+
+
+  
   !+- reshape -+!
   !allocate(Hhf_reshape(Nso,Nso,3*Nx,3*Nx))
   
 !  allocate(kxx(3*Nx),kyy(3*Nx))
-  do ii=1,3
-     do ix=1,Nx
-        i=(ii-1)*Nx+ix
-        kxx(i) = kxgrid(ix)+(ii-2)*2*pi
-        !        write(*,*) kxx(i)
-     end do
-  end do
-  kyy=kxx
-  !
-  do ii=1,3
-     do jj=1,3
-        do ik=1,Lk
-           ix=ik2ii(ik,1)
-           iy=ik2ii(ik,2)
-           i=(ii-1)*Nx+ix
-           j=(jj-1)*Nx+iy
-           Hhf_reshape(:,:,i,j) = Hhf_grid(:,:,ik)     
-        end do
-     end do
-  end do
+  ! do ii=1,3
+  !    do ix=1,Nx
+  !       i=(ii-1)*Nx+ix
+  !       kxx(i) = kxgrid(ix)+(ii-2)*2*pi
+  !       !        write(*,*) kxx(i)
+  !    end do
+  ! end do
+  ! kyy=kxx
+  ! !
+  ! do ii=1,3
+  !    do jj=1,3
+  !       do ik=1,Lk
+  !          ix=ik2ii(ik,1)
+  !          iy=ik2ii(ik,2)
+  !          i=(ii-1)*Nx+ix
+  !          j=(jj-1)*Nx+iy
+  !          Hhf_reshape(:,:,i,j) = Hhf_grid(:,:,ik)     
+  !       end do
+  !    end do
+  ! end do
 
   ! do ik=1,Lk
   !    ix=ik2ii(ik,1)
@@ -260,33 +253,33 @@ program officina
   !    end do
   ! end do
   ! stop
-  do ii=1,3*Nx
-     do jj=1,3*Nx
-        write(300,'(10F18.10)') kxx(ii),kyy(jj),Hhf_reshape(1,1,ii,jj)
-     end do
-  end do
+  ! do ii=1,3*Nx
+  !    do jj=1,3*Nx
+  !       write(300,'(10F18.10)') kxx(ii),kyy(jj),Hhf_reshape(1,1,ii,jj)
+  !    end do
+  ! end do
 
-  !+- TEST inperpolate
-  do ik=1,Lk
-     write(304,'(10F18.10)') k_bz(ik,:),dreal(Hhf_grid(1,1,ik)),dreal(Hhf_grid(2,2,ik)),dreal(Hhf_grid(1,2,ik))
-  end do
+  ! !+- TEST inperpolate
+  ! do ik=1,Lk
+  !    write(304,'(10F18.10)') k_bz(ik,:),dreal(Hhf_grid(1,1,ik)),dreal(Hhf_grid(2,2,ik)),dreal(Hhf_grid(1,2,ik))
+  ! end do
  
-  !+- interpolation -+!
-  !allocate(Hkint(Nso,Nso))
-  dk=pi/dble(50)
-  kint=-dk
-  do ix=1,50
-     kint=kint+dk
-     ktest_int(1) = kint
-     ktest_int(2) = kint
-     Hkint=Hk_HF(ktest_int,Nso)
-     write(305,'(10F18.10)') ktest_int(:),dreal(Hkint(1,1)),dreal(Hkint(2,2)),dreal(Hkint(1,2))
-  end do
+  ! !+- interpolation -+!
+  ! !allocate(Hkint(Nso,Nso))
+  ! dk=pi/dble(50)
+  ! kint=-dk
+  ! do ix=1,50
+  !    kint=kint+dk
+  !    ktest_int(1) = kint
+  !    ktest_int(2) = kint
+  !    Hkint=Hk_HF(ktest_int,Nso)
+  !    write(305,'(10F18.10)') ktest_int(:),dreal(Hkint(1,1)),dreal(Hkint(2,2)),dreal(Hkint(1,2))
+  ! end do
 
-  do ix=1,Nx
-     ik=igr2ik(ix,ix)
-     write(306,'(10F18.10)') k_bz(ik,:),dreal(Hhf_grid(1,1,ik)) 
-  end do
+  ! do ix=1,Nx
+  !    ik=igr2ik(ix,ix)
+  !    write(306,'(10F18.10)') k_bz(ik,:),dreal(Hhf_grid(1,1,ik)) 
+  ! end do
 
   
 
@@ -408,9 +401,9 @@ contains
     do i=1,size(q)
        modq=modq+q(i)**2.d0
     end do
-    Uq_jellium = 0.d0
-    if(modq.ne.0.d0) then
-       Uq_jellium = Umat/sqrt(modq)
+    Uq_jellium = Umat_loc
+    if(modq.gt.1.d-10) then
+       Uq_jellium = Uq_jellium + Umat/sqrt(modq)
     end if
     !
   end function Uq_jellium

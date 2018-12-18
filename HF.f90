@@ -209,6 +209,12 @@ contains
           Uh=Uq(deltak)
           !
           call shift_BZ(jk,jjk)
+          ! if(ik.eq.2) then
+          !    write(547,'(10F18.10)') Uf(1,1),Uf(1,2),dreal(Deltas(1,1:2,jjk))
+          !    write(548,'(10F18.10)') k_bz(ik,:),krl(jk,:),k_bz(jjk,:)  
+          ! end if
+          !
+          
           do iso=1,Nso
              do jso=1,Nso
                 Hhf(iso,jso,ik) = Hhf(iso,jso,ik) - &
@@ -219,7 +225,9 @@ contains
           end do
           !
        end do
+       !write(546,'(10F18.10)') k_bz(ik,:),Hhf(1,1,ik),Hhf(1,2,ik)
     end do
+    !stop
     !
   end subroutine build_HF_hamiltonian
 
