@@ -1,20 +1,26 @@
 MODULE VARS_GLOBAL
-  USE DMFT_VECTORS
+  !USE DMFT_VECTORS
 !  USE DMFT_TIGHT_BINDING
   USE SF_IOTOOLS
   USE SF_PARSE_INPUT
   implicit none
   !
-  integer :: Lk,Norb,Nspin,Nso
-  real(8),dimension(:),allocatable :: wtk
+  integer :: Lk,Norb,Nspin,Nso,Lkr,N_cut_off
+  real(8),dimension(:),allocatable :: wtk,wtk_rl
   complex(8),dimension(:,:,:),allocatable :: Hk 
   real(8),dimension(:,:),allocatable :: Umat_loc,Umat
   real(8) :: Ndens
   real(8) :: beta
   real(8) :: temp
+  !
+  real(8),dimension(:,:),allocatable :: k_bz,krl
+  real(8) :: dk_mesh
+  integer(8),dimension(:,:),allocatable :: ik2ii,igr2ik,igr2ik_rlm,ikrl2ii
+  real(8),dimension(2) :: KK
+  real(8),dimension(:),allocatable :: kxgrid,kygrid,kxx,kyy
+  integer :: Nx  
 
-  type(vect2D),dimension(:),allocatable :: k_bz
-  
+
   integer :: comm,rank,ierr
   logical :: master
   character(len=100) :: init_HF,init_Hsb
@@ -30,6 +36,7 @@ contains
     call parse_input_variable(temp,"TEMP","input.conf",default=1.d-2)
     call parse_input_variable(init_HF,"init_HF_file","input.conf",default='delta_HF.conf')
     call parse_input_variable(init_Hsb,"init_Hsb_file","input.conf",default='Hsb.conf')
+    call parse_input_variable(N_cut_off,"Nk_cutoff","input.conf",default=4)
     if(master) call save_input_file("input.conf")
     beta=1.d0/temp
     !

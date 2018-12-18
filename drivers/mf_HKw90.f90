@@ -90,12 +90,11 @@ program officina
 
   Nx=order_of_magnitude(wmix)
   
-  call foo_tb(wmix)
   
   !+- questa funzione dove cazzo e' presa!!!! -+!
   !call hk_from_w90_hr(Hk_w90)!,w90_file='TNS_HK.out',Nspin=1,Norb=2,Nlat=1,Nkvec=Nkvect)
 
-  call hk_from_w90_hr(R1,R2,R3,Hk_w90,Hloc,'TNS_HK.out',1,2,1,Nkvect)
+  call TB_hr_to_hk(R1,R2,R3,Hk_w90,Hloc,'TNS_HK.out',1,2,1,Nkvect)
 
 
   ! subroutine hk_from_w90_hr(R1,R2,R3,ham_k,ham_loc,w90_file,Nspin,Norb,Nlat,Nkvec,kpt_latt,Hkfile,Kpointfile)

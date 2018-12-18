@@ -3,8 +3,8 @@ FC=mpif90
 #PRECOMPILATION FLAG (leave blank for serial code)
 FPP=
 
-#EXE=q_dep_EI
-EXE=mf_HKw90
+EXE=q_dep_EI
+#EXE=mf_HKw90
 
 HERE=`pwd`
 DIR=${HERE}/drivers
@@ -18,11 +18,6 @@ OBJS=VARS_GLOBAL.o HF.o
 LIBDIR=$(HOME)/opt_local
 #LIBDIR=/opt/
 
-#INCARGS=$(shell pkg-config --cflags --libs dmft_tools)
-#INCARGS= -L/home/mazza/opt/dmft_tools/1.2.1/gnu/lib -ldmft_tools -I/home/mazza/opt/dmft_tools/1.2.1/gnu/include 
-# INCARGS=-I$(LIBDIR)/update/SciFortran/gnu/include -L$(LIBDIR)/update/SciFortran/gnu/lib  -lscifor
-# INCARGS+=$(shell pkg-config --cflags --libs dmft_tools)
-#ARGS=-lscifor  
 
 LIBARGS=$(shell pkg-config --libs   dmft_tools scifor)
 INCARGS=$(shell pkg-config --cflags dmft_tools scifor)
@@ -35,7 +30,7 @@ INCARGS=$(shell pkg-config --cflags dmft_tools scifor)
 
 
 FFLAG += -ffree-line-length-none  $(INCARGS) 
-
+FFLAG+=-O0 -p -g -Wall -fbounds-check -fbacktrace -Wuninitialized
 
 BRANCH=_$(shell git rev-parse --abbrev-ref HEAD)
 ifeq ($(BRANCH),_master)
