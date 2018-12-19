@@ -8,30 +8,28 @@ program officina
   USE MPI
   !
   implicit none
-
-  !type(vect2D) :: KK
-
-
+  !
   real(8) :: KKx,KKy
   complex(8),dimension(:,:,:),allocatable :: delta_hf,H_hf,delta_hf_,Hhf_grid
   complex(8),dimension(:,:,:,:),allocatable :: Hhf_reshape
   real(8) :: mu_fix
   real(8) :: Uintra,Uinter,Delta_CF
-  real(8) :: Uq,thop,err_hf
+  real(8) :: Uq,thop,err_hf,vk
   complex(8),dimension(:,:),allocatable :: Hsb,Hkint
   complex(8),dimension(:,:,:),allocatable :: Hsbk
-
   complex(8),dimension(:),allocatable :: Uft
-
   integer :: iso,jso,ispin,jspin,iorb,jorb,ik,ix,iy,ii,jj,i,j
   integer :: Nhf,ihf,unit_err,unit_obs,unit_in
 
   complex(8),dimension(:),allocatable :: obs_loc
   real(8) :: wmix
-
+  real(8),dimension(4,2) :: kpath
   real(8),dimension(2) :: ktest_int
-  real(8) :: kint,dk
+  real(8) :: kint,kint_,dk
 
+  type(rgb_color),dimension(2) :: color_bands
+  character(len=1),dimension(4) :: kpoint_name
+  
   !+- START MPI -+!
   call init_MPI()
   comm = MPI_COMM_WORLD
@@ -45,6 +43,7 @@ program officina
   call parse_input_variable(Uintra,"Uintra","input.conf",default=1.d0)
   call parse_input_variable(Uinter,"Uinter","input.conf",default=1.d0)
   call parse_input_variable(thop,"thop","input.conf",default=0.25d0)
+  call parse_input_variable(vk,"vk","input.conf",default=0.d0)
   call parse_input_variable(Delta_CF,"delta","input.conf",default=1.d0)
   call parse_input_variable(Nhf,"Nhf","input.conf",default=100)
   call parse_input_variable(wmix,"wmix","input.conf",default=0.5d0)
@@ -55,7 +54,32 @@ program officina
   !
   !
   call build_2d_bz(Nx)!;stop
+
+  kpath(1,1)=0.d0
+  kpath(1,2)=0.d0
+
+  kpath(2,1)=pi
+  kpath(2,2)=0.d0
+
+  kpath(3,1)=pi
+  kpath(3,2)=pi
+
+  kpath(4,1)=0.0
+  kpath(4,2)=0.0
+
+
+  color_bands=black
+  kpoint_name(1)='G'
+  kpoint_name(2)='M'
+  kpoint_name(3)='X'
+  kpoint_name(4)='G'
+  
+  
   allocate(Umat(Nso,Nso),Umat_loc(Nso,Nso))
+
+
+
+
   
   Umat=0.d0
   Umat_loc=0.d0
@@ -93,11 +117,17 @@ program officina
      do ispin=1,Nspin
         iso=(ispin-1)*Nspin+iorb
         Hk(iso,iso,ik) = -Delta_CF*0.5d0+2.d0*thop*(cos(k_bz(ik,1))+cos(k_bz(ik,2)))
+        jorb=2
+        jso=(ispin-1)*Nspin+jorb
+        Hk(iso,jso,ik) = vk*(sin(k_bz(ik,1))+sin(k_bz(ik,2)))
      end do
      iorb=2
      do ispin=1,Nspin
         iso=(ispin-1)*Nspin+iorb
         Hk(iso,iso,ik) = Delta_CF*0.5d0-2.d0*thop*(cos(k_bz(ik,1))+cos(k_bz(ik,2)))
+        jorb=1
+        jso=(ispin-1)*Nspin+jorb
+        Hk(iso,jso,ik) = vk*(sin(k_bz(ik,1))+sin(k_bz(ik,2)))
      end do
      write(unit_in,'(10F18.10)') k_bz(ik,1),k_bz(ik,2),dreal(Hk(1,1,ik)),dreal(Hk(2,2,ik))
      !     
@@ -106,7 +136,7 @@ program officina
 
   !+- loop hartree-fock -+!
   allocate(delta_hf(Nso,Nso,Lk),H_hf(Nso,Nso,Lk),delta_hf_(Nso,Nso,Lk))
-  !
+  
   call init_var_params(delta_hf)
   delta_hf_=delta_hf
 
@@ -125,16 +155,108 @@ program officina
      delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
      !
      err_hf=check_conv(delta_hf,delta_hf_)     
- 
      !
      delta_hf_=delta_hf
-     
+     !
   end do
   close(unit_err)
   close(unit_obs)
   !
   call store_HF_hamiltonian_BZgrid(Hhf_grid,delta_hf,mu_fix,Uq_jellium)
+  ! !
+  allocate(Hhf_reshape(Nso,Nso,3*Nx,3*Nx))
+  allocate(kxx(3*Nx),kyy(3*Nx))
+  do ii=1,3
+     do ix=1,Nx
+        i=(ii-1)*Nx+ix
+        kxx(i) = kxgrid(ix)+(ii-2)*2*pi
+     end do
+  end do
+  kyy=kxx
+  ! !
+  do ii=1,3
+     do jj=1,3
+        do ik=1,Lk
+           ix=ik2ii(ik,1)
+           iy=ik2ii(ik,2)
+           i=(ii-1)*Nx+ix
+           j=(jj-1)*Nx+iy
+           Hhf_reshape(:,:,i,j) = Hhf_grid(:,:,ik)     
+        end do
+     end do
+  end do
+  
+  open(unit=unit_obs,file='EI_out_q.loop')
+  do ix=1,Nx
+     do iy=1,Nx
+        ik=igr2ik(ix,iy)
+        write(unit_obs,'(10F18.10)') kxgrid(ix),kygrid(iy),dreal(delta_hf(1,1,ik)),dreal(delta_hf(2,2,ik)),dreal(delta_hf(1,2,ik))
+     end do
+     write(unit_obs,'(10F18.10)')
+  end do
+  close(unit_obs)
+ 
+  ! !+- test interpolation -+!
+  allocate(Hkint(Nso,Nso))
+  dk=pi/dble(50)
+  kint=-dk
+  do ix=1,50
+     kint=kint+dk
+     ktest_int(1) = kint
+     ktest_int(2) = kint
+     Hkint=Hk_HF(ktest_int,Nso)
+     write(205,'(10F18.10)') ktest_int(:),dreal(Hkint(1,1)),dreal(Hkint(2,2)),dreal(Hkint(1,2))
+  end do  
+  do ix=1,Nx
+     ik=igr2ik(ix,ix)
+     write(206,'(10F18.10)') k_bz(ik,:),dreal(Hhf_grid(1,1,ik)),dreal(Hhf_grid(2,2,ik)),dreal(Hhf_grid(2,1,ik))
+  end do
+  !+- plot bands -+!    
+  call TB_solve_model(Hk_HF,2,kpath,100,color_bands,kpoint_name,file='HF_bands_q.out')
+
+  !+- bare Hamiltonian -+!
+  H_hf=Hk
+  call find_chem_pot(H_hf,delta_hf,mu_fix)
+  call store_HF_hamiltonian_BZgrid(Hhf_grid,delta_hf,mu_fix,Ubare)
   !
+  Hhf_reshape=0.d0
+  do ii=1,3
+     do jj=1,3
+        do ik=1,Lk
+           ix=ik2ii(ik,1)
+           iy=ik2ii(ik,2)
+           i=(ii-1)*Nx+ix
+           j=(jj-1)*Nx+iy
+           Hhf_reshape(:,:,i,j) = Hhf_grid(:,:,ik)     
+        end do
+     end do
+  end do
+
+  dk=pi/dble(50)
+  kint=-dk
+  do ix=1,100
+     kint=kint+dk
+     kint_=-dk
+     do iy=1,100
+        kint_=kint_+dk
+        ktest_int(1) = kint
+        ktest_int(2) = kint_
+        Hkint=Hk_HF(ktest_int,Nso)
+        write(305,'(10F18.10)') ktest_int(:),dreal(Hkint(1,1)),dreal(Hkint(2,2)),dreal(Hkint(1,2))
+     end do
+  end do
+  do ix=1,Nx
+     do iy=1,Nx
+        ik=igr2ik(ix,iy)
+        write(306,'(10F18.10)') k_bz(ik,:),dreal(Hhf_grid(1,1,ik)),dreal(Hhf_grid(2,2,ik)),dreal(Hhf_grid(2,1,ik)),dreal(Hk(2,1,ik)),dreal(Hhf_grid(1,2,ik)),dreal(H_hf(1,2,ik))
+     end do
+  end do
+  
+  call TB_solve_model(Hk_HF,2,kpath,100,color_bands,kpoint_name,file='HF_bands_bare.out')
+  
+  
+  stop
+  
   !
   !
   call init_var_params(delta_hf)
@@ -164,55 +286,6 @@ program officina
 
   call save_array('delta.out',delta_hf)  
   call store_HF_hamiltonian_BZgrid(Hhf_grid,delta_hf,mu_fix,Uloc)
-  ! allocate(Hhf_reshape(Nso,Nso,3*Nx,3*Nx))
-  ! allocate(kxx(3*Nx),kyy(3*Nx))
-  ! do ii=1,3
-  !    do ix=1,Nx
-  !       i=(ii-1)*Nx+ix
-  !       kxx(i) = kxgrid(ix)+(ii-2)*2*pi
-  !    end do
-  ! end do
-  ! kyy=kxx
-  ! !
-  ! do ii=1,3
-  !    do jj=1,3
-  !       do ik=1,Lk
-  !          ix=ik2ii(ik,1)
-  !          iy=ik2ii(ik,2)
-  !          i=(ii-1)*Nx+ix
-  !          j=(jj-1)*Nx+iy
-  !          Hhf_reshape(:,:,i,j) = Hhf_grid(:,:,ik)     
-  !       end do
-  !    end do
-  ! end do
-
-  ! do ii=1,3*Nx
-  !    do jj=1,3*Nx
-  !       write(200,'(10F18.10)') kxx(ii),kyy(jj),Hhf_reshape(1,1,ii,jj)
-  !    end do
-  ! end do
-
-  ! !+- TEST inperpolate
-  ! do ik=1,Lk
-  !    write(204,'(10F18.10)') k_bz(ik,:),dreal(Hhf_grid(1,1,ik)),dreal(Hhf_grid(2,2,ik)),dreal(Hhf_grid(1,2,ik))
-  ! end do
- 
-  ! !+- interpolation -+!
-  ! allocate(Hkint(Nso,Nso))
-  ! dk=pi/dble(50)
-  ! kint=-dk
-  ! do ix=1,50
-  !    kint=kint+dk
-  !    ktest_int(1) = kint
-  !    ktest_int(2) = kint
-  !    Hkint=Hk_HF(ktest_int,Nso)
-  !    write(205,'(10F18.10)') ktest_int(:),dreal(Hkint(1,1)),dreal(Hkint(2,2)),dreal(Hkint(1,2))
-  ! end do
-
-  ! do ix=1,Nx
-  !    ik=igr2ik(ix,ix)
-  !    write(206,'(10F18.10)') k_bz(ik,:),dreal(Hhf_grid(1,1,ik)) 
-  ! end do
 
 
   
@@ -381,7 +454,7 @@ contains
        end do
     end do
     
-    write(*,*) Hk_Hf(1,1),kpoint,dH
+    !write(*,*) Hk_Hf(1,1),kpoint,dH
 
   end function Hk_HF
 
@@ -408,6 +481,21 @@ contains
     !
   end function Uq_jellium
 
+  function Ubare(q)
+    USE DMFT_VECTORS  
+    USE VARS_GLOBAL
+    implicit none
+    real(8),dimension(:) :: q
+    real(8),dimension(Nso,Nso) :: Ubare
+    real(8) :: modq
+    integer :: i
+    !
+    if(size(q).ne.2) stop "size q/=2; jellium" 
+    modq=0.d0
+    Ubare=0.d0
+  end function Ubare
+
+  
   function Uloc(q)
     USE DMFT_VECTORS  
     USE VARS_GLOBAL

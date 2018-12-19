@@ -209,12 +209,7 @@ contains
           Uh=Uq(deltak)
           !
           call shift_BZ(jk,jjk)
-          ! if(ik.eq.2) then
-          !    write(547,'(10F18.10)') Uf(1,1),Uf(1,2),dreal(Deltas(1,1:2,jjk))
-          !    write(548,'(10F18.10)') k_bz(ik,:),krl(jk,:),k_bz(jjk,:)  
-          ! end if
           !
-          
           do iso=1,Nso
              do jso=1,Nso
                 Hhf(iso,jso,ik) = Hhf(iso,jso,ik) - &
@@ -225,9 +220,7 @@ contains
           end do
           !
        end do
-       !write(546,'(10F18.10)') k_bz(ik,:),Hhf(1,1,ik),Hhf(1,2,ik)
     end do
-    !stop
     !
   end subroutine build_HF_hamiltonian
 
@@ -351,10 +344,10 @@ contains
     end interface
     !
     if(allocated(Hhf_grid)) deallocate(Hhf_grid)
-    allocate(Hhf_grid(Nso,Nso,Lk))
+    allocate(Hhf_grid(Nso,Nso,Lk)); Hhf_grid=0.d0
     call build_HF_hamiltonian(Hhf_grid,deltas,Uq)    
     do ik=1,Lk
-       Hhf_grid(:,:,ik) = Hhf_grid(:,:,ik) -xmu**zeye(Nso)        
+       Hhf_grid(:,:,ik) = Hhf_grid(:,:,ik)-xmu*zeye(Nso)
     end do
     !
   end subroutine store_HF_hamiltonian_BZgrid
