@@ -401,9 +401,9 @@ contains
     do i=1,size(q)
        modq=modq+q(i)**2.d0
     end do
-    Uq_jellium = 0.d0
+    Uq_jellium = Umat_loc
     if(modq.gt.1.d-10) then
-       Uq_jellium = Umat/sqrt(modq)
+       Uq_jellium = Uq_jellium + Umat/sqrt(modq)
     end if
     !
   end function Uq_jellium
