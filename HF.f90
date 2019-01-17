@@ -169,7 +169,7 @@ contains
        !
     end do
   end subroutine solve_HF_hamiltonian
-
+  
   subroutine build_HF_hamiltonian(Hhf,Deltas,Uq)
     complex(8),dimension(:,:,:),intent(inout) :: Hhf
     complex(8),dimension(:,:,:),intent(in) :: Deltas    
