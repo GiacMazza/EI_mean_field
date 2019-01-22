@@ -3,8 +3,8 @@ FC=mpif90
 #PRECOMPILATION FLAG (leave blank for serial code)
 FPP=
 
-EXE=q_dep_EI
-#EXE=mf_HKw90
+#EXE=q_dep_EI
+EXE=mf_HKw90
 
 HERE=`pwd`
 DIR=${HERE}/drivers
