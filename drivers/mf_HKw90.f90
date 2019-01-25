@@ -35,7 +35,7 @@ program officina
 
   complex(8),dimension(:),allocatable :: Uft
 
-  complex(8),dimension(:,:),allocatable :: Hloc,Hk_test
+  complex(8),dimension(:,:),allocatable :: Hloc,Hktmp
   complex(8),dimension(:,:,:),allocatable :: Hk_w90
   complex(8),dimension(:,:,:,:,:),allocatable :: Hk_w90_reshape
   real(8),dimension(:,:),allocatable :: kpts,kpt_path
@@ -110,18 +110,13 @@ program officina
   read(unit_in,*) R2(:)
   read(unit_in,*) R3(:)
   close(unit_in)
-  write(*,*) R1
-  write(*,*) R2
-  write(*,*) R3
-
-  !+- build a monkhorst-pack grid -+!
   call TB_set_ei(R1,R2,R3)
   call TB_get_bk(Bk1,Bk2,Bk3)
   Bkinv(:,1) = Bk1
   Bkinv(:,2) = Bk2
   Bkinv(:,3) = Bk3
   call inv(Bkinv)
-  
+  !+- build a monkhorst-pack grid -+!  
   call build_mp_grid(Nk_x,Nk_y,Nk_z)
   Lk=Nk_x*Nk_y*Nk_z
   allocate(kpt_latt(Lk,3),ik_stride(Lk,3))
@@ -143,7 +138,7 @@ program officina
         end do
      end do
   end do
-
+  
   uio=free_unit()
   open(unit=uio,file='mp_kgrid.f90')
   do ik=1,Lk
@@ -151,62 +146,18 @@ program officina
   end do
   close(uio)
   !+---------------------------------+!  
+
+  !+- read the w90 output -+!
   allocate(Hk_w90(Nso,Nso,Lk),Hloc(Nso,Nso))
-  call TB_hr_to_hk(R1,R2,R3,Hk_w90,Hloc,'TNS_hr.dat',1,6,1,kpt_latt,Hkfile='Hk_grid.out')
-
-  allocate(kx(Lk),ky(Lk),kz(Lk))
-  allocate(Hk_w90_reshape(Nso,Nso,Nk_x,Nk_y,Nk_z))
-  do ik=1,Lk
-     i=ik_stride(ik,1)
-     j=ik_stride(ik,2)
-     k=ik_stride(ik,3)
-     Hk_w90_reshape(:,:,i,j,k) = Hk_w90(:,:,ik)
-     kx(ik) = kpt_latt(ik,1)
-     ky(ik) = kpt_latt(ik,2)
-     kz(ik) = kpt_latt(ik,3)     
-  end do
-
-  ktest=0.2324d0*Bk1-0.0345d0*Bk2+0.342d0*Bk3
-  write(*,*) 'ktest',ktest
-  !
-  allocate(Hk_test(Nso,Nso))
-  Hk_test=get_HK(ktest,Nso)
-  !stop
-  !
-
-  !+ M-point
-  allocate(kpath(4,3))
-  kpath(1,:)=0.5d0*Bk1+0.5d0*Bk3
-  !+- Z-point
-  kpath(2,:)=0.5d0*Bk3
-  !+- G-point
-  kpath(3,:)=0.d0
-  !+- X-point
-  kpath(4,:)=0.5d0*Bk1
-
-  color_bands=black
-  kpoint_name(1)='M'
-  kpoint_name(2)='Z'
-  kpoint_name(3)='G'
-  kpoint_name(4)='X'
-  
-!  call TB_solve_model(get_Hk,Nso,kpath,100,color_bands,kpoint_name,file='tns_bands.out')
-
-  ! call TB_solve_model('TNS_hr.dat',&
-  !      1,  &
-  !      6,   &
-  !      1,   &
-  !      kpath,&
-  !      100,&
-  !      color_bands,&
-  !      kpoint_name,kpt_latt=kpt_latt,ham_k=Hk_w90,Hkpathfile='kpath_solve.out')!,file_eigenband='tns_bands.out')
-
   call read_w90_hr(R1,R2,R3,Hr_w90,Hloc,irvec,ndegen,'TNS_hr.dat',1,6,1)
-
+  !+- get Hk_w90 for each k-point -+!
   Hk_w90=0.d0
   do ik=1,Lk
      call get_Hk_w90(kpt_latt(ik,:),Hk_w90(:,:,ik))
   end do
+  !
+  allocate(kx(Lk),ky(Lk),kz(Lk))
+  allocate(Hk_w90_reshape(Nso,Nso,Nk_x,Nk_y,Nk_z))
   Hk_w90_reshape=0.d0
   do ik=1,Lk
      i=ik_stride(ik,1)
@@ -219,43 +170,60 @@ program officina
   end do
 
 
+  !+ M-point
+  allocate(kpath(4,3))
+  kpath(1,:)=0.5d0*Bk1+0.5d0*Bk3
+  !+- Z-point
+  kpath(2,:)=0.5d0*Bk3
+  !+- G-point
+  kpath(3,:)=0.d0
+  !+- X-point
+  kpath(4,:)=0.5d0*Bk1
+  !
+  color_bands=black
+  kpoint_name(1)='M'
+  kpoint_name(2)='Z'
+  kpoint_name(3)='G'
+  kpoint_name(4)='X'
+  !
 
+
+  allocate(Hktmp(Nso,Nso))
   allocate(kpt_path(300,3))
   allocate(ek_out(Nso))
   modk=0.d0
+  !
+  !+- PLOTTING W90 BANDS -+!
+  uio=free_unit()
+  open(unit=uio,file='tns_bands.out')
+  !
   do i=1,3
-     !
      delta_kpath=kpath(i+1,:)-kpath(i,:)
-     !
      do ik=1,100
-        !
         j=(i-1)*100 + ik
         kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
         modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
         !
-        Hk_test=0.d0
-        call get_Hk_w90(kpt_path(j,:),Hk_test)
-        call eigh(Hk_test,ek_out)
-        write(567,*) modk,ek_out
-        
-        Hk_test=0.d0;ek_out=0.d0
-        !write(*,*) j,ik
-
-        Hk_test=get_HK(kpt_path(j,:),Nso)
-        call eigh(Hk_test,ek_out)
-        write(568,*) modk,ek_out
-        !write(*,*) j,ik
-
-        
-        !
+        Hktmp=0.d0;ek_out=0.d0
+        Hktmp=get_HK(kpt_path(j,:),Nso)
+        call eigh(Hktmp,ek_out)
+        write(uio,*) modk,ek_out
         !
      end do
      !
   end do
-
-
-
   
+
+  !+- STILL TO DO: 
+
+  !+- Do the fourier transform of the Interaction:
+  !   for this I may need a larger real space lattice
+  !   
+
+
+  !+ Just do the mean field; need to include more than-one brillouin zone. 
+  !  In 3d this could be annoying...maybe parallel integration could be considered...
+  !  
 
 
   stop
@@ -327,11 +295,10 @@ contains
     end do    
     !
     ktarget=matmul(Bkinv,kpoint)
-    ktarget(1)=ktarget(1)!-dble(Nk_x-1)*0.5d0/dble(Nk_x)
-    ktarget(2)=ktarget(2)!-dble(Nk_y-1)*0.5d0/dble(Nk_y)
-    ktarget(3)=ktarget(3)!-dble(Nk_z-1)*0.5d0/dble(Nk_z)
+    ! ktarget(1)=ktarget(1)!-dble(Nk_x-1)*0.5d0/dble(Nk_x)
+    ! ktarget(2)=ktarget(2)!-dble(Nk_y-1)*0.5d0/dble(Nk_y)
+    ! ktarget(3)=ktarget(3)!-dble(Nk_z-1)*0.5d0/dble(Nk_z)
     !write(*,'(20F10.5)') kpoint,kpt_latt(ik_target,:),ktarget,Hk_w90(1,1,ik_target)
-
     ! write(*,*) 'closest k',kpt_latt(ik_target,:),Hk_w90(1,1,ik_target)
     ! write(*,*) 'k target',ktarget
     !stop
@@ -389,20 +356,6 @@ contains
     !
     
     ! +- a lot of confusion, I needed to do some test to be confortable w/ interpolation
-    ! ikint=0
-    ! do i=1,Nk_x
-    !    do j=1,Nk_y
-    !       do k=1,Nk_z
-    !          ikint=ikint+1
-    !          if(k==3) then
-    !             write(451,*) kpt_latt(ikint,1:2),dreal(Hk_w90_reshape(1,1,i,j,k))
-    !             write(452,*) kpt_latt(ikint,1)+Bk2(1),kpt_latt(ikint,2)+Bk2(2),dreal(Hk_w90_reshape(1,1,i,j,k))
-    !          end if
-    !       end do
-    !    end do
-    ! end do
-    ! write(351,*) kpoint
-    ! write(352,*) kpt_latt(ik_target,:)
     !
     
     ! allocate(yout(Nint_),yout_(Nint_),hk_tmp(Nint_))
