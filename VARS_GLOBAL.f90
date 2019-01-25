@@ -16,7 +16,7 @@ MODULE VARS_GLOBAL
   real(8),dimension(:,:),allocatable :: k_bz,krl
   real(8) :: dk_mesh
   integer(8),dimension(:,:),allocatable :: ik2ii,igr2ik,igr2ik_rlm,ikrl2ii
-  real(8),dimension(2) :: KK
+
   real(8),dimension(:),allocatable :: kxgrid,kygrid,kzgrid,kxx,kyy,kzz
   integer :: Nx  
 

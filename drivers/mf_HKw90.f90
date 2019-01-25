@@ -16,22 +16,30 @@ program officina
   implicit none
   integer :: Nk_x,Nk_y,Nk_z
 
+  integer :: Nint
+
   real(8) :: KKx,KKy
   complex(8),dimension(:,:,:),allocatable :: delta_hf,H_hf,delta_hf_
+  complex(8),dimension(:,:,:),allocatable :: hr_w90
   real(8) :: mu_fix
   real(8) :: Uintra,Uinter,Delta_CF
   real(8) :: Uq,thop,err_hf
   real(8),dimension(3) :: R1,R2,R3
   real(8),dimension(3) :: Bk1,Bk2,Bk3
+  real(8),dimension(3,3) :: Bkinv
+  
+  real(8),dimension(3) :: ktest
+  real(8),dimension(:),allocatable :: ek_out
 
   complex(8),dimension(:,:),allocatable :: Hsb
 
   complex(8),dimension(:),allocatable :: Uft
 
-  complex(8),dimension(:,:),allocatable :: Hloc
+  complex(8),dimension(:,:),allocatable :: Hloc,Hk_test
   complex(8),dimension(:,:,:),allocatable :: Hk_w90
   complex(8),dimension(:,:,:,:,:),allocatable :: Hk_w90_reshape
-  real(8),dimension(:,:),allocatable :: kpts
+  real(8),dimension(:,:),allocatable :: kpts,kpt_path
+  
 
   integer :: iso,jso,ispin,jspin,iorb,jorb,ik
   integer :: i,j,k,idim
@@ -48,7 +56,24 @@ program officina
   integer,allocatable :: Nkvect(:)
 
   real(8),dimension(:,:),allocatable :: kpt_latt
-  real(8),dimension(:),allocatable :: kx,ky,kz,kx_,ky_,kz_
+  real(8),dimension(:),allocatable :: kx,ky,kz
+  !
+  real(8),dimension(:),allocatable :: kxgrid_aux,kygrid_aux,kzgrid_aux
+  integer(8),dimension(:),allocatable :: ix_aux,iy_aux,iz_aux
+
+  real(8),dimension(:,:),allocatable :: kpath
+  real(8) ::      delta_kpath(3)
+  type(rgb_color),dimension(2) :: color_bands
+  character(len=1),dimension(4) :: kpoint_name
+
+
+  integer,dimension(:,:),allocatable :: irvec
+
+  integer,dimension(:),allocatable :: ndegen
+
+  real(8) :: modk
+
+  !
 
   !+- START MPI -+!
   call init_MPI()
@@ -69,6 +94,7 @@ program officina
   call parse_input_variable(Nhf,"Nhf","input.conf",default=100)
   call parse_input_variable(wmix,"wmix","input.conf",default=0.5d0)
   call parse_input_variable(fileRlattice,"R_unit_cell","input.conf",default='R_unit_cell.conf')
+  call parse_input_variable(Nint,"Nint","input.conf",default=5)
   !
   call get_global_vars
   !
@@ -91,6 +117,11 @@ program officina
   !+- build a monkhorst-pack grid -+!
   call TB_set_ei(R1,R2,R3)
   call TB_get_bk(Bk1,Bk2,Bk3)
+  Bkinv(:,1) = Bk1
+  Bkinv(:,2) = Bk2
+  Bkinv(:,3) = Bk3
+  call inv(Bkinv)
+  
   call build_mp_grid(Nk_x,Nk_y,Nk_z)
   Lk=Nk_x*Nk_y*Nk_z
   allocate(kpt_latt(Lk,3),ik_stride(Lk,3))
@@ -123,108 +154,135 @@ program officina
   allocate(Hk_w90(Nso,Nso,Lk),Hloc(Nso,Nso))
   call TB_hr_to_hk(R1,R2,R3,Hk_w90,Hloc,'TNS_hr.dat',1,6,1,kpt_latt,Hkfile='Hk_grid.out')
 
-  allocate(kx(Nk_x),ky(Nk_x),kz(Nk_x))
+  allocate(kx(Lk),ky(Lk),kz(Lk))
   allocate(Hk_w90_reshape(Nso,Nso,Nk_x,Nk_y,Nk_z))
   do ik=1,Lk
      i=ik_stride(ik,1)
      j=ik_stride(ik,2)
      k=ik_stride(ik,3)
      Hk_w90_reshape(:,:,i,j,k) = Hk_w90(:,:,ik)
-     kx(i) = kpt_latt(ik,1)
-     ky(j) = kpt_latt(ik,2)
-     kz(k) = kpt_latt(ik,3)
+     kx(ik) = kpt_latt(ik,1)
+     ky(ik) = kpt_latt(ik,2)
+     kz(ik) = kpt_latt(ik,3)     
   end do
 
-  do i=1,Nk_x
-     do j=1,Nk_y
-        do k=1,Nk_z
-           write(200,'(10F18.10)') kx(i),ky(j),kz(k)
-        end do
-     end do
-  end do
+  ktest=0.2324d0*Bk1-0.0345d0*Bk2+0.342d0*Bk3
+  write(*,*) 'ktest',ktest
+  !
+  allocate(Hk_test(Nso,Nso))
+  Hk_test=get_HK(ktest,Nso)
+  !stop
+  !
+
+  !+ M-point
+  allocate(kpath(4,3))
+  kpath(1,:)=0.5d0*Bk1+0.5d0*Bk3
+  !+- Z-point
+  kpath(2,:)=0.5d0*Bk3
+  !+- G-point
+  kpath(3,:)=0.d0
+  !+- X-point
+  kpath(4,:)=0.5d0*Bk1
+
+  color_bands=black
+  kpoint_name(1)='M'
+  kpoint_name(2)='Z'
+  kpoint_name(3)='G'
+  kpoint_name(4)='X'
   
-  ! !+- old(petocchi?) version -+!
-  ! allocate(Nkvect(3))
-  ! Nkvect(1)=Nk_x
-  ! Nkvect(2)=Nk_y
-  ! Nkvect(3)=Nk_z
-  ! call TB_hr_to_hk(R1,R2,R3,Hk_w90,Hloc,'TNS_hr.dat',1,6,1,Nkvect,kpt_latt=kpt_latt,Hkfile='Hk.out')
+!  call TB_solve_model(get_Hk,Nso,kpath,100,color_bands,kpoint_name,file='tns_bands.out')
+
+  ! call TB_solve_model('TNS_hr.dat',&
+  !      1,  &
+  !      6,   &
+  !      1,   &
+  !      kpath,&
+  !      100,&
+  !      color_bands,&
+  !      kpoint_name,kpt_latt=kpt_latt,ham_k=Hk_w90,Hkpathfile='kpath_solve.out')!,file_eigenband='tns_bands.out')
+
+  call read_w90_hr(R1,R2,R3,Hr_w90,Hloc,irvec,ndegen,'TNS_hr.dat',1,6,1)
+
+  Hk_w90=0.d0
+  do ik=1,Lk
+     call get_Hk_w90(kpt_latt(ik,:),Hk_w90(:,:,ik))
+  end do
+  Hk_w90_reshape=0.d0
+  do ik=1,Lk
+     i=ik_stride(ik,1)
+     j=ik_stride(ik,2)
+     k=ik_stride(ik,3)
+     Hk_w90_reshape(:,:,i,j,k) = Hk_w90(:,:,ik)
+     kx(ik) = kpt_latt(ik,1)
+     ky(ik) = kpt_latt(ik,2)
+     kz(ik) = kpt_latt(ik,3)
+  end do
 
 
 
-  !+- now to plot the bands the interpolation of Hk should be invoked;
-  !+- see the other driver
+  allocate(kpt_path(300,3))
+  allocate(ek_out(Nso))
+  modk=0.d0
+  do i=1,3
+     !
+     delta_kpath=kpath(i+1,:)-kpath(i,:)
+     !
+     do ik=1,100
+        !
+        j=(i-1)*100 + ik
+        kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
+        modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
+        !
+        Hk_test=0.d0
+        call get_Hk_w90(kpt_path(j,:),Hk_test)
+        call eigh(Hk_test,ek_out)
+        write(567,*) modk,ek_out
+        
+        Hk_test=0.d0;ek_out=0.d0
+        !write(*,*) j,ik
+
+        Hk_test=get_HK(kpt_path(j,:),Nso)
+        call eigh(Hk_test,ek_out)
+        write(568,*) modk,ek_out
+        !write(*,*) j,ik
+
+        
+        !
+        !
+     end do
+     !
+  end do
+
+
+
+  
+
 
   stop
 
 
-  ! subroutine hk_from_w90_hr(R1,R2,R3,ham_k,ham_loc,w90_file,Nspin,Norb,Nlat,Nkvec,kpt_latt,Hkfile,Kpointfile)
-  !   implicit none
-  !   real(8)               ,intent(in)            ::   R1(:),R2(:),R3(:)
-  !  complex(8),allocatable,intent(inout)         ::   ham_k(:,:,:)
-  !   complex(8),allocatable,intent(inout)         ::   ham_loc(:,:)
-  !  character(len=*)      ,intent(in)            ::   w90_file
-  !  integer               ,intent(in)            ::   Nspin,Norb,Nlat
-  ! integer(4),allocatable,intent(in)            ::   Nkvec(:)             ![Nkx,Nky,Nkz]
-  ! real(8)   ,allocatable,intent(out),optional  ::   kpt_latt(:,:)        ![ik,3]
-  ! character(len=*)      ,intent(in) ,optional  ::   Hkfile
-  ! character(len=*)      ,intent(in) ,optional  ::   Kpointfile
-  !
-
-
-
-  ! call build_2d_bz(Nx)
-  ! allocate(Umat(Nso,Nso),Umat_loc(Nso,Nso))
-
-  ! Umat=0.d0
-  ! Umat_loc=0.d0
-  ! unit_in=free_unit()
-  ! open(unit=unit_in,file='Umat_loc.in')
-  ! do ispin=1,Nspin
-  !    do iorb=1,Norb
-  !       iso=(ispin-1)*Nspin+iorb
-  !       do jspin=1,Nspin
-  !          do jorb=1,Norb
-  !             jso=(jspin-1)*Nspin+jorb
-  !             !
-  !             if(iorb.eq.jorb) then
-  !                Umat(iso,jso) = Uintra
-  !                if(ispin.ne.jspin) Umat_loc(iso,jso)=Uintra
-  !             else
-  !                Umat(iso,jso) = Uinter
-  !                Umat_loc(iso,jso) = Uinter
-  !             end if
-  !             !
-  !          end do
-  !       end do
-  !       write(unit_in,*) Umat_loc(iso,:),'',Umat(iso,:)
-  !    end do
-  ! end do
-  ! close(unit_in)
-
-  ! open(unit=unit_in,file='Hk.in')
-
-  ! allocate(Hk(Nso,Nso,Lk))
-  ! Hk=0.d0
-  ! do ik=1,Lk
-  !    !
-  !    iorb=1
-  !    do ispin=1,Nspin
-  !       iso=(ispin-1)*Nspin+iorb
-  !       Hk(iso,iso,ik) = -Delta_CF*0.5d0+2.d0*thop*(cos(k_bz(ik)%x)+cos(k_bz(ik)%y))
-  !    end do
-  !    iorb=2
-  !    do ispin=1,Nspin
-  !       iso=(ispin-1)*Nspin+iorb
-  !       Hk(iso,iso,ik) = Delta_CF*0.5d0-2.d0*thop*(cos(k_bz(ik)%x)+cos(k_bz(ik)%y))
-  !    end do
-  !    write(unit_in,'(10F18.10)') k_bz(ik)%x,k_bz(ik)%y,dreal(Hk(1,1,ik)),dreal(Hk(2,2,ik))
-  !    !     
-  ! end do
 
 
 contains
 
+
+  subroutine get_Hk_w90(kpoint,Hk) 
+    implicit none
+    real(8),dimension(3) :: kpoint
+    complex(8),dimension(Nso,Nso) :: Hk
+    integer :: ir,nrpts
+    real(8),dimension(3) :: Rlat
+    real(8) :: dotRk
+    
+    nrpts=size(irvec,1)    
+    Hk=0.d0
+    do ir=1,nrpts
+       Rlat=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3
+       dotRk=dot_product(Rlat,kpoint)
+       Hk=Hk+Hr_w90(:,:,ir)*exp(xi*dotRK)/dble(ndegen(ir))
+    end do
+    
+  end subroutine get_Hk_w90
 
 
   function get_HK(kpoint,N) result(Hk_out)
@@ -232,33 +290,204 @@ contains
     real(8),dimension(:) :: kpoint
     integer              :: N
     complex(8),dimension(N,N) :: Hk_out
-    integer :: io,jo
-    real(8),dimension(Nk_x,Nk_y,Nk_z) :: Hkr
-    real(8) :: Hr,dH
+    integer :: io,jo,Nint_,ik_target
+    complex(8),dimension(:,:,:,:,:),allocatable :: Hk_inter
+    real(8),dimension(:,:,:),allocatable :: Hkr
+    real(8),dimension(:),allocatable :: kix,kiy,kiz
+    real(8) :: Hr,dH,delta_k,diffk
+    integer :: i0,j0,k0
+    integer :: i,j,k,ii,jj,kk
+    integer :: ix,ik
+    real(8),dimension(:,:),allocatable :: kpt_int
+    real(8),dimension(3) :: ktarget,ktmp
+    integer :: Lkint,ikint
+    real(8),dimension(:),allocatable :: yout,yout_,hk_tmp
+    real(8),dimension(:),allocatable :: grid_aux
+
+    Nint_=2*Nint+1
+    allocate(Hk_inter(Nso,Nso,Nint_,Nint_,Nint_))
+    allocate(kix(Nint_),kiy(Nint_),kiz(Nint_))
+
 
     if(size(kpoint).ne.3) stop "kpoint.ne.3"    
     if(N.ne.Nso)  stop "N/=Nso"
+
+    !+- find the closest point to the target one -+!
+    diffk=100.d0
+    ik_target=1
+    do ik=1,Lk
+       delta_k=0.d0
+       delta_k=delta_k+(kpoint(1)-kpt_latt(ik,1))**2.d0
+       delta_k=delta_k+(kpoint(2)-kpt_latt(ik,2))**2.d0
+       delta_k=delta_k+(kpoint(3)-kpt_latt(ik,3))**2.d0
+       if(delta_k.le.diffk) then
+          ik_target=ik
+          diffk=delta_k
+       end if
+    end do    
+    !
+    ktarget=matmul(Bkinv,kpoint)
+    ktarget(1)=ktarget(1)!-dble(Nk_x-1)*0.5d0/dble(Nk_x)
+    ktarget(2)=ktarget(2)!-dble(Nk_y-1)*0.5d0/dble(Nk_y)
+    ktarget(3)=ktarget(3)!-dble(Nk_z-1)*0.5d0/dble(Nk_z)
+    !write(*,'(20F10.5)') kpoint,kpt_latt(ik_target,:),ktarget,Hk_w90(1,1,ik_target)
+
+    ! write(*,*) 'closest k',kpt_latt(ik_target,:),Hk_w90(1,1,ik_target)
+    ! write(*,*) 'k target',ktarget
+    !stop
+    !
+    !+- get the *centered* index of the aux lattice -+!
+    i0=ik_stride(ik_target,1)+Nk_x
+    j0=ik_stride(ik_target,2)+Nk_y
+    k0=ik_stride(ik_target,3)+Nk_z
+    !
+    !+- some temporary check
+    ! write(251,*) kxgrid(i0),kxgrid_aux(i0+Nk_x)
+    ! write(252,*) kygrid(j0),kygrid_aux(j0+Nk_y)
+    ! write(253,*) kzgrid(k0),kzgrid_aux(k0+Nk_z)
+    ! !
+    ! do ix=1,3*Nk_x
+    !    write(254,*) kxgrid_aux(ix),kxgrid(ix_aux(ix))
+    ! end do
+    ! do ix=1,3*Nk_y
+    !    write(255,*) kygrid_aux(ix),kygrid(iy_aux(ix))
+    ! end do
+    ! do ix=1,3*Nk_z
+    !    write(256,*) kzgrid_aux(ix),kzgrid(iz_aux(ix))
+    ! end do
+
+    !
+    Lkint=Nint_*Nint_*Nint_
+    allocate(kpt_int(Lkint,3))
+
+    ikint=0
+    do i=1,Nint_       
+       ii=i0-(Nint+1)+i
+       kix(i)= kxgrid_aux(ii)
+       do j=1,Nint_
+          jj=j0-(Nint+1)+j
+          kiy(j)= kygrid_aux(jj)
+          do k=1,Nint_
+             kk=k0-(Nint+1)+k
+             kiz(k)=kzgrid_aux(kk)
+             ikint=ikint+1
+
+             kpt_int(ikint,:)=kix(i)*Bk1+ kiy(j)*Bk2 + kiz(k)*Bk3
+             !
+             Hk_inter(:,:,i,j,k)=Hk_w90_reshape(:,:,ix_aux(ii),iy_aux(jj),iz_aux(kk)) 
+             !
+             ! write(350,*) kix(i),kiy(j),kiz(k),ktarget!,kpoint
+             ! write(353,*) kpt_int(ikint,:)
+             !
+             ! if(k==Nint+1) then
+             !    write(450,*) kpt_int(ikint,1:2),dreal(Hk_inter(1,1,i,j,k))
+             ! end if
+             !
+          end do
+       end do
+    end do
+    !
+    
+    ! +- a lot of confusion, I needed to do some test to be confortable w/ interpolation
+    ! ikint=0
+    ! do i=1,Nk_x
+    !    do j=1,Nk_y
+    !       do k=1,Nk_z
+    !          ikint=ikint+1
+    !          if(k==3) then
+    !             write(451,*) kpt_latt(ikint,1:2),dreal(Hk_w90_reshape(1,1,i,j,k))
+    !             write(452,*) kpt_latt(ikint,1)+Bk2(1),kpt_latt(ikint,2)+Bk2(2),dreal(Hk_w90_reshape(1,1,i,j,k))
+    !          end if
+    !       end do
+    !    end do
+    ! end do
+    ! write(351,*) kpoint
+    ! write(352,*) kpt_latt(ik_target,:)
+    !
+    
+    ! allocate(yout(Nint_),yout_(Nint_),hk_tmp(Nint_))
+    
+    ! allocate(grid_aux(Nint_))
+
+    ! io=1;jo=1   
+    ! do k=1,Nint_
+    !    do j=1,Nint_          
+          
+    !       !+- interpolate along the BK1 direction -+!
+
+    !       !+- take values of Hamiltonian to interpolate -+!
+    !       hk_tmp(:) = dreal(Hk_inter(io,jo,:,j,k))          
+          
+    !       !+- get grid for the interpolation -+!
+    !       do i=1,Nint_
+    !          !ktmp=kiy(j)*Bk2+kiz(k)*Bk3
+    !          !ktmp=ktmp+kix(i)*Bk1 
+    !          grid_aux(i)=dot_product(ktmp,Bk1)
+    !       end do          
+    !       ! !+- get the target point -+!
+    !       ! ktmp=ktarget(1)*Bk1+kiy(j)*Bk2+kiz(k)*Bk3
+    !       ! ktmp=dot_product(ktmp,Bk1)
+          
+    !       call polint(kix,hk_tmp,ktmp,yout(j),dH)          
+    !    end do       
+    !    !+- interpolate along the BK2 direction -+!
+       
+    !    hk_tmp=yout !+- take previous results as new interpolation points
+
+    !    !+- get grid for the interpolation -+!
+    !    ! do i=1,Nint_
+    !    !    ktmp=kiy(j)*Bk2+kiz(k)*Bk3
+    !    !    ktmp=ktmp+kix(i)*Bk1 
+    !    !    grid_aux(i)=dot_product(ktmp,Bk1)
+    !    ! end do
+       
+
+
+
+    !    call polint(kiy,hk_tmp,ktarget(2),yout_(k),dH)       
+    ! end do
+    ! !+- interpolate along the z axis -+!
+    ! hk_tmp=yout_
+    ! call polint(kiz,hk_tmp,ktarget(3),Hr,dH)
+    ! ! write(*,*) kiz
+    ! ! write(*,*) hk_tmp
+    ! ! !write(*,*) ktarget(3)
+    ! ! write(*,*) 'test_inter',Hr
+    ! stop
+
+    ! io=1
+    ! jo=1
+    ! allocate(Hkr(Nint_,Nint_,Nint_))    
+    ! Hkr=dreal(Hk_inter(io,jo,:,:,:))    
+    ! call polin3(kix,kiy,kiz,Hkr,ktarget(1),ktarget(2),ktarget(3),Hr,dH)    
+    ! write(*,*) 'test_inter polin3',Hr
+    
+    !stop
+    
+    allocate(Hkr(Nint_,Nint_,Nint_))    
+
     Hk_out=0.d0
     do io=1,Nso
-       do jo=io,Nso
+       do jo=1,Nso
           
-          
-          ! Hkr=dreal(Hk_w90_reshape(io,jo,:,:,:))
-          ! Hr=0.d0
-          ! !call polin2(kxx,kyy,Hkr,kpoint(1),kpoint(2),Hr,dH)
-          ! call polin3(kxx,kyy,Hkr,kpoint(1),kpoint(2),Hr,dH)
-          ! Hk_Hf(io,jo) = Hk_Hf(io,jo) + Hr
-          ! !
-          ! Hkr=dimag(Hhf_reshape(io,jo,:,:))
-          ! Hr=0.d0
-          ! call polin2(kxx,kyy,Hkr,kpoint(1),kpoint(2),Hr,dH)
-          ! Hk_Hf(io,jo) = Hk_Hf(io,jo) + xi*Hr
-          ! Hk_Hf(jo,io) = conjg(Hk_Hf(io,jo))
+          !+-get Hkr to be interpolated 
+          Hkr=dreal(Hk_inter(io,jo,:,:,:))
+          Hr=0.d0
+          call polin3(kix,kiy,kiz,Hkr,ktarget(1),ktarget(2),ktarget(3),Hr,dH)          
+          Hk_out(io,jo)=Hk_out(io,jo) + Hr
+          !
+          Hkr=dimag(Hk_inter(io,jo,:,:,:))
+          Hr=0.d0
+          call polin3(kix,kiy,kiz,Hkr,ktarget(1),ktarget(2),ktarget(3),Hr,dH)          
+          Hk_out(io,jo)=Hk_out(io,jo) + xi*Hr          
           !
        end do
     end do
 
-    !write(*,*) Hk_Hf(1,1),kpoint,dH
+    write(*,'(20F10.5)') kpoint,kpt_latt(ik_target,:),ktarget,Hk_w90(1,1,ik_target),Hk_out(1,1)
+
+    !write(*,*) 'test_inter polin3',Hk_out(1,1)
+    !write(*,*) Hk_out(1,1),Hk_out(2,2)
 
   end function Get_HK
 
@@ -267,21 +496,24 @@ contains
   subroutine build_mp_grid(Nx,Ny,Nz)
     implicit none
     integer :: Nx,Ny,Nz
-    integer :: i,ix,iy,ik,unitk
+    integer :: i,ix,iy,ik,iz,unitk
     integer :: Nx_
-    real(8) :: kmax
+    real(8) :: kmax,kxmax,kymax,kzmax,dx,dy,dz
     real(8),dimension(:),allocatable :: kxr,kyr
     !
     !    
     allocate(kxgrid(Nx),kygrid(Ny),kzgrid(Nz))
     kmax=dble(Nx-1)*0.5d0/dble(Nx)
-    kxgrid = linspace(-kmax,kmax,Nx)!,mesh=dk_mesh)
+    kxgrid = linspace(-kmax,kmax,Nx,mesh=dx)
+    kxmax=kmax+dx*0.5d0
     !
     kmax=dble(Ny-1)*0.5d0/dble(Ny)
-    kygrid = linspace(-kmax,kmax,Ny)!,mesh=dk_mesh)
+    kygrid = linspace(-kmax,kmax,Ny,mesh=dy)
+    kymax=kmax+dy*0.5d0
     !
     kmax=dble(Nz-1)*0.5d0/dble(Nz)
-    kzgrid = linspace(-kmax,kmax,Nz)
+    kzgrid = linspace(-kmax,kmax,Nz,mesh=dz)
+    kzmax=kmax+dz*0.5d0
     !
     !
     if(mod(Nx,2).eq.0) then
@@ -293,6 +525,62 @@ contains
     if(mod(Nz,2).eq.0) then
        kzgrid=kzgrid-0.5d0/dble(Nz)
     end if   
+    !
+    allocate(kxgrid_aux(3*Nx),kygrid_aux(3*Ny),kzgrid_aux(3*Nz))
+    allocate(ix_aux(3*Nx),iy_aux(3*Ny),iz_aux(3*Nz))
+    !
+    do ix=1,Nx
+       !
+       kxgrid_aux(ix) = kxgrid(ix) - 2*kxmax
+       kxgrid_aux(ix+Nx) = kxgrid(ix) 
+       kxgrid_aux(ix+2*Nx) = kxgrid(ix) + 2*kxmax
+       !
+       ix_aux(ix) = ix
+       ix_aux(ix+Nx) = ix
+       ix_aux(ix+2*Nx) = ix
+       !
+    end do
+    do iy=1,Ny
+       !
+       kygrid_aux(iy) = kygrid(iy) - 2*kymax
+       kygrid_aux(iy+Ny) = kygrid(iy) 
+       kygrid_aux(iy+2*Ny) = kygrid(iy) + 2*kymax
+       !
+       iy_aux(iy) = iy
+       iy_aux(iy+Ny) = iy
+       iy_aux(iy+2*Ny) = iy
+       !
+    end do
+    do iz=1,Nz
+       !
+       kzgrid_aux(iz) = kzgrid(iz) - 2*kzmax
+       kzgrid_aux(iz+Nz) = kzgrid(iz) 
+       kzgrid_aux(iz+2*Nz) = kzgrid(iz) + 2*kzmax
+       !
+       iz_aux(iz) = iz
+       iz_aux(iz+Nz) = iz
+       iz_aux(iz+2*Nz) = iz
+       !
+    end do
+
+    do ix=1,Nx
+       do iy=1,Ny
+          do iz=1,Nz
+             write(251,'(10F18.10)') kxgrid(ix),kygrid(iy),kzgrid(iz)
+          end do
+       end do
+    end do
+
+
+    do ix=1,3*Nx
+       do iy=1,3*Ny
+          do iz=1,3*Nz
+             write(252,'(10F18.10)') kxgrid_aux(ix),kygrid_aux(iy),kzgrid_aux(iz)
+          end do
+       end do
+    end do
+
+    !
 
 
     !
