@@ -7,14 +7,12 @@ program officina
   USE DMFT_VECTORS
   USE HF
   !
-  !USE DMFT_TIGHT_BINDING
-  !USE DMFT_MISC
-  !USE SF_IOTOOLS
   !
   USE MPI
   !
+  !
   implicit none
-  integer :: Nk_x,Nk_y,Nk_z
+
 
   integer :: Nint
 
@@ -43,19 +41,21 @@ program officina
 
   integer :: iso,jso,ispin,jspin,iorb,jorb,ik
   integer :: i,j,k,idim
-  integer :: Nhf,ihf,unit_err,unit_obs,unit_in,uio
+  integer :: Nhf,ihf,unit_err,unit_obs,unit_in,uio,Nobs
+  integer,dimension(:),allocatable :: units_loc_obs
   integer :: flen,iread
 
   integer,allocatable :: ik_stride(:,:)
 
   complex(8),dimension(:),allocatable :: obs_loc
   real(8) :: wmix
+  real(8),dimension(:,:),allocatable :: Uloc_TNS
 
   character(len=100) :: fileRlattice
 
   integer,allocatable :: Nkvect(:)
 
-  real(8),dimension(:,:),allocatable :: kpt_latt
+
   real(8),dimension(:),allocatable :: kx,ky,kz
   !
   real(8),dimension(:),allocatable :: kxgrid_aux,kygrid_aux,kzgrid_aux
@@ -71,8 +71,9 @@ program officina
 
   integer,dimension(:),allocatable :: ndegen
 
-  real(8) :: modk
-
+  real(8) :: modk,tmpi,tmpj
+  real(8) :: Ncell
+  complex(8),dimension(:,:),allocatable :: ccij
   !
 
   !+- START MPI -+!
@@ -119,15 +120,19 @@ program officina
   !+- build a monkhorst-pack grid -+!  
   call build_mp_grid(Nk_x,Nk_y,Nk_z)
   Lk=Nk_x*Nk_y*Nk_z
-  allocate(kpt_latt(Lk,3),ik_stride(Lk,3))
+  allocate(kpt_latt(Lk,3),ik_stride(Lk,3),wtk(Lk),igr2ik(Nk_x,Nk_y,Nk_z))
+  wtk=1.d0/dble(Lk)
   ik=0
   do i=1,Nk_x
      do j=1,Nk_y
         do k=1,Nk_z           
+           !
            ik=ik+1
+           !
            ik_stride(ik,1) = i
            ik_stride(ik,2) = j
            ik_stride(ik,3) = k
+           igr2ik(i,j,k) = ik
            !
            do idim=1,3
               kpt_latt(ik,idim) = kpt_latt(ik,idim) + kxgrid(i)*Bk1(idim)
@@ -155,6 +160,130 @@ program officina
   do ik=1,Lk
      call get_Hk_w90(kpt_latt(ik,:),Hk_w90(:,:,ik))
   end do
+
+  !+- compute number of particles -+!
+  allocate(ccij(Nso,Nso))
+  allocate(Hktmp(Nso,Nso))
+  allocate(ek_out(Nso))
+  Ncell=0.d0
+  ccij=0.d0
+
+
+  allocate(delta_hf(Nso,Nso,Lk),H_hf(Nso,Nso,Lk),delta_hf_(Nso,Nso,Lk))
+  unit_in=free_unit(); 
+  open(unit=unit_in,file='Ta_Ni_bare_vk.dat')    
+  do ik=1,Lk     
+     Hktmp=Hk_w90(:,:,ik)
+     call eigh(Hktmp,ek_out)
+     do i=1,Nso
+        do j=1,Nso
+           Ncell = Ncell + conjg(Hktmp(i,j))*Hktmp(i,j)*fermi(ek_out(j)-4.d0,beta)*wtk(ik)
+
+           delta_hf(i,j,ik) = 0.d0
+           do k=1,Nso
+              delta_hf(i,j,ik) = delta_hf(i,j,ik) + conjg(Hktmp(i,k))*Hktmp(j,k)*fermi(ek_out(k)-4.d0,beta)*wtk(ik)           
+              ccij(i,j) = ccij(i,j) + conjg(Hktmp(i,k))*Hktmp(j,k)*fermi(ek_out(k)-4.d0,beta)*wtk(ik)           
+           end do        
+
+        end do
+     end do     
+     write(unit_in,*) dble(ik),dreal(Hk_w90(1,6,ik)),dreal(Hk_w90(2,6,ik)),dreal(Hk_w90(3,6,ik)),dreal(Hk_w90(3,5,ik))
+  end do
+  close(unit_in)
+
+  unit_in=free_unit(); 
+  open(unit=unit_in,file='Ta_Ni_bare_occupations.dat')    
+  do i=1,Nso
+     do j=1,Nso
+        write(unit_in,*) i,j,dreal(ccij(i,j)),dimag(ccij(i,j))
+     end do
+     write(unit_in,*)
+  end do
+  close(unit_in)
+  write(*,*) 'Ncell',Ncell
+  
+  allocate(Uloc_TNS(Nso,Nso))
+  flen=file_length('TNS_Uloc.dat')
+  if(flen.ne.Nso*Nso) stop "error in reading Uloc"
+  unit_in=free_unit(); 
+  open(unit=unit_in,file='TNS_Uloc.dat',status="old",action="read")  
+  do i=1,Nso
+     do j=1,Nso
+        read(unit_in,*) tmpi,tmpj,Uloc_TNS(j,i)
+     end do
+  end do  
+  close(unit_in)
+  if(Nspin.eq.1) then
+     do i=1,Nso
+        Uloc_TNS(i,i) = 0.d0
+     end do
+  end if
+
+
+
+
+
+  allocate(Hk(Nso,Nso,Lk)); Hk=Hk_w90  
+  call init_var_params(delta_hf)
+  ! delta_hf(1,:,:)=delta_hf(1,:,:)+0.1d0
+  ! delta_hf(:,1,:)=delta_hf(:,1,:)+0.1d0
+  delta_hf=delta_hf+0.1
+  delta_hf_=delta_hf
+
+  unit_err=free_unit()
+  open(unit=unit_err,file='err_q.err')
+
+  Nobs=Nso*(Nso+1)/2
+  allocate(units_loc_obs(Nobs))
+  units_loc_obs=free_units(Nobs)
+  iso=0
+  do i=1,Nso
+     do j=i,Nso
+        iso=iso+1
+        open(unit=units_loc_obs(iso),file="obs_hf_"//reg(txtfy(i)//reg(txtfy(j))))        
+     end do
+  end do
+  unit_obs=free_unit()
+  open(unit=unit_obs,file='ndens_hf.loop')
+
+  !Uloc_TNS
+  err_hf=1.d0  
+  do ihf=1,Nhf
+     write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix          
+     call local_single_particle_observables(delta_hf,obs_loc)
+     iso=0
+     Ncell=0.d0
+     do i=1,Nso           
+        Ncell=Ncell+obs_loc(i)
+        do j=i,Nso
+           iso=iso+1
+           write(units_loc_obs(iso),'(10F18.10)') dble(ihf),obs_loc(iso)
+        end do
+     end do
+     write(unit_obs,'(10F18.10)') dble(ihf),ndens
+     !
+     call build_HF_hamiltonian(H_hf,delta_hf,Uq_jellium)          
+     call find_chem_pot(H_hf,delta_hf,mu_fix)
+     delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
+     !
+     err_hf=check_conv(delta_hf,delta_hf_)     
+     !
+     delta_hf_=delta_hf
+     !
+  end do
+  close(unit_err)
+  close(unit_obs)
+  !
+  !call store_HF_hamiltonian_BZgrid(Hhf_grid,delta_hf,mu_fix,Uq_jellium)
+
+
+  !+- here now I should plot the HF bands; see wheather the small hybridizations actually open a gap
+
+
+  stop
+
+
+
   !
   allocate(kx(Lk),ky(Lk),kz(Lk))
   allocate(Hk_w90_reshape(Nso,Nso,Nk_x,Nk_y,Nk_z))
@@ -188,9 +317,8 @@ program officina
   !
 
 
-  allocate(Hktmp(Nso,Nso))
+
   allocate(kpt_path(300,3))
-  allocate(ek_out(Nso))
   modk=0.d0
   !
   !+- PLOTTING W90 BANDS -+!
@@ -449,10 +577,10 @@ contains
   subroutine build_mp_grid(Nx,Ny,Nz)
     implicit none
     integer :: Nx,Ny,Nz
+    integer :: Nx_,Ny_,Nz_
     integer :: i,ix,iy,ik,iz,unitk
-    integer :: Nx_
     real(8) :: kmax,kxmax,kymax,kzmax,dx,dy,dz
-    real(8),dimension(:),allocatable :: kxr,kyr
+    real(8),dimension(:),allocatable :: kxr,kyr,kzr
     !
     !    
     allocate(kxgrid(Nx),kygrid(Ny),kzgrid(Nz))
@@ -516,23 +644,26 @@ contains
        !
     end do
 
+    unitk=free_unit()
+    open(unit=unitk,file='mp_grid.out')
     do ix=1,Nx
        do iy=1,Ny
           do iz=1,Nz
-             write(251,'(10F18.10)') kxgrid(ix),kygrid(iy),kzgrid(iz)
+             write(unitk,'(10F18.10)') kxgrid(ix),kygrid(iy),kzgrid(iz)
           end do
        end do
     end do
-
-
+    close(unitk)
+    unitk=free_unit()
+    open(unit=unitk,file='mp_grid_aux.out')    
     do ix=1,3*Nx
        do iy=1,3*Ny
           do iz=1,3*Nz
-             write(252,'(10F18.10)') kxgrid_aux(ix),kygrid_aux(iy),kzgrid_aux(iz)
+             write(unitk,'(10F18.10)') kxgrid_aux(ix),kygrid_aux(iy),kzgrid_aux(iz)
           end do
        end do
     end do
-
+    close(unitk)
     !
 
 
@@ -565,38 +696,56 @@ contains
     ! kygrid=kxgrid*KK(2)
     ! !
     ! !+-Next brillouin zones! -+!
-    ! Nx_=Nx*N_cut_off
-    ! !
-    ! allocate(kxr(Nx_),kyr(Nx_))
-    ! kmax=dble(Nx_-1)*0.5d0/dble(Nx)
-    ! kxr = linspace(-kmax,kmax,Nx_)
-    ! kyr = kxr    
-    ! if(mod(Nx,2).eq.0) then
-    !    kxr=kxr-0.5d0/dble(Nx)
-    !    kyr=kyr-0.5d0/dble(Nx)
-    ! end if
-    ! !
-    ! Lkr=Nx_*Nx_
-    ! allocate(krl(Lkr,2),wtk_rl(Lkr),ikrl2ii(Lkr,2))
-    ! wtk_rl=1.d0/dble(Lkr)
-    ! !
-    ! KK(1)=2.d0*pi
-    ! KK(2)=2.d0*pi
-    ! !
-    ! unitk=free_unit()
-    ! open(unit=unitk,file='kRL_points.out')
-    ! ik=0
-    ! do ix=1,Nx_
-    !    do iy=1,Nx_
-    !       ik = ik + 1          
-    !       krl(ik,1)=kxr(ix)*KK(1)
-    !       krl(ik,2)=kyr(iy)*KK(2)
-    !       ikrl2ii(ik,1)=ix
-    !       ikrl2ii(ik,2)=iy
-    !       write(unitk,'(10F18.10)') krl(ik,1),krl(ik,2)
-    !    end do
-    ! end do
-    ! close(unitk)
+    Nx_=Nx*N_cut_off
+    Ny_=Ny*N_cut_off
+    Nz_=Nz*N_cut_off
+
+    allocate(kxr(Nx),kyr(Ny),kzr(Nz))
+    kmax=dble(Nx_-1)*0.5d0/dble(Nx_)
+    kxr = linspace(-kmax,kmax,Nx_)
+    !
+    kmax=dble(Ny_-1)*0.5d0/dble(Ny_)
+    kyr = linspace(-kmax,kmax,Ny_)
+    !
+    kmax=dble(Nz_-1)*0.5d0/dble(Nz_)
+    kzr = linspace(-kmax,kmax,Nz_)
+    !
+    if(mod(Nx_,2).eq.0) then
+       kxr=kxr-0.5d0/dble(Nx_)
+    end if
+    if(mod(Nx_,2).eq.0) then
+       kyr=kyr-0.5d0/dble(Ny_)
+    end if
+    if(mod(Nz_,2).eq.0) then
+       kzr=kzr-0.5d0/dble(Nz_)
+    end if
+    !
+    Lkr = Nx_*Ny_*Nz_
+    allocate(krl(Lkr,3),wtk_rl(Lkr),ikrl2ii(Lkr,3))
+    wtk_rl=1.d0/dble(Lkr)
+    !
+    !
+    unitk=free_unit()
+    open(unit=unitk,file='kRL_points.out')
+    ik=0
+    krl=0
+    do ix=1,Nx_
+       do iy=1,Nx_
+          do iz=1,Nz_
+             ik = ik + 1          
+             !
+             krl(ik,:)=krl(ik,:)+kxr(ix)*Bk1(:)
+             krl(ik,:)=krl(ik,:)+kyr(iy)*Bk2(:)
+             krl(ik,:)=krl(ik,:)+kzr(iz)*Bk3(:)
+             !
+             ikrl2ii(ik,1)=ix
+             ikrl2ii(ik,2)=iy
+             ikrl2ii(ik,3)=iz
+             write(unitk,'(10F18.10)') krl(ik,:)
+          end do
+       end do
+    end do
+    close(unitk)
     ! kxr=kxr*KK(1)
     ! kyr=kyr*KK(2)
     ! !
@@ -635,14 +784,23 @@ contains
     USE DMFT_VECTORS  
     USE VARS_GLOBAL
     implicit none
-    type(vect2D) :: q
-    real(8),dimension(Nso,Nso) :: Uq_jellium
     !
-    Uq_jellium = 0.d0
-    if(modulo(q).ne.0.d0) then
-       !Uq_jellium = Umat_loc + Umat/modulo(q)
-       Uq_jellium = Umat/modulo(q)
-    end if
+    real(8),dimension(:)       :: q
+    real(8),dimension(Nso,Nso) :: Uq_jellium
+    real(8) :: mod
+    integer :: i
+    !
+    mod=0.d0
+    do i=1,size(q)
+       mod=mod+q(i)**2.0
+    end do
+    mod=sqrt(mod)
+    Uq_jellium=Uloc_TNS
+    ! Uq_jellium = 0.d0
+    ! if(mod.ne.0.d0) then
+    !    !Uq_jellium = Umat_loc + Umat/modulo(q)
+    !    Uq_jellium = Umat/mod
+    ! end if
     !
   end function Uq_jellium
    

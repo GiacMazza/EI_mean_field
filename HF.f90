@@ -5,7 +5,8 @@ MODULE HF
   USE SF_OPTIMIZE
   USE SF_IOTOOLS
   USE SF_CONSTANTS
-  !USE DMFT_VECTORS
+  ! !USE DMFT_VECTORS
+
   implicit none
   private
 
@@ -22,28 +23,28 @@ MODULE HF
 contains
 
   subroutine shift_BZ(ik_in,ik_out)
-    integer :: ik_in,ik_out
-    integer :: ix_out,iy_out,ix,iy
-    !
+    integer(8) :: ik_in,ik_out
+    integer(8) :: ix_out,iy_out,iz_out
+    integer(8) :: ix,iy,iz
     !
     ix=ikrl2ii(ik_in,1)
     iy=ikrl2ii(ik_in,2)
-    !
+    iz=ikrl2ii(ik_in,3)
     !
     ix_out=ix; 
-!    write(*,*) 'ix',ix_out,ix_out-Nx,Nx
-    do while(ix_out.gt.Nx) 
-       ix_out=ix_out-Nx
+    do while(ix_out.gt.Nk_x) 
+       ix_out=ix_out-Nk_x
     end do
-
     iy_out=iy
-!    write(*,*) 'iy',iy_out,iy_out-Nx,Nx
-    do while(iy_out.gt.Nx) 
-       iy_out=iy_out-Nx
+    do while(iy_out.gt.Nk_y) 
+       iy_out=iy_out-Nk_y
     end do
-!    write(*,*) ix_out,iy_out
-    ik_out = igr2ik(ix_out,iy_out)
-
+    iz_out=iz
+    do while(iz_out.gt.Nk_z) 
+       iz_out=iz_out-Nk_z
+    end do
+    ik_out = igr2ik(ix_out,iy_out,iz_out)
+    !
   end subroutine shift_BZ
 
 
@@ -51,11 +52,10 @@ contains
     complex(8),dimension(Nso,Nso,Lk),intent(inout) :: delta_hf
     complex(8),dimension(Nso,Nso,Lk) :: Hhf        
     logical   :: IOfile
-    integer   :: flen
+    integer(8)  :: flen
     real(8)   :: mu_fix
     
     delta_hf=0.d0
-
     Hhf = Hk
     inquire(file=trim(init_Hsb),exist=IOfile)    
     if(IOfile) then
@@ -89,7 +89,7 @@ contains
   function check_conv(deltas_new,deltas_old) result(err)
     complex(8),dimension(Nso,Nso,Lk),intent(in) :: deltas_new,deltas_old
     real(8) :: err    
-    integer :: ik,iso,jso
+    integer(8):: ik,iso,jso
     err=0.d0
     do ik=1,Lk
        do iso=1,Nso
@@ -121,7 +121,7 @@ contains
       real(8),dimension(:) :: xmu
       real(8),dimension(size(xmu)) :: deltaN
       complex(8),dimension(Nso,Nso,Lk) :: Htmp
-      integer :: ik,iso
+      integer(8):: ik,iso
       do ik=1,Lk
          Htmp(:,:,ik)=Hhf(:,:,ik)-xmu(1)*zeye(Nso)        
       end do
@@ -129,7 +129,7 @@ contains
       deltaN=0.d0
       do ik=1,Lk
          do iso=1,Nso
-            deltaN = deltaN + deltas(iso,iso,ik)*wtk(ik)
+            deltaN = deltaN + dreal(deltas(iso,iso,ik)*wtk(ik))
          end do
       end do
       deltaN(1)=deltaN(1)-Ndens
@@ -141,7 +141,7 @@ contains
     complex(8),dimension(:,:,:),intent(inout) :: Deltas
     real(8),dimension(size(Hhf,1)) :: Ehf
     complex(8),dimension(size(Hhf,1),size(Hhf,1)) :: Htmp    
-    integer :: ik,i,j,ii,jj
+    integer(8):: ik,i,j,ii,jj
     !
     if(size(Hhf,1).ne.Nso) stop "error in Hhf1"
     if(size(Hhf,2).ne.Nso) stop "error in Hhf2"
@@ -173,7 +173,7 @@ contains
   subroutine build_HF_hamiltonian(Hhf,Deltas,Uq)
     complex(8),dimension(:,:,:),intent(inout) :: Hhf
     complex(8),dimension(:,:,:),intent(in) :: Deltas    
-    integer :: ik,i,j,ii,jj,jk,iso,jso,jjk
+    integer(8):: ik,i,j,ii,jj,jk,iso,jso,jjk
     real(8),dimension(:),allocatable :: deltaK,deltak_
     real(8),dimension(Nso,Nso) :: Uh,Uf
     complex(8),dimension(Nso,Nso) :: Htest
@@ -195,14 +195,14 @@ contains
     if(size(Deltas,2).ne.Nso) stop "error in Deltas2"
     if(size(Deltas,3).ne.Lk) stop "error in Deltas3"
     !
-    allocate(deltak(size(k_bz,2)),deltak_(size(k_bz,2)))
+    allocate(deltak(size(kpt_latt,2)),deltak_(size(kpt_latt,2)))
     !
     Hhf=0.d0
     do ik=1,Lk
        Hhf(:,:,ik) = Hk(:,:,ik)       
        do jk=1,Lkr
           !
-          deltaK = k_bz(ik,:) - krl(jk,:)
+          deltaK = kpt_latt(ik,:) - krl(jk,:)
           !
           Uf=Uq(deltaK)
           deltaK=0.d0
@@ -228,7 +228,7 @@ contains
   ! subroutine build_HF_hamiltonian(Hhf,Deltas,Uq)
   !   complex(8),dimension(:,:,:),intent(inout) :: Hhf
   !   complex(8),dimension(:,:,:),intent(in) :: Deltas    
-  !   integer :: ik,i,j,ii,jj,jk,iso,jso
+  !   integer(8):: ik,i,j,ii,jj,jk,iso,jso
   !   real(8),dimension(:),allocatable :: deltaK
   !   real(8),dimension(Nso,Nso) :: Uh,Uf
   !   complex(8),dimension(Nso,Nso) :: Htest
@@ -286,7 +286,7 @@ contains
   !   complex(8),dimension(Nso,Nso,Lk) :: Hhf
   !   real(8),dimension(size(Deltas,1)) :: Ehf
   !   complex(8),dimension(size(Hhf,1),size(Hhf,1)) :: Htmp    
-  !   integer :: ik,i,j,ii,jj
+  !   integer(8):: ik,i,j,ii,jj
   !   interface
   !      function Uq(q)
   !        USE DMFT_VECTORS  
@@ -332,7 +332,7 @@ contains
     complex(8),dimension(:,:,:),allocatable :: Hhf_grid
     complex(8),dimension(Nso,Nso,Lk),intent(inout) :: Deltas    
     real(8) :: xmu
-    integer :: ik
+    integer(8):: ik
     interface
        function Uq(q)
          USE DMFT_VECTORS  
@@ -358,7 +358,7 @@ contains
   subroutine local_single_particle_observables(deltas,vec_obs)
     complex(8),dimension(Nso,Nso,Lk),intent(inout) :: Deltas    
     complex(8),dimension(:),allocatable :: vec_obs
-    integer :: ik,iso,jso,ii
+    integer(8):: ik,iso,jso,ii
     !
     ii=Nso*(Nso+1)/2
     if(allocated(vec_obs)) deallocate(vec_obs)
@@ -368,13 +368,9 @@ contains
     do ik=1,Lk
        ii=0
        do iso=1,Nso
-          ii=ii+1
-          vec_obs(ii) = vec_obs(ii)+deltas(iso,iso,ik)*wtk(ik)
-       end do
-       do iso=1,Nso
-          do jso=iso+1,Nso
+          do jso=iso,Nso
              ii=ii+1
-             vec_obs(ii) = vec_obs(ii)+deltas(iso,jso,ik)*wtk(ik)
+             vec_obs(ii) = vec_obs(ii)+deltas(iso,jso,ik)*wtk(ik)             
           end do
        end do
     end do
