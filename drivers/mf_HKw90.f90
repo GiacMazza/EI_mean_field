@@ -6,6 +6,7 @@ program officina
   USE VARS_GLOBAL
   USE DMFT_VECTORS
   USE HF
+  USE HF_real
   !
   !
   USE MPI
@@ -17,13 +18,11 @@ program officina
   integer :: Nint
 
   real(8) :: KKx,KKy
-  complex(8),dimension(:,:,:),allocatable :: delta_hf,H_hf,delta_hf_,Hhf_grid
+  complex(8),dimension(:,:,:),allocatable :: delta_hf,H_hf,delta_hf_,Hhf_grid,delta_hfr,delta_hfr_
   complex(8),dimension(:,:,:),allocatable :: hr_w90
   real(8) :: mu_fix
   real(8) :: Uintra,Uinter,Delta_CF
   real(8) :: Uq,thop,err_hf
-  real(8),dimension(3) :: R1,R2,R3
-  real(8),dimension(3) :: Bk1,Bk2,Bk3
   !real(8),dimension(3,3) :: Bkinv
 
   real(8),dimension(3) :: ktest
@@ -45,7 +44,7 @@ program officina
   integer,dimension(:),allocatable :: units_loc_obs
   integer :: flen,iread
 
-  integer :: ir,jr,kr,iir,nrpts  
+  integer :: ir,jr,kr,iir
   real(8),dimension(3) :: Rlat 
 
   complex(8),dimension(:),allocatable :: obs_loc
@@ -73,9 +72,9 @@ program officina
   character(len=1),dimension(4) :: kpoint_name
 
 
-  integer,dimension(:,:),allocatable :: irvec
 
-  integer,dimension(:),allocatable :: ndegen
+
+
 
   real(8) :: modk,tmpi,tmpj
   real(8) :: kmod(3)
@@ -173,7 +172,6 @@ program officina
      end do
   end do
   !
-
   Lk_aux=3*3*3*Lk
   allocate(kpt_latt_aux(Lk_aux,3),ik_stride_aux(Lk_aux,3),igr2ik_aux(3*Nk_x,3*Nk_y,3*Nk_z))
   ik=0
@@ -214,12 +212,143 @@ program officina
   close(uio)
 
   !+---------------------------------+!  
-
   file_name=reg(read_tns)//reg(file_w90_hr)  
   !+- read the w90 output -+!
   allocate(Hk_w90(Nso,Nso,Lk),Hloc(Nso,Nso))
   call read_w90_hr(R1,R2,R3,Hr_w90,Hloc,irvec,ndegen,trim(file_name),1,6,1)
   nrpts=size(irvec,1)
+
+
+  !+- read local interaction term -+!
+  allocate(Uloc_TNS(Nso,Nso))
+  flen=file_length('TNS_Uloc.dat')
+  if(flen.ne.Nso*Nso) stop "error in reading Uloc"
+  unit_in=free_unit(); 
+  open(unit=unit_in,file='TNS_Uloc.dat',status="old",action="read")  
+  do i=1,Nso
+     do j=1,Nso
+        read(unit_in,*) tmpi,tmpj,Uloc_TNS(j,i)
+     end do
+  end do
+  close(unit_in)
+  if(Nspin.eq.1) then
+     do i=1,Nso
+        Uloc_TNS(i,i) = 0.d0
+     end do
+  end if
+  
+  !+- read U(q) -+!
+  file_name=reg(read_tns)//reg(file_UV)
+  open(unit=unit_in,file=trim(file_name),status="old",action="read")  
+  read(unit_in,*) 
+  read(unit_in,*) 
+  allocate(read_tmp(9))
+  !
+  allocate(Uq_TNS(Nso,Nso,Lk),Vq_TNS(Nso,Nso,Lk),check_Uloc(Nso,Nso))
+  check_Uloc=0.d0
+  ik=0
+  do ix=1,Nk_x
+     do iz=1,Nk_z
+        do iy=1,Nk_y
+           ik=ik+1
+           !
+           do i=1,Nso
+              do j=1,Nso
+                 read(unit_in,*) read_tmp(1:9),Vq_read,Uq_read
+                 Uq_TNS(i,j,ik) = Uq_read(1)+xi*Uq_read(2)
+                 Vq_TNS(i,j,ik) = Vq_read(1)+xi*Vq_read(2)                 
+                 check_Uloc(i,j) = check_Uloc(i,j) + Uq_TNS(i,j,ik)*wtk(ik)
+              end do
+           end do
+           !
+        end do
+     end do
+  end do
+  close(unit_in)
+
+  open(unit_in,file='read_Uq.tns')
+  do ik=1,Lk
+     !+- here print out Uq vs |q| -+!
+     modk=kpt_latt(ik,1)**2.d0+kpt_latt(ik,2)**2.d0+kpt_latt(ik,3)**2.d0
+     modk=sqrt(modk)
+     
+     do i=1,Nso
+        Uq_TNS(i,i,ik)=Uq_TNS(i,i,ik)-check_Uloc(i,i)
+        Vq_TNS(i,i,ik)=Vq_TNS(i,i,ik)-check_Uloc(i,i)
+     end do
+     write(unit_in,'(50F9.5)') modk,Uq_TNS(1,1:6,ik),Uq_TNS(2,2:6,ik),Uq_TNS(3,3:6,ik),Uq_TNS(4,4:6,ik),Uq_TNS(5,5:6,ik),Uq_TNS(6,6,ik)
+  end do
+  close(unit_in)
+
+  allocate(rpt_latt(nrpts,3))
+  allocate(Ur_TNS(Nso,Nso,nrpts))
+  open(unit_in,file='Ur_full_space.tns')
+  !+- get the full real space interaction -+!
+  Ur_TNS=0.d0
+  do ir=1,nrpts
+     !
+     rpt_latt(ir,:)=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3     
+     call FT_q2r(rpt_latt(ir,:),Ur_TNS(:,:,ir),Uq_TNS)
+     modk=rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0
+     modk=sqrt(modk)
+     write(unit_in,'(50F9.5)') modk,rpt_latt(ir,1:3),Ur_TNS(1,1:6,ir),Ur_TNS(2,2:6,ir),Ur_TNS(3,3:6,ir),Ur_TNS(4,4:6,ir),Ur_TNS(5,5:6,ir),Ur_TNS(6,6,ir)
+     !
+  end do
+  close(unit_in)
+  
+  !+- get the truncated interaction -+!
+  open(unit_in,file='Ur_truncated.tns')
+  Ur_TNS=0.d0
+  do ir=1,nrpts
+     rpt_latt(ir,:)=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3     
+     modk=rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0
+     !     
+     modk=sqrt(modk)
+     if(modk.lt.20.0) then        
+        call FT_q2r(rpt_latt(ir,:),Ur_TNS(:,:,ir),Uq_TNS)
+     end if
+     write(unit_in,'(50F9.5)') modk,rpt_latt(ir,1:3),Ur_TNS(1,1:6,ir),Ur_TNS(2,2:6,ir),Ur_TNS(3,3:6,ir),Ur_TNS(4,4:6,ir),Ur_TNS(5,5:6,ir),Ur_TNS(6,6,ir)
+  end do
+  close(unit_in)
+  !
+  !+- transform back to momentum space -+!
+  !
+  open(unit_in,file='Uq_truncated.tns')
+  Uq_TNS=0.d0
+  do ik=1,Lk
+     call FT_r2q(kpt_latt(ik,:),Uq_TNS(:,:,ik),Ur_TNS)
+     modk=kpt_latt(ik,1)**2.d0+kpt_latt(ik,2)**2.d0+kpt_latt(ik,3)**2.d0
+     modk=sqrt(modk)
+     write(unit_in,'(50F9.5)') modk,Uq_TNS(1,1:6,ik),Uq_TNS(2,2:6,ik),Uq_TNS(3,3:6,ik),Uq_TNS(4,4:6,ik),Uq_TNS(5,5:6,ik),Uq_TNS(6,6,ik)
+  end do
+  close(unit_in)
+  !
+  
+
+  allocate(delta_hfr(Nso,Nso,nrpts),delta_hfr_(Nso,Nso,nrpts)) 
+  call init_var_params_latt(delta_hfr,Hr_w90)
+  mu_fix=4.d0
+  call find_chem_pot_latt(Hr_w90,delta_hfr,mu_fix)
+  do iso=1,Nso
+     write(*,*) delta_hfr(iso,iso,ir0)
+  end do
+  write(*,*) mu_fix
+  stop
+  
+
+
+
+
+
+
+
+
+
+
+
+  !+- old stuff in momentum space -+!
+  !
+  
   !+- get Hk_w90 for each k-point -+!
   Hk_w90=0.d0
   do ik=1,Lk
@@ -234,10 +363,6 @@ program officina
      !
   end do
 
-
-
-
-
   !+- compute number of particles -+!
   allocate(ccij(Nso,Nso))
   allocate(Hktmp(Nso,Nso))
@@ -246,8 +371,7 @@ program officina
   ccij=0.d0
   allocate(delta_hf(Nso,Nso,Lk),H_hf(Nso,Nso,Lk),delta_hf_(Nso,Nso,Lk))
 
-  mu_fix=4.d0
-  !call find_chem_pot(Hk_w90,ccij,mu_fix)
+
   unit_in=free_unit(); 
   open(unit=unit_in,file='Ta_Ni_bare_vk.dat')    
   do ik=1,Lk     
@@ -281,69 +405,8 @@ program officina
   write(*,*) 'Ncell',Ncell
 
 
-  allocate(Uloc_TNS(Nso,Nso))
-  flen=file_length('TNS_Uloc.dat')
-  if(flen.ne.Nso*Nso) stop "error in reading Uloc"
-  unit_in=free_unit(); 
-  open(unit=unit_in,file='TNS_Uloc.dat',status="old",action="read")  
-  do i=1,Nso
-     do j=1,Nso
-        read(unit_in,*) tmpi,tmpj,Uloc_TNS(j,i)
-     end do
-  end do
-  close(unit_in)
-  if(Nspin.eq.1) then
-     do i=1,Nso
-        Uloc_TNS(i,i) = 0.d0
-     end do
-  end if
-
-  file_name=reg(read_tns)//reg(file_UV)
-  open(unit=unit_in,file=trim(file_name),status="old",action="read")  
-  read(unit_in,*) 
-  read(unit_in,*) 
-  allocate(read_tmp(9))
-  !
-  allocate(Uq_TNS(Nso,Nso,Lk),Vq_TNS(Nso,Nso,Lk),check_Uloc(Nso,Nso))
-  check_Uloc=0.d0
-  ik=0
-  do ix=1,Nk_x
-     do iz=1,Nk_z
-        do iy=1,Nk_y
-           ik=ik+1
-           !
-           do i=1,Nso
-              do j=1,Nso
-                 read(unit_in,*) read_tmp(1:9),Vq_read,Uq_read
-                 Uq_TNS(i,j,ik) = Uq_read(1)+xi*Uq_read(2)
-                 Vq_TNS(i,j,ik) = Vq_read(1)+xi*Vq_read(2)                 
-                 check_Uloc(i,j) = check_Uloc(i,j) + Uq_TNS(i,j,ik)*wtk(ik)
-              end do
-           end do
-           !
-        end do
-     end do
-  end do
-  close(unit_in)
 
 
-  do ik=1,Lk
-     !+- here print out Uq vs |q| -+!
-     modk=kpt_latt(ik,1)**2.d0+kpt_latt(ik,2)**2.d0+kpt_latt(ik,3)**2.d0
-     modk=sqrt(modk)
-     write(601,'(20F18.10)') modk,Uq_TNS(1,1,ik),Uq_TNS(1,2,ik),Uq_TNS(1,6,ik),Uq_TNS(3,5,ik)
-     ! write(501,'(20F18.10)') modk,check_Uloc(1,:)
-     ! write(602,'(20F18.10)') modk,Uq_TNS(2,:,ik)
-     ! write(603,'(20F18.10)') modk,Uq_TNS(3,:,ik)
-     ! write(604,'(20F18.10)') modk,Uq_TNS(4,:,ik)
-     ! write(605,'(20F18.10)') modk,Uq_TNS(5,:,ik)
-     ! write(606,'(20F18.10)') modk,Uq_TNS(6,:,ik)
-     do i=1,Nso
-        ! Uq_TNS(i,i,ik)=Uq_TNS(i,i,ik)-check_Uloc(i,i)
-        ! Vq_TNS(i,i,ik)=Vq_TNS(i,i,ik)-check_Uloc(i,i)
-     end do
-  end do
-  !stop
 
   do i=1,Nso
      do j=1,Nso
@@ -354,27 +417,7 @@ program officina
 
   !+- here obtain the Fourier transform of the density density Coulomb interaction U(R-R') -+!  
   !+- TEST of THE FT -+!
-  allocate(rpt_latt(nrpts,3))
-  allocate(Ur_TNS(Nso,Nso,nrpts))
-  Ur_TNS=0.d0
-  do ir=1,nrpts
-     !
-     rpt_latt(ir,:)=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3     
-     call FT_q2r(rpt_latt(ir,:),Ur_TNS(:,:,ir),Uq_TNS)
-     modk=rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0
-     modk=sqrt(modk)
-     write(501,'(20F18.10)') modk,Ur_TNS(1,1,ir),Ur_TNS(1,2,ir),Ur_TNS(1,6,ir),Ur_TNS(1,5,ir)
-     write(511,'(20F18.10)') rpt_latt(ir,1:3),Ur_TNS(4,5,iir),Ur_TNS(5,4,iir),Ur_TNS(1,6,ir),Ur_TNS(6,1,ir)
-     !
-  end do
-  ! Uq_TNS=0.d0
-  ! do ik=1,Lk
-  !    call FT_r2q(kpt_latt(ik,:),Uq_TNS(:,:,ik),Ur_TNS)
-  !    modk=kpt_latt(ik,1)**2.d0+kpt_latt(ik,2)**2.d0+kpt_latt(ik,3)**2.d0
-  !    modk=sqrt(modk)
-  !    write(502,'(20F18.10)') modk,Uq_TNS(1,1,ik),Uq_TNS(1,2,ik),Uq_TNS(1,6,ik),Uq_TNS(3,5,ik)     
-  ! end do
-  
+  !
   Ur_TNS=0.d0
   iir=0
   do ir=1,6
@@ -435,59 +478,15 @@ program officina
   ! end do
   
   
-  Ur_TNS=0.d0
+  
+
+
+
   do ir=1,nrpts
-     rpt_latt(ir,:)=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3     
-     modk=rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0
-     !
-     Rlat=dble(Nk_x*0.5d0)*R1+dble(Nk_y*0.5d0)*R2+dble(Nk_z*0.5d0)*R3
-     Uradius=.true.
-     Uradius=Uradius.and.(abs(rpt_latt(ir,1)).lt.abs(Rlat(1)))
-     Uradius=Uradius.and.(abs(rpt_latt(ir,2)).lt.abs(Rlat(2)))
-     Uradius=Uradius.and.(abs(rpt_latt(ir,3)).lt.abs(Rlat(3)))
-     !     
-     modk=sqrt(modk)
-     if(modk.lt.20.0) then        
-        call FT_q2r(rpt_latt(ir,:),Ur_TNS(:,:,ir),Uq_TNS)
-        write(802,*) rpt_latt(ir,:),Rlat
-     end if
-     write(801,'(20F18.10)') modk,Ur_TNS(1,1,ir),Ur_TNS(1,2,ir),Ur_TNS(1,6,ir),Ur_TNS(1,5,ir)
+     call FT_q2r(rpt_latt(ir,:),delta_hfr(:,:,ir),delta_hf)
   end do
-  
-
-
-  Uq_TNS=0.d0
-  do ik=1,Lk
-     call FT_r2q(kpt_latt(ik,:),Uq_TNS(:,:,ik),Ur_TNS)
-     modk=kpt_latt(ik,1)**2.d0+kpt_latt(ik,2)**2.d0+kpt_latt(ik,3)**2.d0
-     modk=sqrt(modk)
-     write(502,'(20F18.10)') modk,Uq_TNS(1,1,ik),Uq_TNS(1,2,ik),Uq_TNS(1,6,ik),Uq_TNS(3,5,ik)     
-  end do
-
-  
-  stop
-
-
-
-
-
-
-  allocate(Hk(Nso,Nso,Lk)); Hk=Hk_w90  
-  call init_var_params(delta_hf)
-  do i=1,4
-     do j=5,6
-        delta_hf(i,j,:) = 0.10
-        delta_hf(j,i,:) = 0.10
-     end do
-  end do
-
-
-
-  delta_hf_=delta_hf
-
-  unit_err=free_unit()
-  open(unit=unit_err,file='err_q.err')
-
+  call init_var_params_latt(delta_hfr,Hr_w90)
+  !
   Nobs=Nso*(Nso+1)/2
   allocate(units_loc_obs(Nobs))
   units_loc_obs=free_units(Nobs)
@@ -500,6 +499,41 @@ program officina
   end do
   unit_obs=free_unit()
   open(unit=unit_obs,file='ndens_hf.loop')
+
+  err_hf=1.d0  
+  do ihf=1,Nhf
+     write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix               
+     iso=0
+     Ncell=0.d0
+     do i=1,Nso           
+        Ncell=Ncell+obs_loc(i)
+        do j=i,Nso
+           iso=iso+1
+           write(units_loc_obs(iso),'(10F18.10)') dble(ihf),delta_hfr(iso,jso,ir0)
+        end do
+     end do
+     write(unit_obs,'(10F18.10)') dble(ihf),ndens
+     !
+     call build_HF_hamiltonian_latt(Hr_w90,delta_hfr,Ur_TNS)          
+     call find_chem_pot_latt(H_hf,delta_hfr,mu_fix)
+     delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
+     !
+     err_hf=check_conv(delta_hf,delta_hf_)     
+     !
+     delta_hf_=delta_hf
+     !
+  end do
+  close(unit_err)
+  close(unit_obs)
+
+  stop
+
+
+  delta_hf_=delta_hf
+
+  unit_err=free_unit()
+  open(unit=unit_err,file='err_q.err')
+
 
   !Uloc_TNS
   err_hf=1.d0  
@@ -794,43 +828,6 @@ program officina
 
 contains
 
-
-  subroutine FT_q2r(Rlat,Fr,Fk) 
-    implicit none
-    real(8),dimension(3) :: kpoint
-    complex(8),dimension(Nso,Nso) :: Fr
-    complex(8),dimension(Nso,Nso,Lk) :: Fk
-    integer :: ik
-    real(8),dimension(3) :: Rlat
-    real(8) :: dotRk
-    !
-    Fr=0.d0
-    do ik=1,Lk
-       kpoint=kpt_latt(ik,:)
-       dotRk=dot_product(Rlat,kpoint)
-       Fr=Fr+exp(-xi*dotRk)*Fk(:,:,ik)*wtk(ik)
-    end do
-  end subroutine FT_q2r
-
-  subroutine FT_r2q(kpoint,Fk,Fr) 
-    implicit none
-    real(8),dimension(3) :: kpoint
-    complex(8),dimension(Nso,Nso) :: Fk
-    complex(8),dimension(Nso,Nso,nrpts) :: Fr
-    integer :: ir
-    real(8),dimension(3) :: Rlat
-    real(8) :: dotRk
-    !
-    Fk=0.d0
-    do ir=1,nrpts
-       Rlat=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3
-       dotRk=dot_product(Rlat,kpoint)
-       Fk = Fk + Fr(:,:,ir)*exp(xi*dotRK)/dble(ndegen(ir))
-    end do
-    !
-  end subroutine FT_r2q
-
-  !
   !
 
 

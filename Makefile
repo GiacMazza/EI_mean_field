@@ -13,7 +13,7 @@ DIREXE=${HOME}/.project_bin
 .SUFFIXES: .f90
 
 #
-OBJS=VARS_GLOBAL.o HF.o 
+OBJS=VARS_GLOBAL.o HF.o  R_HF.o
 
 LIBDIR=$(HOME)/opt_local
 #LIBDIR=/opt/

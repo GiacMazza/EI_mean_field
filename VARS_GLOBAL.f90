@@ -1,6 +1,6 @@
 MODULE VARS_GLOBAL
   !USE DMFT_VECTORS
-!  USE DMFT_TIGHT_BINDING
+  !  USE DMFT_TIGHT_BINDING
   USE SF_IOTOOLS
   USE SF_PARSE_INPUT
   USE SF_CONSTANTS
@@ -16,17 +16,24 @@ MODULE VARS_GLOBAL
   !
 
   real(8),dimension(3,3) :: Bkinv
+  real(8),dimension(3) :: R1,R2,R3
+  real(8),dimension(3) :: Bk1,Bk2,Bk3
+
 
   real(8),dimension(:,:),allocatable :: kpt_latt
   real(8),dimension(:,:),allocatable :: kpt_latt_aux
 
+  integer,dimension(:),allocatable :: ndegen
+
   real(8),dimension(:,:),allocatable :: rpt_latt
+  integer :: nrpts
+  integer,dimension(:,:),allocatable :: irvec
 
   real(8),dimension(:,:),allocatable :: k_bz,krl
   real(8) :: dk_mesh
   integer(8),dimension(:,:,:),allocatable :: ik2ii,igr2ik,igr2ik_aux
   integer(8),dimension(:,:),allocatable  :: ikrl2ii
-  !integer(8),dimension(:,:),allocatable :: ik_stride
+  integer(8),dimension(:,:,:),allocatable :: ir_stride
 
   real(8),dimension(:),allocatable :: kxgrid,kygrid,kzgrid,kxx,kyy,kzz
   real(8),dimension(:),allocatable :: kxgrid_aux,kygrid_aux,kzgrid_aux
@@ -40,6 +47,10 @@ MODULE VARS_GLOBAL
   character(len=100) :: init_HF,init_Hsb
 
   logical :: whartree,only_LOC
+
+
+  integer :: ir0
+  integer,dimension(:),allocatable :: ir_mirror
 
 
 contains
