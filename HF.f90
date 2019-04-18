@@ -12,11 +12,14 @@ MODULE HF
 
   public :: solve_HF_hamiltonian
   public :: build_HF_hamiltonian
+  public :: build_HF_hamiltonian_ij
+
   public :: find_chem_pot
   public :: check_conv
   public :: local_single_particle_observables
   public :: init_var_params
   public :: store_HF_hamiltonian_BZgrid
+  public :: store_HF_hamiltonian_BZgrid_ij
 
   public :: shift_BZ
 
@@ -169,7 +172,6 @@ contains
        !
     end do
   end subroutine solve_HF_hamiltonian
-  
   subroutine build_HF_hamiltonian(Hhf,Deltas,Uq)
     complex(8),dimension(:,:,:),intent(inout) :: Hhf
     complex(8),dimension(:,:,:),intent(in) :: Deltas    
@@ -223,110 +225,100 @@ contains
     end do
     !
   end subroutine build_HF_hamiltonian
+  
+  subroutine build_HF_hamiltonian_ij(Hhf,Deltas,Uq)
+    complex(8),dimension(:,:,:),intent(inout) :: Hhf
+    complex(8),dimension(:,:,:),intent(in) :: Deltas    
+    integer:: ik,i,j,ii,jj,kk,jk,iso,jso,jjk
+    real(8),dimension(:),allocatable :: deltaK,deltak_
+    complex(8),dimension(Nso,Nso) :: Uh,Uf
+    complex(8),dimension(Nso,Nso) :: Hhartree
 
+    real(8),dimension(3) :: deltak_target
 
-  ! subroutine build_HF_hamiltonian(Hhf,Deltas,Uq)
-  !   complex(8),dimension(:,:,:),intent(inout) :: Hhf
-  !   complex(8),dimension(:,:,:),intent(in) :: Deltas    
-  !   integer(8):: ik,i,j,ii,jj,jk,iso,jso
-  !   real(8),dimension(:),allocatable :: deltaK
-  !   real(8),dimension(Nso,Nso) :: Uh,Uf
-  !   complex(8),dimension(Nso,Nso) :: Htest
-  !   interface
-  !      function Uq(q)
-  !        USE DMFT_VECTORS  
-  !        USE VARS_GLOBAL
-  !        implicit none
-  !        !type(vect2D) :: q
-  !        real(8),dimension(:) :: q
-  !        real(8),dimension(Nso,Nso) :: Uq
-  !      end function Uq
-  !   end interface
-  !   !
-  !   if(size(Hhf,1).ne.Nso) stop "error in Hhf1"
-  !   if(size(Hhf,2).ne.Nso) stop "error in Hhf2"
-  !   if(size(Hhf,3).ne.Lk) stop "error in Hhf3"
-  !   !
-  !   if(size(Deltas,1).ne.Nso) stop "error in Deltas1"
-  !   if(size(Deltas,2).ne.Nso) stop "error in Deltas2"
-  !   if(size(Deltas,3).ne.Lk) stop "error in Deltas3"
-  !   !
-  !   !Htest=0.d0
-    
-  !   allocate(deltak(size(k_bz,2)))
+    interface
+       function Uq(iq)
+         USE DMFT_VECTORS  
+         USE VARS_GLOBAL
+         implicit none
+         !real(8),dimension(:) :: q
+         integer :: iq
+         complex(8),dimension(Nso,Nso) :: Uq
+       end function Uq
+    end interface
+    !
+    if(size(Hhf,1).ne.Nso) stop "error in Hhf1"
+    if(size(Hhf,2).ne.Nso) stop "error in Hhf2"
+    if(size(Hhf,3).ne.Lk) stop "error in Hhf3"
+    !
+    if(size(Deltas,1).ne.Nso) stop "error in Deltas1"
+    if(size(Deltas,2).ne.Nso) stop "error in Deltas2"
+    if(size(Deltas,3).ne.Lk) stop "error in Deltas3"
+    !
+    allocate(deltak(size(kpt_latt,2)),deltak_(size(kpt_latt,2)))
+    !
+    Hhf=0.d0
+    do ik=1,Lk
+       Hhf(:,:,ik) = Hk(:,:,ik)       
 
-  !   Hhf=0.d0
-  !   do ik=1,Lk
-  !      Hhf(:,:,ik) = Hk(:,:,ik)       
-  !      do jk=1,Lk
-  !         !
-  !         deltaK = k_bz(ik,:) - k_bz(jk,:)
-  !         Uf=Uq(deltaK)
-  !         deltaK=0.d0
-  !         Uh=Uq(deltak)
-  !         !
-  !         do iso=1,Nso
-  !            do jso=1,Nso
-  !               Hhf(iso,jso,ik) = Hhf(iso,jso,ik) - &
-  !                    Uf(iso,jso)*Deltas(iso,jso,jk)*wtk(jk)                     
-  !               Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + &
-  !                    Uh(iso,jso)*Deltas(jso,jso,jk)*wtk(jk)
-  !            end do
-  !         end do
-  !         !
-  !      end do
-  !   end do
-  !   !
-  ! end subroutine build_HF_hamiltonian
+       Hhartree=0.d0
 
+       do jk=1,Lk !+- U(jk)*Delta(ik-jk)
+          !
+          deltak = kpt_latt(ik,:) + kpt_latt(jk,:)
+          !+- find deltaK in the aux lattice -+!
+          deltak_target=matmul(Bkinv,deltak)
+          !
+          do ii=1,3*Nk_x
+             if(abs(deltak_target(1)-kxgrid_aux(ii)).lt.1.d-10) exit              
+          end do
+          do jj=1,3*Nk_y
+             if(abs(deltak_target(2)-kygrid_aux(jj)).lt.1.d-10) exit              
+          end do
+          do kk=1,3*Nk_z
+             if(abs(deltak_target(3)-kzgrid_aux(kk)).lt.1.d-10) exit              
+          end do
+          !
+          Uf=Uq(jk)
+          if(abs(kpt_latt(jk,1))**2.d0+abs(kpt_latt(jk,2))**2.d0+abs(kpt_latt(jk,3))**2.d0.lt.1.d-8) then
+             Uf=0.d0
+             Uh=0.d0
+             if(whartree) then
+                Uf=Uq(jk)
+                Uh=Uq(jk)
+             end if
+          end if
+          Uh=0.d0
+          !
+          !
+          ii=ix_aux(ii)
+          jj=iy_aux(jj)
+          kk=iz_aux(kk)
+          !
+          jjk=igr2ik(ii,jj,kk)
+          !
+          do iso=1,Nso
+             do jso=1,Nso                
+                Hhf(iso,jso,ik) = Hhf(iso,jso,ik)- &
+                     0.5d0*Uf(iso,jso)*Deltas(jso,iso,jjk)*wtk(jk)- &
+                     0.5d0*Uf(iso,jso)*Deltas(iso,jso,jjk)*wtk(jk)                
+             end do
+             Hhartree(iso,iso) = Hhartree(iso,iso) + Deltas(iso,iso,jk)*wtk(jk)
+          end do
+          !          
+       end do
 
+       do iso=1,Nso       
+          do jso=1,Nso
+             Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + Hhartree(iso,iso)*Uh(iso,jso)
+          end do
+       end do
 
-  ! subroutine print_HF_bands(Deltas,xmu,Uq)
-  !   complex(8),dimension(:,:,:),intent(inout) :: Deltas
-  !   complex(8),dimension(Nso,Nso,Lk) :: Hhf
-  !   real(8),dimension(size(Deltas,1)) :: Ehf
-  !   complex(8),dimension(size(Hhf,1),size(Hhf,1)) :: Htmp    
-  !   integer(8):: ik,i,j,ii,jj
-  !   interface
-  !      function Uq(q)
-  !        USE DMFT_VECTORS  
-  !        USE VARS_GLOBAL
-  !        implicit none
-  !        type(vect2D) :: q
-  !        real(8),dimension(Nso,Nso) :: Uq
-  !      end function Uq
-  !   end interface
+    end do
 
-  !   !
-  !   if(size(Hhf,1).ne.Nso) stop "error in Hhf1"
-  !   if(size(Hhf,2).ne.Nso) stop "error in Hhf2"
-  !   if(size(Hhf,3).ne.Lk) stop "error in Hhf3"
-  !   !
-  !   if(size(Deltas,1).ne.Nso) stop "error in Deltas1"
-  !   if(size(Deltas,2).ne.Nso) stop "error in Deltas2"
-  !   if(size(Deltas,3).ne.Lk) stop "error in Deltas3"
-  !   !
+    !
+  end subroutine build_HF_hamiltonian_ij
 
-  !   call build_HF_hamiltonian
-
-  !   do ik=1,Lk
-  !      !
-  !      Htmp=Hhf(:,:,ik)
-  !      call eigh(Htmp,Ehf)
-  !      !
-  !      do i=1,Nso
-  !         do j=1,i
-  !            Deltas(i,j,ik)=0.d0             
-  !            do jj=1,Nso
-  !               Deltas(i,j,ik) = Deltas(i,j,ik) + &
-  !                    conjg(Htmp(i,jj))*Htmp(j,jj)*fermi(Ehf(jj),beta)
-  !            end do
-  !            Deltas(j,i,ik)=conjg(Deltas(i,j,ik))
-  !         end do
-  !      end do
-  !      !
-  !   end do
-  ! end subroutine print_HF_bands
 
   subroutine store_HF_hamiltonian_BZgrid(Hhf_grid,deltas,xmu,Uq)
     complex(8),dimension(:,:,:),allocatable :: Hhf_grid
@@ -351,6 +343,31 @@ contains
     end do
     !
   end subroutine store_HF_hamiltonian_BZgrid
+
+
+  subroutine store_HF_hamiltonian_BZgrid_ij(Hhf_grid,deltas,xmu,Uq)
+    complex(8),dimension(:,:,:),allocatable :: Hhf_grid
+    complex(8),dimension(Nso,Nso,Lk),intent(inout) :: Deltas    
+    real(8) :: xmu
+    integer(8):: ik
+    interface
+       function Uq(iq)
+         USE DMFT_VECTORS  
+         USE VARS_GLOBAL
+         implicit none
+         integer :: iq
+         complex(8),dimension(Nso,Nso) :: Uq
+       end function Uq
+    end interface
+    !
+    if(allocated(Hhf_grid)) deallocate(Hhf_grid)
+    allocate(Hhf_grid(Nso,Nso,Lk)); Hhf_grid=0.d0
+    call build_HF_hamiltonian_ij(Hhf_grid,deltas,Uq)    
+    do ik=1,Lk
+       Hhf_grid(:,:,ik) = Hhf_grid(:,:,ik)-xmu*zeye(Nso)
+    end do
+    !
+  end subroutine store_HF_hamiltonian_BZgrid_ij
 
 
 
