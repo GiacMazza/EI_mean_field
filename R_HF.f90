@@ -121,10 +121,12 @@ contains
     !    Hk=Hk+Hr_w90(:,:,ir)*exp(xi*dotRK)/dble(ndegen(ir))
     ! end do
     !
-    call fsolve(delta_N,mu_,tol=1.d-10,info=iter)
+    !call fsolve(delta_N,mu_,tol=1.d-10,info=iter)
+    !mu=mu_(1)
+    !Nout=delta_N(mu_)
+    mu=brentq(delta_Nb,-100.d0,100.d0)
+    Nout=delta_Nb(mu)
     !
-    mu=mu_(1)
-    Nout=delta_N(mu_)
     !
     do ir=1,nrpts
        call FT_q2r(rpt_latt(ir,:),delta_hf(:,:,ir),delta_hf_k)
@@ -151,6 +153,27 @@ contains
       write(531,'(10F18.10)') deltaN,Ndens
       deltaN(1)=deltaN(1)-Ndens
     end function delta_N
+
+
+    function delta_Nb(xmu) result(deltaN)
+      real(8),intent(in) :: xmu
+      real(8) :: deltaN
+      complex(8),dimension(Nso,Nso,Lk) :: Htmp
+      integer(8):: ir,iso
+      do ik=1,Lk
+         Htmp(:,:,ik)=Hhf_k(:,:,ik)-xmu*zeye(Nso)        
+      end do
+      call solve_HF_hamiltonian(Htmp,delta_hf_k) 
+      deltaN=0.d0
+      do ik=1,Lk
+         do iso=1,Nso
+            deltaN = deltaN + dreal(delta_hf_k(iso,iso,ik)*wtk(ik))
+         end do
+      end do
+      write(531,'(10F18.10)') deltaN,Ndens
+      deltaN=deltaN-Ndens
+    end function delta_Nb
+
   end subroutine find_chem_pot_latt
 
   subroutine solve_HF_hamiltonian(Hhf,Deltas)
@@ -188,27 +211,40 @@ contains
   end subroutine solve_HF_hamiltonian
 
 
-  subroutine build_HF_hamiltonian_latt(Hr_w90,Delta_Hf,Ur)
-    complex(8),dimension(Nso,Nso,nrpts),intent(inout) :: Hr_w90
+  subroutine build_HF_hamiltonian_latt(Hhf,Delta_Hf,Ur)
+    complex(8),dimension(Nso,Nso,nrpts),intent(inout) :: Hhf
     complex(8),dimension(Nso,Nso,nrpts),intent(in) :: Delta_HF
     complex(8),dimension(Nso,Nso,nrpts),intent(in) :: Ur
-    complex(8),dimension(Nso,Nso,nrpts) :: Hhf    
+    !complex(8),dimension(Nso,Nso,nrpts) :: Hhf    
     integer(8):: ir,jr,iso,jso
+    complex(8),dimension(Nso) :: Uhartree
     ! real(8),dimension(:),allocatable :: deltaK,deltak_
     ! real(8),dimension(Nso,Nso) :: Uh,Uf
     ! complex(8),dimension(Nso,Nso) :: Htest
-    Hhf=Hr_w90
-    do ir=1,nrpts       
-       do iso=1,Nso
+    !Hhf=Hr_w90
+    !+- 
+    Uhartree = 0.d0
+    do iso=1,Nso
+       do ir=1,nrpts
           do jso=1,Nso
-             !+- Hartree term          
-             do jr=1,nrpts
-                Hhf(iso,iso,ir) = Hhf(iso,iso,ir) + Ur(iso,jso,jr)*Delta_HF(jso,jso,ir0)
-             end do
+             Uhartree(iso) = Uhartree(iso) + Ur(iso,jso,ir)*Delta_HF(jso,jso,ir0)
+          end do
+       end do
+    end do
+    !+- 
+    do iso=1,Nso
+       !+- Hartree term -+!
+       if(whartree) then
+          Hhf(iso,iso,ir0) = Hhf(iso,iso,ir0) + Uhartree(iso)
+       end if
+       !+----------------+!
+       do jso=1,Nso
+          do ir=1,nrpts       
              !+- Fock Term -+!
              Hhf(iso,jso,ir) = Hhf(iso,jso,ir) - Ur(iso,jso,ir)*Delta_HF(jso,iso,ir_mirror(ir))
+             !+-------------+!
           end do
-       end do       
+       end do
     end do
     
     ! !Hhf=0.d0
