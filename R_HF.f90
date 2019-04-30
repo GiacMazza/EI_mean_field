@@ -124,7 +124,7 @@ contains
     !call fsolve(delta_N,mu_,tol=1.d-10,info=iter)
     !mu=mu_(1)
     !Nout=delta_N(mu_)
-    mu=brentq(delta_Nb,-100.d0,100.d0)
+    mu=brentq(delta_Nb,-100.d0,5000.d0)
     Nout=delta_Nb(mu)
     !
     !
@@ -170,7 +170,7 @@ contains
             deltaN = deltaN + dreal(delta_hf_k(iso,iso,ik)*wtk(ik))
          end do
       end do
-      write(531,'(10F18.10)') deltaN,Ndens
+      write(531,'(10F18.10)') deltaN,Ndens,xmu
       deltaN=deltaN-Ndens
     end function delta_Nb
 

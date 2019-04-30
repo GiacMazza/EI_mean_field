@@ -73,6 +73,7 @@ contains
     !temp=kelvin_electron_volt_relationship*temp
     temp=kelvin_electron_volt_relationship*temp
     beta=1.d0/temp
+    Ndens=Ndens*dble(Nspin)
     ! write(*,*) temp,beta
     ! stop
     !

@@ -19,7 +19,7 @@ program officina
 
   real(8) :: KKx,KKy
   complex(8),dimension(:,:,:),allocatable :: delta_hf,H_hf,delta_hf_,Hhf_grid,delta_hfr,delta_hfr_
-  complex(8),dimension(:,:,:),allocatable :: hr_w90
+  complex(8),dimension(:,:,:),allocatable :: Hr_w90,Hr_w90_tmp
   real(8) :: mu_fix
   real(8) :: Uintra,Uinter,Delta_CF
   real(8) :: Uq,thop,err_hf
@@ -36,7 +36,10 @@ program officina
   complex(8),dimension(:,:,:),allocatable :: Hk_w90,Hk_w90_tmp
   complex(8),dimension(:,:,:,:,:),allocatable :: Hk_w90_reshape,Hk_hf_reshape
   real(8),dimension(:,:),allocatable :: kpts,kpt_path
+  integer,dimension(:,:),allocatable :: irvec2d,itmp
+  integer,dimension(:),allocatable :: stride2D,stride2D_
 
+  integer :: nr2d
 
   integer :: iso,jso,ispin,jspin,iorb,jorb,ik
   integer :: i,j,k,idim
@@ -50,7 +53,7 @@ program officina
   complex(8),dimension(:),allocatable :: obs_loc
   real(8) :: wmix
   real(8),dimension(:,:),allocatable :: Uloc_TNS
-  complex(8),dimension(:,:,:),allocatable :: Uq_TNS,Vq_TNS,Ur_TNS
+  complex(8),dimension(:,:,:),allocatable :: Uq_TNS,Vq_TNS,Ur_TNS,Ur_tmp
   complex(8),dimension(:,:),allocatable :: check_Uloc
 
   real(8),dimension(2) :: Uq_read,Vq_read
@@ -76,7 +79,7 @@ program officina
 
 
 
-  real(8) :: modk,tmpi,tmpj
+  real(8) :: modk,tmpi,tmpj,checkR
   real(8) :: kmod(3)
   real(8) :: Ncell
   complex(8),dimension(:,:),allocatable :: ccij
@@ -88,6 +91,7 @@ program officina
   real(8),dimension(:),allocatable :: read_tmp
   real(8) :: cf_ext
   real(8) :: Ucut_off
+  integer :: Ncut
 
   integer :: Lreal
   real(8),dimension(:),allocatable :: wreal
@@ -95,6 +99,8 @@ program officina
   real(8),dimension(:),allocatable :: Aw
 
   logical :: Uradius
+
+  real(8) :: alphaU
 
   !
 
@@ -122,11 +128,13 @@ program officina
   call parse_input_variable(hartree,"Hartree","input.conf",default=.true.)  
   call parse_input_variable(cf_ext,"cf_ext","input.conf",default=0.d0)
   call parse_input_variable(Ucut_off,"U_CUT","input.conf",default=20.d0)
+  !call parse_input_variable(Ncut,"NU_CUT","input.conf",default=1)
+  call parse_input_variable(alphaU,"alphaU","input.conf",default=1.d0)
 
   !
   call get_global_vars
   !
-  Nso=Norb*Nspin
+  Nso=Norb!*Nspin
   !
   !+- read primitive cell lattice vectors -+!
 
@@ -230,38 +238,29 @@ program officina
   allocate(Hk_w90(Nso,Nso,Lk),Hloc(Nso,Nso))
   call read_w90_hr(R1,R2,R3,Hr_w90,Hloc,irvec,ndegen,trim(file_name),1,6,1)
   nrpts=size(irvec,1)
-
-  
-  !+- PLOTTING W90 BANDS -+!
-  allocate(kpt_path(300,3))
-  allocate(Hktmp(Nso,Nso))
-  allocate(ek_out(Nso))
-  uio=free_unit()
-  open(unit=uio,file='tns_bare_bands.out')
-  !
-  allocate(Ta_fat(Nso),Ni_fat(Nso))
-  modk=0.d0
-  do i=1,3
-     delta_kpath=kpath(i+1,:)-kpath(i,:)
-     do ik=1,100
-        j=(i-1)*100 + ik
-        kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
-        modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
-        !
-        call FT_r2q(kpt_path(j,:),Hktmp,Hr_w90)
-        !
-        ! Hktmp=0.d0;ek_out=0.d0
-        ! Hktmp=get_HK(kpt_path(j,:),Nso,Hk_w90_reshape)
-        call eigh(Hktmp,ek_out)
-        Ta_fat=abs(Hktmp(1,:))**2.d0+abs(Hktmp(2,:))**2.d0+abs(Hktmp(3,:))**2.d0+abs(Hktmp(4,:))**2.d0
-        Ni_fat=abs(Hktmp(5,:))**2.d0+abs(Hktmp(6,:))**2.d0
-        write(uio,'(30F18.10)') modk,ek_out,Ta_fat,Ni_fat
-        !
-     end do
-     !
+  allocate(rpt_latt(nrpts,3))
+  do ir=1,nrpts
+     rpt_latt(ir,:)=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3     
   end do
-  close(uio)
-
+  !
+  allocate(itmp(nrpts,2))  
+  allocate(stride2D_(nrpts))
+  i=0
+  do ir=1,nrpts
+     if(irvec(ir,2).eq.0) then
+        i=i+1
+        itmp(i,1) = irvec(ir,1)
+        itmp(i,2) = irvec(ir,3)
+        stride2D_(i) = ir
+     end if
+  end do
+  nr2d=i
+  write(*,*) "nr-points on xz plane",nr2d
+  allocate(irvec2d(nr2d,2));   allocate(stride2D(nr2d)); 
+  irvec2d(:,1)=itmp(1:nr2d,1)
+  irvec2d(:,2)=itmp(1:nr2d,2)
+  stride2D=stride2D_(1:nr2d)
+  !
   !+- read local interaction term -+!
   allocate(Uloc_TNS(Nso,Nso))
   flen=file_length('TNS_Uloc.dat')
@@ -313,24 +312,21 @@ program officina
   do ik=1,Lk
      !+- here print out Uq vs |q| -+!
      modk=kpt_latt(ik,1)**2.d0+kpt_latt(ik,2)**2.d0+kpt_latt(ik,3)**2.d0
-     modk=sqrt(modk)
-     
-     do i=1,Nso
-        Uq_TNS(i,i,ik)=Uq_TNS(i,i,ik)-check_Uloc(i,i)
-        Vq_TNS(i,i,ik)=Vq_TNS(i,i,ik)-check_Uloc(i,i)
-     end do
+     modk=sqrt(modk)     
+     ! do i=1,Nso
+     !    Uq_TNS(i,i,ik)=Uq_TNS(i,i,ik)-check_Uloc(i,i)
+     !    Vq_TNS(i,i,ik)=Vq_TNS(i,i,ik)-check_Uloc(i,i)
+     ! end do
      write(unit_in,'(50F10.5)') modk,Uq_TNS(1,1:6,ik),Uq_TNS(2,2:6,ik),Uq_TNS(3,3:6,ik),Uq_TNS(4,4:6,ik),Uq_TNS(5,5:6,ik),Uq_TNS(6,6,ik)
   end do
   close(unit_in)
 
-  allocate(rpt_latt(nrpts,3))
   allocate(Ur_TNS(Nso,Nso,nrpts))
   open(unit_in,file='Ur_full_space.tns')
   !+- get the full real space interaction -+!
   Ur_TNS=0.d0
   do ir=1,nrpts
      !
-     rpt_latt(ir,:)=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3     
      call FT_q2r(rpt_latt(ir,:),Ur_TNS(:,:,ir),Uq_TNS)
      modk=rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0
      modk=sqrt(modk)
@@ -339,25 +335,37 @@ program officina
   end do
   close(unit_in)
 
-
-  allocate(delta_hfr(Nso,Nso,nrpts),delta_hfr_(Nso,Nso,nrpts),H_hf(Nso,Nso,nrpts))
-  call init_var_params_latt(delta_hfr,Hr_w90)
-
-  !+- get the truncated interaction -+!
+  
+  
+  Rlat=-1000.0
+  do ir=1,nrpts
+     do i=1,3
+        if(rpt_latt(ir,i).gt.Rlat(i)) Rlat(i)=rpt_latt(ir,i)
+     end do
+  end do
+  write(*,*) 'largest components of R vectors in the supercell',Rlat
+  checkR=1000.d0
+  do i=1,3
+     if(Rlat(i).lt.checkR) checkR=Rlat(i)
+  end do
+  write(*,*) 'largest radius sphere in the supercell',checkR,Rlat
+  if(checkR.lt.Ucut_off) then
+     write(*,*) 'cut-off larger than the largest radius sphere in the supercell' 
+     Ucut_off=checkR
+     write(*,*) 'New cut-off set to',Ucut_off 
+  end if
   open(unit_in,file='Ur_truncated.tns')
   Ur_TNS=0.d0
   do ir=1,nrpts
-     rpt_latt(ir,:)=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3     
      modk=rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0
      !     
      modk=sqrt(modk)
      if(modk.lt.Ucut_off) then
-     !if(ir.eq.ir0) then
         call FT_q2r(rpt_latt(ir,:),Ur_TNS(:,:,ir),Uq_TNS)
      end if
      write(unit_in,'(50F10.5)') modk,rpt_latt(ir,1:3),Ur_TNS(1,1:6,ir),Ur_TNS(2,2:6,ir),Ur_TNS(3,3:6,ir),Ur_TNS(4,4:6,ir),Ur_TNS(5,5:6,ir),Ur_TNS(6,6,ir)
   end do
-  close(unit_in)
+  close(unit_in)  
   !
   !+- transform back to momentum space -+!
   !
@@ -371,7 +379,145 @@ program officina
   end do
   close(unit_in)
   ! 
+
   
+  !
+  allocate(Hr_w90_tmp(Nso,Nso,nrpts)); Hr_w90_tmp=Hr_w90
+  deallocate(Hr_w90)
+  allocate(Ur_tmp(Nso,Nso,nrpts)) ; Ur_tmp=Ur_TNS
+  deallocate(Ur_TNS)            !
+  !
+  Nso=Norb*Nspin
+  allocate(Hr_w90(Nso,Nso,nrpts))
+  !
+  do ispin=1,Nspin
+     do iorb=1,Norb
+        iso=(ispin-1)*Norb+iorb
+        do jorb=1,Norb
+           jso=(ispin-1)*Norb+jorb
+           Hr_w90(iso,jso,:) = Hr_w90_tmp(iorb,jorb,:)
+        end do
+     end do
+  end do
+  deallocate(Hr_w90_tmp)
+  !
+  !+- bare bands -+!
+  allocate(delta_hfr(Nso,Nso,nrpts),delta_hfr_(Nso,Nso,nrpts),H_hf(Nso,Nso,nrpts))
+  call init_var_params_latt(delta_hfr,Hr_w90)
+  mu_fix=4.d0
+  call find_chem_pot_latt(Hr_w90,delta_hfr,mu_fix)
+  
+  allocate(kpt_path(300,3))
+  allocate(Hktmp(Nso,Nso))
+  allocate(ek_out(Nso))
+  uio=free_unit()
+  open(unit=uio,file='tns_bare_bands.out')
+  unit_in=free_unit()
+  open(unit_in,file='tns_fat_bare.tns')
+  !
+  allocate(Ta_fat(Nso),Ni_fat(Nso))
+  modk=0.d0
+  do i=1,3
+     delta_kpath=kpath(i+1,:)-kpath(i,:)
+     do ik=1,100
+        j=(i-1)*100 + ik
+        kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
+        modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
+        !
+        call FT_r2q(kpt_path(j,:),Hktmp,Hr_w90)
+        !
+        call eigh(Hktmp,ek_out)
+        Ta_fat=abs(Hktmp(1,:))**2.d0+abs(Hktmp(2,:))**2.d0+abs(Hktmp(3,:))**2.d0+abs(Hktmp(4,:))**2.d0
+        Ni_fat=abs(Hktmp(5,:))**2.d0+abs(Hktmp(6,:))**2.d0
+        write(uio,'(30F18.10)') modk,ek_out-mu_fix
+        write(unit_in,'(30F18.10)') modk,Ta_fat,Ni_fat
+        !
+     end do
+     !
+  end do
+  close(uio)
+  close(unit_in)  
+  open(unit_in,file='Deltar_bare_real.tns')
+  modk=0.d0
+  do ir=1,nrpts
+     modk=sqrt(rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0)
+     !     
+     write(unit_in,'(50F10.5)') modk,rpt_latt(ir,1:3), &
+          dreal(delta_hfr(1,1:6,ir)), &
+          dreal(delta_hfr(2,2:6,ir)), &
+          dreal(delta_hfr(3,3:6,ir)), &
+          dreal(delta_hfr(4,4:6,ir)), &
+          dreal(delta_hfr(5,5:6,ir)), &
+          dreal(delta_hfr(6,6,ir))
+  end do
+  close(unit_in)
+  open(unit_in,file='Deltar_bare_imag.tns')
+  modk=0.d0
+  do ir=1,nrpts
+     modk=sqrt(rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0)
+     !     
+     write(unit_in,'(50F10.5)') modk,rpt_latt(ir,1:3), &
+          dimag(delta_hfr(1,1:6,ir)), &
+          dimag(delta_hfr(2,2:6,ir)), &
+          dimag(delta_hfr(3,3:6,ir)), &
+          dimag(delta_hfr(4,4:6,ir)), &
+          dimag(delta_hfr(5,5:6,ir)), &
+          dimag(delta_hfr(6,6,ir))
+  end do
+  close(unit_in)
+
+  open(unit_in,file='2d_deltar_bare_real.tns')
+  modk=0.d0
+  do ir=1,nr2d
+     Rlat=irvec2d(ir,1)*R1+irvec2d(ir,2)*R3
+     modk=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
+     !     
+     write(unit_in,'(50F10.5)') modk,Rlat(1:3), &
+          dreal(delta_hfr(1,1:6,stride2D(ir))), &
+          dreal(delta_hfr(2,2:6,stride2D(ir))), &
+          dreal(delta_hfr(3,3:6,stride2D(ir))), &
+          dreal(delta_hfr(4,4:6,stride2D(ir))), &
+          dreal(delta_hfr(5,5:6,stride2D(ir))), &
+          dreal(delta_hfr(6,6,stride2D(ir)))
+  end do
+  close(unit_in)
+  open(unit_in,file='2d_deltar_bare_imag.tns')
+  modk=0.d0
+  do ir=1,nr2d
+     Rlat=irvec2d(ir,1)*R1+irvec2d(ir,2)*R3
+     modk=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
+     !     
+     write(unit_in,'(50F10.5)') modk,Rlat(1:3), &
+          dimag(delta_hfr(1,1:6,stride2D(ir))), &
+          dimag(delta_hfr(2,2:6,stride2D(ir))), &
+          dimag(delta_hfr(3,3:6,stride2D(ir))), &
+          dimag(delta_hfr(4,4:6,stride2D(ir))), &
+          dimag(delta_hfr(5,5:6,stride2D(ir))), &
+          dimag(delta_hfr(6,6,stride2D(ir)))
+  end do
+  close(unit_in)
+  
+  allocate(Ur_TNS(Nso,Nso,nrpts)); 
+  do ispin=1,Nspin
+     do iorb=1,Norb
+        iso=(ispin-1)*Norb+iorb
+        do jspin=1,Nspin
+           do jorb=1,Norb
+              jso=(jspin-1)*Norb+jorb              
+              Ur_TNS(iso,jso,:) = Ur_tmp(iorb,jorb,:)
+           end do
+        end do
+     end do
+  end do
+  do ispin=1,Nspin
+     do iorb=1,Norb
+        iso=(ispin-1)*Norb+iorb
+        Ur_TNS(iso,iso,ir0) = 0.d0
+     end do
+  end do
+  !
+  Ur_TNS=alphaU*Ur_TNS
+  !  
   mu_fix=4.d0
   call find_chem_pot_latt(Hr_w90,delta_hfr,mu_fix)
   ncell=0.d0
@@ -379,17 +525,7 @@ program officina
      write(*,*) delta_hfr(iso,iso,ir0)
      ncell=ncell+delta_hfr(iso,iso,ir0)
   end do
-  delta_hfr_=delta_hfr
   write(*,*) mu_fix,ncell,ndens
-
-  ! write(*,*) 'fin qua tutto bene 1'
-  ! do ir=1,nrpts
-  !    call FT_q2r(rpt_latt(ir,:),delta_hfr(:,:,ir),delta_hf)
-  ! end do
-  ! write(*,*) 'fin qua tutto bene 2'
-  ! call init_var_params_latt(delta_hfr,Hr_w90)
-  ! write(*,*) 'fin qua tutto bene 3'
-  ! stop
   !
   Nobs=Nso*(Nso+1)/2
   allocate(units_loc_obs(Nobs))
@@ -398,16 +534,31 @@ program officina
   do i=1,Nso
      do j=i,Nso
         iso=iso+1
+        open(unit=units_loc_obs(iso),file="bare_obs_hf_"//reg(txtfy(i)//reg(txtfy(j))))        
+        write(units_loc_obs(iso),'(10F18.10)') 0.d0,delta_hfr(i,j,ir0)
+        close(units_loc_obs(iso))
+     end do
+  end do  
+  iso=0
+  do i=1,Nso
+     do j=i,Nso
+        iso=iso+1
         open(unit=units_loc_obs(iso),file="obs_hf_"//reg(txtfy(i)//reg(txtfy(j))))        
      end do
   end do
+  do iso=1,Nso
+     do jso=iso+1,Nso
+        delta_hfr(iso,jso,ir0) = delta_hfr(iso,jso,ir0) + 0.1d0
+        delta_hfr(jso,iso,ir0) = delta_hfr(jso,iso,ir0) + 0.1d0
+     end do
+  end do
+  delta_hfr_=delta_hfr
+
   unit_obs=free_unit()
   open(unit=unit_obs,file='ndens_hf.loop')
-
-  
+ 
   unit_err=free_unit()
   open(unit=unit_err,file='err_q.err')
-
   
   err_hf=1.d0  
   do ihf=1,Nhf
@@ -437,15 +588,68 @@ program officina
   close(unit_obs)
 
 
-  open(unit_in,file='Deltar_HF.tns')
+  open(unit_in,file='Deltar_HF_real.tns')
   modk=0.d0
   do ir=1,nrpts
-     rpt_latt(ir,:)=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3     
-     modk=sqrt(rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0)
+     Rlat=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3     
+     modk=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
      !     
-     write(unit_in,'(50F10.5)') modk,rpt_latt(ir,1:3),delta_hfr(1,1:6,ir),delta_hfr(2,2:6,ir),delta_hfr(3,3:6,ir),delta_hfr(4,4:6,ir),delta_hfr(5,5:6,ir),delta_hfr(6,6,ir)
+     write(unit_in,'(50F10.5)') modk,Rlat(1:3), &
+          dreal(delta_hfr(1,1:6,ir)), &
+          dreal(delta_hfr(2,2:6,ir)), &
+          dreal(delta_hfr(3,3:6,ir)), &
+          dreal(delta_hfr(4,4:6,ir)), &
+          dreal(delta_hfr(5,5:6,ir)), &
+          dreal(delta_hfr(6,6,ir))
   end do
   close(unit_in)
+  open(unit_in,file='Deltar_HF_imag.tns')
+  modk=0.d0
+  do ir=1,nrpts
+     Rlat=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3     
+     modk=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
+     !     
+     write(unit_in,'(50F10.5)') modk,Rlat(1:3), &
+          dimag(delta_hfr(1,1:6,ir)), &
+          dimag(delta_hfr(2,2:6,ir)), &
+          dimag(delta_hfr(3,3:6,ir)), &
+          dimag(delta_hfr(4,4:6,ir)), &
+          dimag(delta_hfr(5,5:6,ir)), &
+          dimag(delta_hfr(6,6,ir))
+  end do
+  close(unit_in)
+
+  open(unit_in,file='2d_deltar_HF_real.tns')
+  modk=0.d0
+  do ir=1,nr2d
+     Rlat=irvec2d(ir,1)*R1+irvec2d(ir,2)*R3     
+     modk=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
+     !     
+     write(unit_in,'(50F10.5)') modk,Rlat(1:3), &
+          dreal(delta_hfr(1,1:6,stride2D(ir))), &
+          dreal(delta_hfr(2,2:6,stride2D(ir))), &
+          dreal(delta_hfr(3,3:6,stride2D(ir))), &
+          dreal(delta_hfr(4,4:6,stride2D(ir))), &
+          dreal(delta_hfr(5,5:6,stride2D(ir))), &
+          dreal(delta_hfr(6,6,stride2D(ir)))
+  end do
+  close(unit_in)
+  open(unit_in,file='2d_deltar_HF_imag.tns')
+  modk=0.d0
+  do ir=1,nr2d
+     Rlat=irvec2d(ir,1)*R1+irvec2d(ir,2)*R3     
+     modk=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
+     !     
+     write(unit_in,'(50F10.5)') modk,Rlat(1:3), &
+          dimag(delta_hfr(1,1:6,stride2D(ir))), &
+          dimag(delta_hfr(2,2:6,stride2D(ir))), &
+          dimag(delta_hfr(3,3:6,stride2D(ir))), &
+          dimag(delta_hfr(4,4:6,stride2D(ir))), &
+          dimag(delta_hfr(5,5:6,stride2D(ir))), &
+          dimag(delta_hfr(6,6,stride2D(ir)))
+  end do
+  close(unit_in)
+
 
 
   H_hf=Hr_w90
@@ -457,7 +661,8 @@ program officina
      H_hf(iso,iso,ir0) =  H_hf(iso,iso,ir0) - mu_fix
   end do
   !end do
-  !+- here plot bands -+!
+  !+- here plot bands -+! 
+  !+- problems: bands are not spin symmetric -+!
   uio=free_unit()
   open(unit=uio,file='tns_bands.out')
   !
@@ -1399,3 +1604,32 @@ end program Officina
   !AMOEBA TEST
 
 
+  !+- get the truncated interaction -+!
+  ! open(unit_in,file='Ur_truncated.tns')
+  ! Ur_TNS=0.d0
+  ! do i=1,2*Ncut+1
+  !    do j=1,2*Ncut+1
+  !       do k=1,2*Ncut+1
+  !          Rlat=(i-(Ncut+1))*R1+(j-(Ncut+1))*R2+(k-(Ncut+1))*R3           
+  !          modk=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
+  !          do ir=1,nrpts
+  !             rpt_latt(ir,:)=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3              
+  !             CheckR=sqrt(rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0)
+  !             if(abs(modk-CheckR).lt.1.d-10) then
+  !                write(*,*) i-(Ncut+1),j-(Ncut+1),k-(Ncut+1)
+  !                call FT_q2r(rpt_latt(ir,:),Ur_TNS(:,:,ir),Uq_TNS)
+  !                exit
+  !             end if
+  !          end do
+  !       end do
+  !    end do
+  ! end do
+  ! do ir=1,nrpts
+  !    rpt_latt(ir,:)=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3     
+  !    modk=rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0
+  !    !     
+  !    modk=sqrt(modk)
+  !    write(unit_in,'(50F10.5)') modk,rpt_latt(ir,1:3),Ur_TNS(1,1:6,ir),Ur_TNS(2,2:6,ir),Ur_TNS(3,3:6,ir),Ur_TNS(4,4:6,ir),Ur_TNS(5,5:6,ir),Ur_TNS(6,6,ir)
+  ! end do
+  ! close(unit_in)
+  ! stop
