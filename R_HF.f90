@@ -193,7 +193,6 @@ contains
     if(size(Deltas,2).ne.Nso) stop "error in Deltas2"
     if(size(Deltas,3).ne.Lk) stop "error in Deltas3"
     !
-    write(*,*) "inside solve"; stop
     Deltas=0.d0             
     do ik=1,Lk
        !
@@ -478,21 +477,22 @@ contains
 
 
   !+- TMP K-SPACE ROUTINES -+!
-  subroutine fix_mu(Hhf,delta_hf,mu)
+  subroutine fix_mu(Hhf,delta_hf,mu) 
     complex(8),dimension(Nso,Nso,Lk),intent(in) :: Hhf
     complex(8),dimension(Nso,Nso,Lk),intent(inout) :: delta_hf
     complex(8),dimension(Nso,Nso,Lk) :: Hhf_k,delta_hf_k
     real(8),intent(inout) :: mu    
     real(8),dimension(1) :: mu_,Nout
     integer :: iter,ik,ir
-    !    
+    real(8) :: x1,x2
+    !
     allocate(Hhf_tmp(Nso,Nso,Lk)); Hhf_tmp=Hhf
     allocate(delta_hf_tmp(Nso,Nso,Lk)); delta_hf_tmp=delta_hf
-    write(*,*) deltaN(-100.d0)
-    write(*,*) deltaN(5000.d0)
-    stop
-    mu=brentq(deltaN,-100.d0,5000.d0)
-    Nout=deltaN(mu)
+    x1=deltaN_fix(-100.d0)
+    x2=deltaN_fix( 100.d0)
+    write(*,*) x1,x2
+    mu=brentq(deltaN_fix,-100.d0,5000.d0)
+    Nout=deltaN_fix(mu)
     !
     write(530,*) Nout,Ndens,mu_
     delta_hf=delta_hf_tmp
@@ -501,13 +501,13 @@ contains
     !
   end subroutine fix_mu
   ! 
-  function deltaN(xmu) !result(deltaN)
+  function deltaN_fix(xmu) result(deltaN)
     real(8),intent(in) :: xmu
     real(8) :: deltaN
     complex(8),dimension(Nso,Nso,Lk) :: Htmp
-    integer(8):: ik,iso 
+    integer(8):: ik,iso
     do ik=1,Lk
-       Htmp(:,:,ik)=Hhf_tmp(:,:,ik)-xmu*zeye(Nso)                
+       Htmp(:,:,ik)=Hhf_tmp(:,:,ik)-xmu*zeye(Nso)
     end do
     call solve_HF_hamiltonian(Htmp,delta_hf_tmp) 
     deltaN=0.d0
@@ -517,9 +517,8 @@ contains
        end do
     end do
     write(531,'(10F18.10)') deltaN,Ndens,xmu
-    stop
     deltaN=deltaN-Ndens
-  end function deltaN
+  end function deltaN_fix
     
   
 

@@ -50,7 +50,7 @@ program officina
   integer :: ir,jr,kr,iir
   real(8),dimension(3) :: Rlat 
 
-  complex(8),dimension(:),allocatable :: obs_loc
+  complex(8),dimension(:),allocatable :: obs,obs_loc
   real(8) :: wmix
   real(8),dimension(:,:),allocatable :: Uloc_TNS
   complex(8),dimension(:,:,:),allocatable :: Uq_TNS,Vq_TNS,Ur_TNS,Ur_tmp
@@ -102,6 +102,9 @@ program officina
   logical :: H1d
   real(8) :: alphaU,deltar,hybloc
   real(8),dimension(:),allocatable :: tk
+  complex(8),dimension(4) :: x_iter,x_iter_
+
+  real(8) :: Ucell,Vcell
   !
 
   !+- START MPI -+!
@@ -114,8 +117,6 @@ program officina
 
   !+- PARSE INPUT DRIVER -+!
   call parse_input_variable(Nk_x,"Nk_x","input.conf",default=12)
-  call parse_input_variable(Nk_y,"Nk_y","input.conf",default=12)
-  call parse_input_variable(Nk_z,"Nk_z","input.conf",default=3)
   call parse_input_variable(Nhf,"Nhf","input.conf",default=100)
   call parse_input_variable(Lreal,"Lreal","input.conf",default=2000)
   call parse_input_variable(wmix,"wmix","input.conf",default=0.5d0)
@@ -130,6 +131,10 @@ program officina
   call parse_input_variable(Ucut_off,"U_CUT","input.conf",default=20.d0)
   call parse_input_variable(H1d,"H1D","input.conf",default=.false.)
   call parse_input_variable(alphaU,"alphaU","input.conf",default=1.d0)
+
+  call parse_input_variable(Ucell,"V","input.conf",default=1.d0)
+  call parse_input_variable(Vcell,"U","input.conf",default=1.d0)
+
 
   call parse_input_variable(hybloc,"hybloc","input.conf",default=0.d0)
   !
@@ -167,9 +172,11 @@ program officina
   !+- X-point
   kpath(3,:)=0.5d0*Bk1
   !+- build a monkhorst-pack grid -+!  
-  call build_mp_grid(Nk_x,Nk_y,Nk_z)
+  call build_mp_grid_1d(Nk_x,Nk_y,Nk_z)
   !
-  Lk=Nk_x*Nk_y*Nk_z
+  Lk=Nk_x
+  Nk_y=1
+  Nk_z=1
   allocate(kpt_latt(Lk,3),ik_stride(Lk,3),wtk(Lk),igr2ik(Nk_x,Nk_y,Nk_z))
   wtk=1.d0/dble(Lk)
   ik=0
@@ -187,8 +194,6 @@ program officina
            !
            do idim=1,3
               kpt_latt(ik,idim) = kpt_latt(ik,idim) + kxgrid(i)*Bk1(idim)
-              ! kpt_latt(ik,idim) = kpt_latt(ik,idim) + kygrid(j)*Bk2(idim)
-              ! kpt_latt(ik,idim) = kpt_latt(ik,idim) + kzgrid(k)*Bk3(idim)
            end do
            write(300,*) kpt_latt(ik,:)
         end do
@@ -209,7 +214,9 @@ program officina
   irvec=0
   do ir=1,nrpts
      irvec(ir,1) = - (Nk_x-1)/2 + (ir-1)
-     rpt_latt(ir,:)=irvec(ir,1)*R1!+irvec(ir,2)*R2+irvec(ir,3)*R3     
+     rpt_latt(ir,:)=irvec(ir,1)*R1
+     modk=sqrt(rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0)
+     if(modk.lt.1.d-12) ir0=ir
   end do
   deallocate(Hr_w90)
   
@@ -236,71 +243,65 @@ program officina
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=R1
-        Hk_w90(iso,jso,ik) = hybloc*(1.d0-exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
+        Hk_w90(iso,jso,ik) = hybloc*(1.d0-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))) 
         Hk_w90(jso,iso,ik) = hybloc*(1.d0-exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
         !
      end do
   end do
+  
+
   !
   allocate(Hr_w90(Nso,Nso,nrpts))
   do ir=1,nrpts
      call FT_q2r(rpt_latt(ir,:),Hr_w90(:,:,ir),Hk_w90)
   end do
-  write(*,*) 'ft q2r mu superato'
-
   !
   mu_fix=0.d0
   call fix_mu(Hk_w90,delta_hf,mu_fix)
-  
-  stop
-
+  !
   allocate(delta_hfr(Nso,Nso,nrpts))
-
   do ir=1,nrpts
-     call FT_q2r(rpt_latt(ir,:),delta_hfr(:,:,ir),delta_hf)
+     !call FT_q2r(rpt_latt(ir,:),delta_hfr(:,:,ir),delta_hf) !+- be careful with FT; make a choice for the FT of operators!!
+     !+- this choice is consistent w/ the interaction Hamiltonian written as (n_{R 1} + n_{R+d 1}) n_{R 2}
+     delta_hfr(:,:,ir)=0.d0
+     do ik=1,Lk
+        delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
+             delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
+     end do
   end do
 
+  uio=free_unit()
+  open(unit=uio,file='hyb_info.out')
+  iso=0
+  do i=1,Nso                
+     do j=1,Nso
+        iso=iso+1
+        write(uio,*) i,j,iso+1
+     end do
+  end do
 
-  ! do iso=1,Nso
-  !    do jso=1,Nso
-  !       call 
-  !       ! do ir=1,nrpts
-  !       !    delta_hfr(iso,jso,ir)=0.d0
-  !       !    do ik=1,Lk
-  !       !       Rlat=rpt_latt(ir,:)
-  !       !       delta_hfr(iso,jso,ir) = delta_hfr(iso,jso,ir) + &
-  !       !            delta_hf(iso,jso,ik)*wtk(ik)*exp(xi*dot_product(Rlat,kpt_latt(ik,:)))                
-  !       !    end do
-  !       ! end do
-  !    end do
-  ! end do
+  close(uio)
   uio=free_unit()
   open(unit=uio,file='hyb_bareR.out')
+  allocate(obs(Nso*Nso))
   do ir=1,Nrpts
-     write(uio,'(50F18.10)') rpt_latt(ir,1),delta_hfr(1,1:2,ir),delta_hfr(2,2,ir),delta_hfr(3,3:4,ir),delta_hfr(4,4,ir)
+     iso=0
+     do i=1,Nso                
+        do j=1,Nso
+           iso=iso+1
+           obs(iso) = delta_hfr(i,j,ir)
+        end do
+     end do
+     write(uio,'(50F18.10)') rpt_latt(ir,1),dreal(obs(:)),dreal(obs(:))     
   end do
   close(uio)
-  ! do iso=1,Nso
-  !    do jso=1,Nso
-  !       write(uio,'(50F18.10)') dble(iso),dble(jso),delta_hfr(iso,jso,1)
-  !    end do
-  ! end do
-  ! close(uio)
-  ! uio=free_unit()
-  ! open(unit=uio,file='nn_hyb_bare.out')
-  ! do iso=1,Nso
-  !    do jso=1,Nso
-  !       write(uio,'(20F18.10)') dble(iso),dble(jso),delta_hfr(iso,jso,2)
-  !    end do
-  ! end do
-  ! close(uio)
+  !
   uio=free_unit()
   open(unit=uio,file='k_hyb_bare.out')
   do ik=1,Lk
      write(uio,'(40F18.10)') kpt_latt(ik,1),dreal(delta_hf(:,:,ik)),dimag(delta_hf(:,:,ik))
   end do
   close(uio)
-
   !
   allocate(kpt_path(300,3))
   allocate(Hktmp(Nso,Nso))
@@ -325,15 +326,52 @@ program officina
      !
   end do
   close(uio)
-  close(unit_in)  
+  
+  x_iter(1) = delta_hfr(1,1,ir0)
+  x_iter(2) = delta_hfr(2,2,ir0)
+  x_iter(3) = delta_hfr(1,2,ir0)
+  x_iter(4) = delta_hfr(1,2,ir0)+delta_hfr(1,2,ir0+1)+0.1d0
+  !
+  write(*,*) x_iter(1)
+  write(*,*) x_iter(2)
+  write(*,*) x_iter(3)
+  write(*,*) x_iter(4)
+  !
+  uio=free_unit()
+  open(unit=uio,file='hf_loop.out')
+  
+  allocate(H_Hf(Nso,Nso,Lk))
+  do ihf=1,Nhf
 
+     write(uio,'(10F18.10)') dreal(x_iter),dimag(x_iter)
+     
+     x_iter_=x_iter
+     !
+     H_Hf=HF_hamiltonian(x_iter)
+     H_Hf=H_Hf+Hk_w90
+     !
+     call fix_mu(H_Hf,delta_hf,mu_fix)
+     !
+     do ir=1,nrpts
+        delta_hfr(:,:,ir)=0.d0
+        do ik=1,Lk
+           delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
+                delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
+        end do
+     end do
+     x_iter(1) = delta_hfr(1,1,ir0)
+     x_iter(2) = delta_hfr(2,2,ir0)
+     x_iter(3) = delta_hfr(1,2,ir0)
+     x_iter(4) = delta_hfr(1,2,ir0)+delta_hfr(1,2,ir0+1)
+     !
+     x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_     
+     !
+     !
+  end do
+
+  
   stop
-
-
-
-  ! x_iter(1) = 0.0d0
-  ! x_iter(2) = 0.0d0
-  ! X_iter(3) = 0.0d0
+  
   ! do iself=1,Nloop
   !    x_iter_=exciton_ins_photon(x_iter)
   !    x_iter=(1.d0-wmix)*x_iter+wmix*x_iter_
@@ -344,559 +382,8 @@ program officina
 
 
   !
-  !
-  !+- bare bands -+!
-  ! allocate(delta_hfr(Nso,Nso,nrpts),delta_hfr_(Nso,Nso,nrpts),H_hf(Nso,Nso,nrpts))
-  ! call init_var_params_latt(delta_hfr,Hr_w90)
 
 
-  ! !
-  ! !
-  ! Hr_w90=0.d0
-  ! do ir=1,nrpts
-  !    Rlat=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3
-  !    Rlat=Rlat+R1
-  !    deltar=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
-  !    if(deltar.lt.1.d-10) then
-  !       do ispin=1,Nspin
-  !          do iorb=1,Norb
-  !             iso=(ispin-1)*Norb+iorb        
-  !             Hr_w90(iso,iso,ir) = tk(iorb)
-  !          end do
-  !       end do
-  !    end if
-  !    Rlat=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3
-  !    Rlat=Rlat-R1
-  !    deltar=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
-  !    if(deltar.lt.1.d-10) then
-  !       do ispin=1,Nspin
-  !          do iorb=1,Norb
-  !             iso=(ispin-1)*Norb+iorb        
-  !             Hr_w90(iso,iso,ir) = tk(iorb)
-  !          end do
-  !       end do
-  !    end if
-  ! end do
-  ! !
-  ! do ispin=1,Nspin
-  !    do iorb=1,4
-  !       iso=(ispin-1)*Norb+iorb
-  !       Hr_w90(iso,iso,ir0) = Hr_w90(iso,iso,ir0) + 1.7
-  !    end do
-  ! end do
-  ! do ispin=1,Nspin
-  !    do iorb=5,6
-  !       iso=(ispin-1)*Norb+iorb
-  !       Hr_w90(iso,iso,ir0) = Hr_w90(iso,iso,ir0) - 0.9
-  !    end do
-  ! end do
-  ! ! do iso=1,Nso
-  ! !    do jso=iso+1,Nso
-  ! !       Hr_w90(iso,jso,:) = 0.d0
-  ! !       Hr_w90(jso,iso,:) = 0.d0
-  ! !    end do
-  ! ! end do
-
-
-
-
-  !delta_hfr=0.d0
-  delta_hfr_=delta_hfr
-  unit_obs=free_unit()
-  open(unit=unit_obs,file='ndens_hf.loop')  
-  unit_err=free_unit()
-  open(unit=unit_err,file='err_q.err')  
-  err_hf=1.d0  
-  do ihf=1,Nhf
-     write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix               
-     iso=0
-     Ncell=0.d0
-     do i=1,Nso           
-        Ncell=Ncell+delta_hfr(i,i,ir0)
-        do j=i,Nso
-           iso=iso+1
-           write(units_loc_obs(iso),'(10F18.10)') dble(ihf),delta_hfr(i,j,ir0)
-        end do
-     end do
-     write(unit_obs,'(10F18.10)') dble(ihf),ncell
-
-     H_hf=Hr_w90
-     call build_HF_hamiltonian_latt(H_hf,delta_hfr,Ur_TNS)          
-     call find_chem_pot_latt(H_hf,delta_hfr,mu_fix)
-
-     ! if(Nspin.eq.2) then
-     !    do iorb=1,Norb
-     !       do jorb=1,Norb
-     !          iso=iorb+Norb
-     !          jso=jorb
-     !          delta_hfr(iso,jso,:) = 0.d0
-     !          iso=iorb
-     !          jso=jorb+Norb
-     !          delta_hfr(iso,jso,:) = 0.d0        
-     !       end do
-     !    end do
-     ! end if
-
-     delta_hfr=wmix*delta_hfr+(1.d0-wmix)*delta_hfr_
-
-
-     !if(ihf.eq.2) stop
-     !
-     !
-     err_hf=check_conv(delta_hfr,delta_hfr_)     
-     !
-     delta_hfr_=delta_hfr
-     !
-  end do
-  close(unit_err)
-  close(unit_obs)
-
-
-  !+- here plot bands -+! 
-  !+- problems: bands are not spin symmetric -+!
-  ! uio=free_unit()
-  ! open(unit=uio,file='tns_bands.out')
-  ! !
-  ! Hktmp=0.d0
-  ! modk=0.d0
-  ! do i=1,3
-  !    delta_kpath=kpath(i+1,:)-kpath(i,:)
-  !    do ik=1,100
-  !       j=(i-1)*100 + ik
-  !       kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
-  !       modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
-  !       !
-  !       call FT_r2q(kpt_path(j,:),Hktmp,H_hf)
-  !       !
-  !       ! Hktmp=0.d0;ek_out=0.d0
-  !       ! Hktmp=get_HK(kpt_path(j,:),Nso,Hk_w90_reshape)
-  !       call eigh(Hktmp,ek_out)
-  !       write(uio,'(30F18.10)') modk,ek_out
-  !       !
-  !    end do
-  !    !
-  ! end do
-  ! close(uio)
-
-
-  stop
-
-
-
-
-
-
-
-
-
-
-
-
-  !+- old stuff in momentum space -+!
-  !
-
-  !+- get Hk_w90 for each k-point -+!
-  Hk_w90=0.d0
-  do ik=1,Lk
-     call get_Hk_w90(kpt_latt(ik,:),Hk_w90(:,:,ik))
-     !
-     do i=1,4
-        Hk_w90(i,i,ik) = Hk_w90(i,i,ik) - cf_ext
-     end do
-     do i=5,6
-        Hk_w90(i,i,ik) = Hk_w90(i,i,ik) + cf_ext
-     end do
-     !
-  end do
-
-  !+- compute number of particles -+!
-  allocate(ccij(Nso,Nso))
-  allocate(Hktmp(Nso,Nso))
-  allocate(ek_out(Nso))
-  Ncell=0.d0
-  ccij=0.d0
-  allocate(delta_hf(Nso,Nso,Lk),H_hf(Nso,Nso,Lk),delta_hf_(Nso,Nso,Lk))
-
-
-  unit_in=free_unit(); 
-  open(unit=unit_in,file='Ta_Ni_bare_vk.dat')    
-  do ik=1,Lk     
-     Hktmp=Hk_w90(:,:,ik)
-     call eigh(Hktmp,ek_out)
-     do i=1,Nso
-        do j=1,Nso
-           Ncell = Ncell + conjg(Hktmp(i,j))*Hktmp(i,j)*fermi(ek_out(j)-4.d0,beta)*wtk(ik)
-
-           delta_hf(i,j,ik) = 0.d0
-           do k=1,Nso
-              delta_hf(i,j,ik) = delta_hf(i,j,ik) + conjg(Hktmp(i,k))*Hktmp(j,k)*fermi(ek_out(k)-4.d0,beta)*wtk(ik)           
-              ccij(i,j) = ccij(i,j) + conjg(Hktmp(i,k))*Hktmp(j,k)*fermi(ek_out(k)-4.d0,beta)*wtk(ik)           
-           end do
-
-        end do
-     end do
-     write(unit_in,*) dble(ik),dreal(delta_hf(1,1,ik)),dreal(delta_hf(2,2,ik)),dreal(delta_hf(3,3,ik)),dreal(delta_hf(4,4,ik)),dreal(delta_hf(6,6,ik)),dreal(delta_hf(6,6,ik)),dreal(Hk_w90(1,6,ik)),dreal(Hk_w90(2,6,ik)),dreal(Hk_w90(3,6,ik)),dreal(Hk_w90(3,5,ik))
-  end do
-  close(unit_in)
-  !
-  unit_in=free_unit(); 
-  open(unit=unit_in,file='Ta_Ni_bare_occupations.dat')    
-  do i=1,Nso
-     do j=1,Nso
-        write(unit_in,*) i,j,dreal(ccij(i,j)),dimag(ccij(i,j))
-     end do
-     write(unit_in,*)
-  end do
-  close(unit_in)
-  write(*,*) 'Ncell',Ncell
-
-
-
-
-
-  do i=1,Nso
-     do j=1,Nso
-        write(768,'(10F18.10)') check_Uloc(i,j)
-     end do
-     check_Uloc(i,i) = 0.d0
-  end do
-
-  !+- here obtain the Fourier transform of the density density Coulomb interaction U(R-R') -+!  
-  !+- TEST of THE FT -+!
-  !
-  Ur_TNS=0.d0
-  iir=0
-  do ir=1,6
-     ! do jr=1,3
-     !    do kr=1,3
-     iir=iir+1
-     !
-     Rlat=dble(ir-2)*R1!+dble(jr-2)*R2+dble(kr-2)*R3
-     call FT_q2r(Rlat,Ur_TNS(:,:,iir),Uq_TNS)
-     modk=Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0
-     modk=sqrt(modk)           
-     write(701,'(20F18.10)') modk,Ur_TNS(1,1,iir),Ur_TNS(1,2,iir),Ur_TNS(1,6,iir),Ur_TNS(1,5,iir)
-     write(702,'(20F18.10)') Rlat,Ur_TNS(1,5,iir),Ur_TNS(1,6,iir),Ur_TNS(4,5,iir),Ur_TNS(5,4,iir)
-
-     !
-     !    end do
-     ! end do
-  end do
-
-  Ur_TNS=0.d0
-  iir=0
-  do ir=1,Nk_z
-     iir=iir+1
-     !
-     Rlat=dble(ir-2)*R3-1.d0*R1!+dble(jr-2)*R2+dble(kr-2)*R3
-     call FT_q2r(Rlat,Ur_TNS(:,:,iir),Uq_TNS)
-     modk=Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0
-     modk=sqrt(modk)           
-     write(711,'(20F18.10)') modk,Ur_TNS(1,6,iir),Ur_TNS(6,1,iir),Ur_TNS(4,5,iir),Ur_TNS(5,4,iir)
-     write(712,'(20F18.10)') Rlat,Ur_TNS(1,6,iir),Ur_TNS(6,1,iir),Ur_TNS(3,1,iir),Ur_TNS(1,3,iir)
-
-     Rlat=dble(ir-2)*R3+0.d0*R1!+dble(jr-2)*R2+dble(kr-2)*R3
-     call FT_q2r(Rlat,Ur_TNS(:,:,iir),Uq_TNS)
-     modk=Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0
-     modk=sqrt(modk)           
-     write(721,'(20F18.10)') modk,Ur_TNS(1,6,iir),Ur_TNS(6,1,iir),Ur_TNS(4,5,iir),Ur_TNS(5,4,iir)
-     write(722,'(20F18.10)') Rlat,Ur_TNS(1,6,iir),Ur_TNS(6,1,iir),Ur_TNS(3,1,iir),Ur_TNS(1,3,iir)
-     write(723,'(20F18.10)') Rlat,Ur_TNS(2,4,iir),Ur_TNS(4,2,iir)
-     write(724,'(20F18.10)') Rlat,Ur_TNS(2,5,iir),Ur_TNS(5,2,iir)
-
-  end do
-
-  ! Ur_TNS=0.d0
-  ! iir=0
-  ! do ir=1,3
-  !    do jr=1,3
-  !       do kr=1,3
-  !          iir=iir+1
-  !          !
-  !          Rlat=dble(ir-2)*R1+dble(jr-2)*R2+dble(kr-2)*R3
-  !          call FT_q2r(Rlat,Ur_TNS(:,:,iir),Uq_TNS)
-  !          modk=Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0
-  !          modk=sqrt(modk)           
-  !          write(801,'(20F18.10)') modk,Ur_TNS(1,1,iir),Ur_TNS(1,2,iir),Ur_TNS(1,6,iir),Ur_TNS(1,5,iir)
-  !    !
-  !       end do
-  !    end do
-  ! end do
-
-
-
-
-
-
-
-  stop
-
-
-  delta_hf_=delta_hf
-
-  unit_err=free_unit()
-  open(unit=unit_err,file='err_q.err')
-
-
-  !Uloc_TNS
-  err_hf=1.d0  
-  do ihf=1,Nhf
-     write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix          
-     call local_single_particle_observables(delta_hf,obs_loc)
-     iso=0
-     Ncell=0.d0
-     do i=1,Nso           
-        Ncell=Ncell+obs_loc(i)
-        do j=i,Nso
-           iso=iso+1
-           write(units_loc_obs(iso),'(10F18.10)') dble(ihf),obs_loc(iso)
-        end do
-     end do
-     write(unit_obs,'(10F18.10)') dble(ihf),ndens
-     !
-     call build_HF_hamiltonian_ij(H_hf,delta_hf,Uq_ij)          
-     call find_chem_pot(H_hf,delta_hf,mu_fix)
-     delta_hf=wmix*delta_hf+(1.d0-wmix)*delta_hf_
-     !
-     err_hf=check_conv(delta_hf,delta_hf_)     
-     !
-     delta_hf_=delta_hf
-     !
-  end do
-  close(unit_err)
-  close(unit_obs)
-
-  !
-  call store_HF_hamiltonian_BZgrid_ij(Hhf_grid,delta_hf,mu_fix,Uq_ij)
-
-
-  !+- here now I should plot the HF bands; see wheather the small hybridizations actually open a gap
-
-
-  !+ M-point
-  allocate(kpath(4,3))
-  kpath(1,:)=0.5d0*Bk1+0.5d0*Bk3
-  !+- Z-point
-  kpath(2,:)=0.5d0*Bk3
-  !+- G-point
-  kpath(3,:)=0.d0
-  !+- X-point
-  kpath(4,:)=0.5d0*Bk1
-  !
-  color_bands=black
-  kpoint_name(1)='M'
-  kpoint_name(2)='Z'
-  kpoint_name(3)='G'
-  kpoint_name(4)='X'
-  !
-  allocate(kpt_path(300,3))
-  allocate(kx(Lk),ky(Lk),kz(Lk))
-
-  allocate(Hk_w90_reshape(Nso,Nso,Nk_x,Nk_y,Nk_z))
-  Hk_w90_reshape=0.d0
-  do ik=1,Lk
-     i=ik_stride(ik,1)
-     j=ik_stride(ik,2)
-     k=ik_stride(ik,3)
-     Hk_w90_reshape(:,:,i,j,k) = Hk_w90(:,:,ik)
-     kx(ik) = kpt_latt(ik,1)
-     ky(ik) = kpt_latt(ik,2)
-     kz(ik) = kpt_latt(ik,3)
-  end do
-  modk=0.d0
-  !
-
-
-
-  allocate(Hk_hf_reshape(Nso,Nso,Nk_x,Nk_y,Nk_z))
-  Hk_hf_reshape=0.d0
-  do ik=1,Lk
-     i=ik_stride(ik,1)
-     j=ik_stride(ik,2)
-     k=ik_stride(ik,3)
-     Hk_hf_reshape(:,:,i,j,k) = Hhf_grid(:,:,ik)
-     kx(ik) = kpt_latt(ik,1)
-     ky(ik) = kpt_latt(ik,2)
-     kz(ik) = kpt_latt(ik,3)
-  end do
-  modk=0.d0
-
-
-  !+- compute spectral density -+!
-  allocate(wreal(Lreal),G_loc(Nso,Lreal),Aw(Lreal))
-  wreal=linspace(-5.0d0,5.0d0,Lreal)
-  G_loc = 0.d0
-  do ik=1,Lk
-     Hktmp=0.d0;ek_out=0.d0     
-     Hktmp=Hhf_grid(:,:,ik)
-     call eigh(Hktmp,ek_out)
-     do j=1,Nso     
-        do i=1,Lreal
-           G_loc(j,i) = G_loc(j,i) + 1.d0/(wreal(i)+xi*0.01d0-ek_out(j))*wtk(ik)
-        end do
-     end do
-  end do
-  Aw=0.d0
-  do i=1,Nso
-     Aw=Aw-1.d0/pi*dimag(G_loc(i,:))
-  end do
-
-  uio=free_unit()
-  open(unit=uio,file='Aw.out')
-  do i=1,Lreal
-     write(uio,'(10F18.10)') wreal(i),Aw(i),-1.d0/pi*dimag(G_loc(:,i))
-  end do
-  close(uio)
-
-
-  !
-  !+- PLOTTING W90 BANDS -+!
-  uio=free_unit()
-  open(unit=uio,file='tns_HF_bands.out')
-  !
-  kmod=0.d0
-  do i=1,3
-     delta_kpath=kpath(i+1,:)-kpath(i,:)
-     kmod = kmod + sqrt(dot_product(delta_kpath,delta_kpath))
-     do ik=1,100
-        j=(i-1)*100 + ik
-        kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
-        modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
-        !
-        Hktmp=0.d0;ek_out=0.d0
-        Hktmp=get_HK(kpt_path(j,:),Nso,Hk_hf_reshape)
-        call eigh(Hktmp,ek_out)
-        write(uio,*) modk,ek_out
-        !
-     end do
-     write(*,*) i,kmod(1)
-     !
-  end do
-  close(uio)
-
-
-  allocate(Hk_w90_tmp(Nso,Nso,Lk))
-  Hk_w90_tmp=Hk_w90
-
-
-  do i=1,2
-     do j=3,6
-        Hk_w90_tmp(i,j,:) = Hk_w90_tmp(i,j,:) + 0.10
-        Hk_w90_tmp(j,i,:) = Hk_w90_tmp(j,i,:) + 0.10
-     end do
-  end do
-
-  ! Hk_w90_tmp(5,1,:) = Hk_w90_tmp(5,1,:) + 0.10
-  ! Hk_w90_tmp(1,6,:) = Hk_w90_tmp(1,6,:) + 0.10
-  ! Hk_w90_tmp(6,1,:) = Hk_w90_tmp(6,1,:) + 0.10
-  ! Hk_w90_tmp(2,5,:) = Hk_w90_tmp(2,5,:) + 0.10
-  ! Hk_w90_tmp(5,2,:) = Hk_w90_tmp(5,2,:) + 0.10
-  ! Hk_w90_tmp(3,6,:) = Hk_w90_tmp(3,6,:) + 0.10
-  ! Hk_w90_tmp(6,3,:) = Hk_w90_tmp(6,3,:) + 0.10
-  ! Hk_w90_tmp(4,6,:) = Hk_w90_tmp(4,6,:) + 0.10
-  ! Hk_w90_tmp(6,4,:) = Hk_w90_tmp(6,4,:) + 0.10
-
-
-  Hk_w90_reshape=0.d0
-  do ik=1,Lk
-     i=ik_stride(ik,1)
-     j=ik_stride(ik,2)
-     k=ik_stride(ik,3)
-     Hk_w90_reshape(:,:,i,j,k) = Hk_w90_tmp(:,:,ik)
-     kx(ik) = kpt_latt(ik,1)
-     ky(ik) = kpt_latt(ik,2)
-     kz(ik) = kpt_latt(ik,3)
-  end do
-  modk=0.d0
-  !
-  !+- PLOTTING W90 BANDS -+!
-  uio=free_unit()
-  open(unit=uio,file='tns_15_25_36_46_bands.out')
-  !
-  do i=1,3
-     delta_kpath=kpath(i+1,:)-kpath(i,:)
-     do ik=1,100
-        j=(i-1)*100 + ik
-        kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
-        modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
-        !
-        Hktmp=0.d0;ek_out=0.d0
-        Hktmp=get_HK(kpt_path(j,:),Nso,Hk_w90_reshape)
-        call eigh(Hktmp,ek_out)
-        write(uio,'(30F18.10)') modk,ek_out
-
-        !
-     end do
-     !
-  end do
-  close(uio)
-
-
-
-  Hk_w90_tmp=Hk_w90
-
-  Hk_w90_tmp(1,6,:) = Hk_w90_tmp(1,6,:) + 0.10
-  Hk_w90_tmp(6,1,:) = Hk_w90_tmp(6,1,:) + 0.10
-
-  Hk_w90_tmp(3,5,:) = Hk_w90_tmp(3,5,:) + 0.10
-  Hk_w90_tmp(5,3,:) = Hk_w90_tmp(5,3,:) + 0.10
-
-  Hk_w90_tmp(4,5,:) = Hk_w90_tmp(4,5,:) + 0.10
-  Hk_w90_tmp(5,4,:) = Hk_w90_tmp(5,4,:) + 0.10
-
-  Hk_w90_tmp(6,2,:) = Hk_w90_tmp(6,2,:) + 0.10
-  Hk_w90_tmp(2,6,:) = Hk_w90_tmp(2,6,:) + 0.10
-
-
-  Hk_w90_reshape=0.d0
-  do ik=1,Lk
-     i=ik_stride(ik,1)
-     j=ik_stride(ik,2)
-     k=ik_stride(ik,3)
-     Hk_w90_reshape(:,:,i,j,k) = Hk_w90_tmp(:,:,ik)
-     kx(ik) = kpt_latt(ik,1)
-     ky(ik) = kpt_latt(ik,2)
-     kz(ik) = kpt_latt(ik,3)
-  end do
-  modk=0.d0
-  !
-  !+- PLOTTING W90 BANDS -+!
-  uio=free_unit()
-  open(unit=uio,file='tns_16_26_35_45_bands.out')
-  !
-  do i=1,3
-     delta_kpath=kpath(i+1,:)-kpath(i,:)
-     do ik=1,100
-        j=(i-1)*100 + ik
-        kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
-        modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
-        !
-        Hktmp=0.d0;ek_out=0.d0
-        Hktmp=get_HK(kpt_path(j,:),Nso,Hk_w90_reshape)
-        call eigh(Hktmp,ek_out)
-        write(uio,'(30F18.10)') modk,ek_out
-
-        !
-     end do
-     !
-  end do
-  close(uio)
-
-
-
-
-
-
-  !+- STILL TO DO: 
-
-  !+- Do the fourier transform of the Interaction:
-  !   for this I may need a larger real space lattice
-  !   
-
-
-  !+ Just do the mean field; need to include more than-one brillouin zone. 
-  !  In 3d this could be annoying...maybe parallel integration could be considered...
-  !  
 
 
   stop
@@ -906,8 +393,31 @@ program officina
 
 contains
 
-
-
+  function HF_hamiltonian(x_iter) result(Hhf)
+    implicit none
+    complex(8) :: x_iter(4)
+    complex(8),dimension(Nso,Nso,Lk) :: Hhf
+    integer :: iso,jso,iorb,jorb
+    !
+    Hhf=0.d0
+    do ik=1,Lk
+       do ispin=1,Nspin
+          iorb=1
+          iso=(ispin-1)*Norb+iorb
+          Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(1)+2.d0*Vcell*x_iter(2)
+          jorb=2
+          jso=(ispin-1)*Norb+jorb
+          Hhf(jso,iso,ik) = -Vcell*x_iter(3)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(4)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
+          Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
+          !
+          Hhf(jso,jso,ik) = 0.5d0*Ucell*x_iter(2)+2.d0*Vcell*x_iter(1)
+          !          
+       end do
+    end do
+    !
+  end function HF_hamiltonian
+    
 
 
 
