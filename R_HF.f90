@@ -14,15 +14,16 @@ MODULE HF_real
   public :: build_HF_hamiltonian_latt
   public :: find_chem_pot_latt
   public :: check_conv_latt
-  ! public :: local_single_particle_observables
   public :: init_var_params_latt
-  ! public :: store_HF_hamiltonian_BZgrid
-  ! public :: store_HF_hamiltonian_BZgrid_ij
   !
   public :: FT_r2q
   public :: FT_q2r
   !
-  
+  public :: fix_mu
+
+
+  complex(8),dimension(:,:,:),allocatable :: Hhf_tmp,delta_hf_tmp
+
 contains
 
   function check_conv_latt(deltas_new,deltas_old) result(err)
@@ -182,6 +183,7 @@ contains
     real(8),dimension(size(Hhf,1)) :: Ehf
     complex(8),dimension(size(Hhf,1),size(Hhf,1)) :: Htmp    
     integer(8):: ik,i,j,ii,jj
+    integer :: iorb,jorb
     !
     if(size(Hhf,1).ne.Nso) stop "error in Hhf1"
     if(size(Hhf,2).ne.Nso) stop "error in Hhf2"
@@ -191,14 +193,15 @@ contains
     if(size(Deltas,2).ne.Nso) stop "error in Deltas2"
     if(size(Deltas,3).ne.Lk) stop "error in Deltas3"
     !
+    write(*,*) "inside solve"; stop
+    Deltas=0.d0             
     do ik=1,Lk
        !
        Htmp=Hhf(:,:,ik)
        call eigh(Htmp,Ehf)
        !
        do i=1,Nso
-          do j=1,i
-             Deltas(i,j,ik)=0.d0             
+          do j=i,Nso
              do jj=1,Nso
                 Deltas(i,j,ik) = Deltas(i,j,ik) + &
                      conjg(Htmp(i,jj))*Htmp(j,jj)*fermi(Ehf(jj),beta)
@@ -241,37 +244,20 @@ contains
        do jso=1,Nso
           do ir=1,nrpts       
              !+- Fock Term -+!
-             Hhf(iso,jso,ir) = Hhf(iso,jso,ir) - Ur(iso,jso,ir)*Delta_HF(jso,iso,ir_mirror(ir))
+             if(wfock) then
+                !Hhf(iso,jso,ir) = Hhf(iso,jso,ir) - Ur(iso,jso,ir)*Delta_HF(jso,iso,ir_mirror(ir))
+                Hhf(iso,jso,ir) = Hhf(iso,jso,ir) - Ur(iso,jso,ir)*Delta_HF(iso,jso,ir)
+             end if
              !+-------------+!
           end do
        end do
     end do
     
-    ! !Hhf=0.d0
-    ! do ik=1,Lk
-    !    Hhf(:,:,ik) = Hk(:,:,ik)       
-    !    do jk=1,Lkr
-    !       !
-    !       deltaK = kpt_latt(ik,:) - krl(jk,:)
-    !       !
-    !       Uf=Uq(deltaK)
-    !       deltaK=0.d0
-    !       Uh=Uq(deltak)
-    !       !
-    !       call shift_BZ(jk,jjk)
-    !       !
-    !       do iso=1,Nso
-    !          do jso=1,Nso
-    !             Hhf(iso,jso,ik) = Hhf(iso,jso,ik) - &
-    !                  Uf(iso,jso)*Deltas(iso,jso,jjk)*wtk_rl(jk)                     
-    !             Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + &
-    !                  Uh(iso,jso)*Deltas(jso,jso,jjk)*wtk_rl(jk)
-    !          end do
-    !       end do
-    !       !
+    ! if(Nspin.eq.2) then
+    !    do ir=1,nrpts
+    !       write(345,*) Hhf(1,7,ir)
     !    end do
-    ! end do
-    !
+    ! end if
   end subroutine build_HF_hamiltonian_latt
 
   
@@ -488,6 +474,55 @@ contains
   !   end do
   !   !
   ! end subroutine store_HF_hamiltonian_BZgrid_ij
+
+
+
+  !+- TMP K-SPACE ROUTINES -+!
+  subroutine fix_mu(Hhf,delta_hf,mu)
+    complex(8),dimension(Nso,Nso,Lk),intent(in) :: Hhf
+    complex(8),dimension(Nso,Nso,Lk),intent(inout) :: delta_hf
+    complex(8),dimension(Nso,Nso,Lk) :: Hhf_k,delta_hf_k
+    real(8),intent(inout) :: mu    
+    real(8),dimension(1) :: mu_,Nout
+    integer :: iter,ik,ir
+    !    
+    allocate(Hhf_tmp(Nso,Nso,Lk)); Hhf_tmp=Hhf
+    allocate(delta_hf_tmp(Nso,Nso,Lk)); delta_hf_tmp=delta_hf
+    write(*,*) deltaN(-100.d0)
+    write(*,*) deltaN(5000.d0)
+    stop
+    mu=brentq(deltaN,-100.d0,5000.d0)
+    Nout=deltaN(mu)
+    !
+    write(530,*) Nout,Ndens,mu_
+    delta_hf=delta_hf_tmp
+    deallocate(delta_hf_tmp)
+    deallocate(Hhf_tmp)
+    !
+  end subroutine fix_mu
+  ! 
+  function deltaN(xmu) !result(deltaN)
+    real(8),intent(in) :: xmu
+    real(8) :: deltaN
+    complex(8),dimension(Nso,Nso,Lk) :: Htmp
+    integer(8):: ik,iso 
+    do ik=1,Lk
+       Htmp(:,:,ik)=Hhf_tmp(:,:,ik)-xmu*zeye(Nso)                
+    end do
+    call solve_HF_hamiltonian(Htmp,delta_hf_tmp) 
+    deltaN=0.d0
+    do ik=1,Lk
+       do iso=1,Nso
+          deltaN = deltaN + dreal(delta_hf_tmp(iso,iso,ik)*wtk(ik))
+       end do
+    end do
+    write(531,'(10F18.10)') deltaN,Ndens,xmu
+    stop
+    deltaN=deltaN-Ndens
+  end function deltaN
+    
+  
+
 
 
 

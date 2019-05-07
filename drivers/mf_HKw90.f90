@@ -99,9 +99,9 @@ program officina
   real(8),dimension(:),allocatable :: Aw
 
   logical :: Uradius
-
-  real(8) :: alphaU
-
+  logical :: H1d
+  real(8) :: alphaU,deltar
+  real(8),dimension(6) :: tk
   !
 
   !+- START MPI -+!
@@ -128,7 +128,7 @@ program officina
   call parse_input_variable(hartree,"Hartree","input.conf",default=.true.)  
   call parse_input_variable(cf_ext,"cf_ext","input.conf",default=0.d0)
   call parse_input_variable(Ucut_off,"U_CUT","input.conf",default=20.d0)
-  !call parse_input_variable(Ncut,"NU_CUT","input.conf",default=1)
+  call parse_input_variable(H1d,"H1D","input.conf",default=.false.)
   call parse_input_variable(alphaU,"alphaU","input.conf",default=1.d0)
 
   !
@@ -192,30 +192,30 @@ program officina
      end do
   end do
   !
-  Lk_aux=3*3*3*Lk
-  allocate(kpt_latt_aux(Lk_aux,3),ik_stride_aux(Lk_aux,3),igr2ik_aux(3*Nk_x,3*Nk_y,3*Nk_z))
-  ik=0
-  kpt_latt_aux=0.d0
-  do i=1,3*Nk_x
-     do k=1,3*Nk_z
-        do j=1,3*Nk_y
-           !
-           ik=ik+1
-           !
-           ik_stride_aux(ik,1)=i
-           ik_stride_aux(ik,2)=j
-           ik_stride_aux(ik,3)=k
-           igr2ik_aux(i,j,k) = ik
-           !
-           do idim=1,3
-              kpt_latt_aux(ik,idim) = kpt_latt_aux(ik,idim) + kxgrid_aux(i)*Bk1(idim)
-              kpt_latt_aux(ik,idim) = kpt_latt_aux(ik,idim) + kygrid_aux(j)*Bk2(idim)
-              kpt_latt_aux(ik,idim) = kpt_latt_aux(ik,idim) + kzgrid_aux(k)*Bk3(idim)
-           end do
-           !
-        end do
-     end do
-  end do
+  ! Lk_aux=3*3*3*Lk
+  ! allocate(kpt_latt_aux(Lk_aux,3),ik_stride_aux(Lk_aux,3),igr2ik_aux(3*Nk_x,3*Nk_y,3*Nk_z))
+  ! ik=0
+  ! kpt_latt_aux=0.d0
+  ! do i=1,3*Nk_x
+  !    do k=1,3*Nk_z
+  !       do j=1,3*Nk_y
+  !          !
+  !          ik=ik+1
+  !          !
+  !          ik_stride_aux(ik,1)=i
+  !          ik_stride_aux(ik,2)=j
+  !          ik_stride_aux(ik,3)=k
+  !          igr2ik_aux(i,j,k) = ik
+  !          !
+  !          do idim=1,3
+  !             kpt_latt_aux(ik,idim) = kpt_latt_aux(ik,idim) + kxgrid_aux(i)*Bk1(idim)
+  !             kpt_latt_aux(ik,idim) = kpt_latt_aux(ik,idim) + kygrid_aux(j)*Bk2(idim)
+  !             kpt_latt_aux(ik,idim) = kpt_latt_aux(ik,idim) + kzgrid_aux(k)*Bk3(idim)
+  !          end do
+  !          !
+  !       end do
+  !    end do
+  ! end do
   !  
   uio=free_unit()
   open(unit=uio,file='mp_kgrid.f90')
@@ -224,12 +224,12 @@ program officina
   end do
   close(uio)
 
-  uio=free_unit()
-  open(unit=uio,file='mp_kgrid_aux.f90')
-  do ik=1,Lk_aux
-     write(uio,'(10F18.10)') kpt_latt_aux(ik,:)
-  end do
-  close(uio)
+  ! uio=free_unit()
+  ! open(unit=uio,file='mp_kgrid_aux.f90')
+  ! do ik=1,Lk_aux
+  !    write(uio,'(10F18.10)') kpt_latt_aux(ik,:)
+  ! end do
+  ! close(uio)
 
 
   !+---------------------------------+!  
@@ -273,11 +273,6 @@ program officina
      end do
   end do
   close(unit_in)
-  if(Nspin.eq.1) then
-     do i=1,Nso
-        Uloc_TNS(i,i) = 0.d0
-     end do
-  end if
   
   !+- read U(q) -+!
   file_name=reg(read_tns)//reg(file_UV)
@@ -380,6 +375,42 @@ program officina
   close(unit_in)
   ! 
 
+  !+- new MP grid -+!
+  Nk_x=1000
+  Nk_x=2
+  Nk_x=2
+  call build_mp_grid(Nk_x,Nk_y,Nk_z)
+  !
+  deallocate(kpt_latt,ik_stride,wtk,igr2ik)
+  Lk=Nk_x*Nk_y*Nk_z
+  allocate(kpt_latt(Lk,3),ik_stride(Lk,3),wtk(Lk),igr2ik(Nk_x,Nk_y,Nk_z))
+  wtk=1.d0/dble(Lk)
+  ik=0
+  kpt_latt=0.d0
+  do i=1,Nk_x
+     do k=1,Nk_z           
+        do j=1,Nk_y        
+           !
+           ik=ik+1
+           !
+           ik_stride(ik,1) = i
+           ik_stride(ik,2) = j
+           ik_stride(ik,3) = k
+           igr2ik(i,j,k) = ik
+           !
+           do idim=1,3
+              kpt_latt(ik,idim) = kpt_latt(ik,idim) + kxgrid(i)*Bk1(idim)
+              kpt_latt(ik,idim) = kpt_latt(ik,idim) + kygrid(j)*Bk2(idim)
+              kpt_latt(ik,idim) = kpt_latt(ik,idim) + kzgrid(k)*Bk3(idim)
+           end do
+           write(301,*) kpt_latt(ik,:)
+        end do
+     end do
+  end do
+  
+
+  
+
   
   !
   allocate(Hr_w90_tmp(Nso,Nso,nrpts)); Hr_w90_tmp=Hr_w90
@@ -404,6 +435,76 @@ program officina
   !+- bare bands -+!
   allocate(delta_hfr(Nso,Nso,nrpts),delta_hfr_(Nso,Nso,nrpts),H_hf(Nso,Nso,nrpts))
   call init_var_params_latt(delta_hfr,Hr_w90)
+
+
+  do ispin=1,Nspin
+     do iorb=1,4
+        iso=(ispin-1)*Norb+iorb
+        Hr_w90(iso,iso,ir0) = Hr_w90(iso,iso,ir0) + cf_ext
+     end do
+  end do
+  do ispin=1,Nspin
+     do iorb=5,6
+        iso=(ispin-1)*Norb+iorb
+        Hr_w90(iso,iso,ir0) = Hr_w90(iso,iso,ir0) - cf_ext
+     end do
+  end do
+
+
+  if(H1d) then
+     
+     tk(1:4) = -0.8d0
+     tk(5:6) = 0.4d0
+
+     Hr_w90=0.d0
+     do ir=1,nrpts
+        Rlat=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3
+        Rlat=Rlat+R1
+        deltar=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
+        if(deltar.lt.1.d-10) then
+           do ispin=1,Nspin
+              do iorb=1,Norb
+                 iso=(ispin-1)*Norb+iorb        
+                 Hr_w90(iso,iso,ir) = tk(iorb)
+              end do
+           end do
+        end if
+        Rlat=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3
+        Rlat=Rlat-R1
+        deltar=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
+        if(deltar.lt.1.d-10) then
+           do ispin=1,Nspin
+              do iorb=1,Norb
+                 iso=(ispin-1)*Norb+iorb        
+                 Hr_w90(iso,iso,ir) = tk(iorb)
+              end do
+           end do
+        end if
+     end do
+     !
+     do ispin=1,Nspin
+        do iorb=1,4
+           iso=(ispin-1)*Norb+iorb
+           Hr_w90(iso,iso,ir0) = Hr_w90(iso,iso,ir0) + 1.7
+        end do
+     end do
+     do ispin=1,Nspin
+        do iorb=5,6
+           iso=(ispin-1)*Norb+iorb
+           Hr_w90(iso,iso,ir0) = Hr_w90(iso,iso,ir0) - 0.9
+        end do
+     end do
+     ! do iso=1,Nso
+     !    do jso=iso+1,Nso
+     !       Hr_w90(iso,jso,:) = 0.d0
+     !       Hr_w90(jso,iso,:) = 0.d0
+     !    end do
+     ! end do
+  end if
+  
+  
+
+
   mu_fix=4.d0
   call find_chem_pot_latt(Hr_w90,delta_hfr,mu_fix)
   
@@ -509,6 +610,22 @@ program officina
         end do
      end do
   end do
+  if(only_loc) then
+     Ur_TNS=0.d0
+     write(*,*) 'LOCAL COULOMB INTERACTION'
+     do ispin=1,Nspin
+        do iorb=1,Norb
+           iso=(ispin-1)*Norb+iorb
+           do jspin=1,Nspin
+              do jorb=1,Norb
+                 jso=(jspin-1)*Norb+jorb              
+                 Ur_TNS(iso,jso,ir0) = Uloc_TNS(iorb,jorb)
+                 write(*,*) iso,jso,Ur_TNS(iso,jso,ir0)
+              end do
+           end do
+        end do
+     end do
+  end if
   do ispin=1,Nspin
      do iorb=1,Norb
         iso=(ispin-1)*Norb+iorb
@@ -546,22 +663,63 @@ program officina
         open(unit=units_loc_obs(iso),file="obs_hf_"//reg(txtfy(i)//reg(txtfy(j))))        
      end do
   end do
-  do iso=1,Nso
-     do jso=iso+1,Nso
-        delta_hfr(iso,jso,ir0) = delta_hfr(iso,jso,ir0) + 0.1d0
-        delta_hfr(jso,iso,ir0) = delta_hfr(jso,iso,ir0) + 0.1d0
-     end do
+  
+  do ispin=1,Nspin
+     !do iorb=1,Norb
+        !do jorb=iorb+1,Norb
+     iorb=1
+     jorb=5
+     iso=(ispin-1)*Norb+iorb
+     jso=(ispin-1)*Norb+jorb
+     delta_hfr(iso,jso,ir0) = 0.1d0!delta_hfr(iso,jso,ir0) + 0.1d0
+     delta_hfr(jso,iso,ir0) = 0.1d0!delta_hfr(jso,iso,ir0) + 0.1d0           
+
+     iorb=2
+     jorb=5
+     iso=(ispin-1)*Norb+iorb
+     jso=(ispin-1)*Norb+jorb
+     delta_hfr(iso,jso,ir0) = 0.1d0!delta_hfr(iso,jso,ir0) + 0.1d0
+     delta_hfr(jso,iso,ir0) = 0.1d0!delta_hfr(jso,iso,ir0) + 0.1d0           
+
+
+     iorb=3
+     jorb=6
+     iso=(ispin-1)*Norb+iorb
+     jso=(ispin-1)*Norb+jorb
+     delta_hfr(iso,jso,ir0) = 0.1d0!delta_hfr(iso,jso,ir0) + 0.1d0
+     delta_hfr(jso,iso,ir0) = 0.1d0!delta_hfr(jso,iso,ir0) + 0.1d0           
+
+
+     iorb=4
+     jorb=6
+     iso=(ispin-1)*Norb+iorb
+     jso=(ispin-1)*Norb+jorb
+     delta_hfr(iso,jso,ir0) = 0.1d0!delta_hfr(iso,jso,ir0) + 0.1d0
+     delta_hfr(jso,iso,ir0) = 0.1d0!delta_hfr(jso,iso,ir0) + 0.1d0           
+
+
+        !end do
+     !end do
   end do
+  ! do iso=1,Nso
+  !    do jso=iso+1,Nso
+  !       delta_hfr(iso,jso,ir0) = delta_hfr(iso,jso,ir0) + 0.1d0
+  !       delta_hfr(jso,iso,ir0) = delta_hfr(jso,iso,ir0) + 0.1d0
+  !    end do
+  ! end do
+  !
+  !delta_hfr=0.d0
   delta_hfr_=delta_hfr
 
   unit_obs=free_unit()
   open(unit=unit_obs,file='ndens_hf.loop')
  
   unit_err=free_unit()
-  open(unit=unit_err,file='err_q.err')
-  
+  open(unit=unit_err,file='err_q.err')  
   err_hf=1.d0  
   do ihf=1,Nhf
+
+     
      write(unit_err,'(10F18.10)') dble(ihf),err_hf,mu_fix               
      iso=0
      Ncell=0.d0
@@ -573,11 +731,29 @@ program officina
         end do
      end do
      write(unit_obs,'(10F18.10)') dble(ihf),ncell
-     !
+
      H_hf=Hr_w90
      call build_HF_hamiltonian_latt(H_hf,delta_hfr,Ur_TNS)          
      call find_chem_pot_latt(H_hf,delta_hfr,mu_fix)
+
+     ! if(Nspin.eq.2) then
+     !    do iorb=1,Norb
+     !       do jorb=1,Norb
+     !          iso=iorb+Norb
+     !          jso=jorb
+     !          delta_hfr(iso,jso,:) = 0.d0
+     !          iso=iorb
+     !          jso=jorb+Norb
+     !          delta_hfr(iso,jso,:) = 0.d0        
+     !       end do
+     !    end do
+     ! end if
+     
      delta_hfr=wmix*delta_hfr+(1.d0-wmix)*delta_hfr_
+
+
+     !if(ihf.eq.2) stop
+     !
      !
      err_hf=check_conv(delta_hfr,delta_hfr_)     
      !
@@ -587,6 +763,7 @@ program officina
   close(unit_err)
   close(unit_obs)
 
+  
 
   open(unit_in,file='Deltar_HF_real.tns')
   modk=0.d0
@@ -651,9 +828,29 @@ program officina
   close(unit_in)
 
 
+  !+- spin-symmetriz delta_hfr -+!
+  if(Nspin.eq.2) then
+     do iorb=1,Norb
+        do jorb=1,Norb
+           iso=iorb+Norb
+           jso=jorb
+           ! delta_hfr(iso,jso,:) = 0.d0
+           ! delta_hfr(jso,iso,:) = 0.d0        
+        end do
+     end do     
+     do iorb=1,Norb
+        do jorb=1,Norb
+           do ir=1,nrpts
+              iso=iorb+Norb
+              jso=jorb+Norb
+              !delta_hfr(iso,jso,ir) = delta_hfr(iorb,jorb,ir)
+           end do
+        end do
+     end do
+  end if
 
-  H_hf=Hr_w90
-  call build_HF_hamiltonian_latt(H_hf,delta_hfr,Ur_TNS)
+  !H_hf=Hr_w90
+  !call build_HF_hamiltonian_latt(H_hf,delta_hfr,Ur_TNS)
   call find_chem_pot_latt(H_hf,delta_hfr,mu_fix)
   write(*,*) 'mu fix',mu_fix
   !do ir=1,nrpts
@@ -1250,6 +1447,9 @@ contains
     real(8),dimension(:),allocatable :: kxr,kyr,kzr
     !
     !    
+    if(allocated(kxgrid)) deallocate(kxgrid)
+    if(allocated(kygrid)) deallocate(kygrid)
+    if(allocated(kzgrid)) deallocate(kzgrid)
     allocate(kxgrid(Nx),kygrid(Ny),kzgrid(Nz))
     kmax=dble(Nx-1)*0.5d0/dble(Nx)
     kxgrid = linspace(-kmax,kmax,Nx,mesh=dx)
@@ -1274,42 +1474,42 @@ contains
        kzgrid=kzgrid-0.5d0/dble(Nz)
     end if
     !
-    allocate(kxgrid_aux(3*Nx),kygrid_aux(3*Ny),kzgrid_aux(3*Nz))
-    allocate(ix_aux(3*Nx),iy_aux(3*Ny),iz_aux(3*Nz))
-    !
-    do ix=1,Nx
-       !
-       kxgrid_aux(ix) = kxgrid(ix) - 2*kxmax
-       kxgrid_aux(ix+Nx) = kxgrid(ix) 
-       kxgrid_aux(ix+2*Nx) = kxgrid(ix) + 2*kxmax
-       !
-       ix_aux(ix) = ix
-       ix_aux(ix+Nx) = ix
-       ix_aux(ix+2*Nx) = ix
-       !
-    end do
-    do iy=1,Ny
-       !
-       kygrid_aux(iy) = kygrid(iy) - 2*kymax
-       kygrid_aux(iy+Ny) = kygrid(iy) 
-       kygrid_aux(iy+2*Ny) = kygrid(iy) + 2*kymax
-       !
-       iy_aux(iy) = iy
-       iy_aux(iy+Ny) = iy
-       iy_aux(iy+2*Ny) = iy
-       !
-    end do
-    do iz=1,Nz
-       !
-       kzgrid_aux(iz) = kzgrid(iz) - 2*kzmax
-       kzgrid_aux(iz+Nz) = kzgrid(iz) 
-       kzgrid_aux(iz+2*Nz) = kzgrid(iz) + 2*kzmax
-       !
-       iz_aux(iz) = iz
-       iz_aux(iz+Nz) = iz
-       iz_aux(iz+2*Nz) = iz
-       !
-    end do
+    ! allocate(kxgrid_aux(3*Nx),kygrid_aux(3*Ny),kzgrid_aux(3*Nz))
+    ! allocate(ix_aux(3*Nx),iy_aux(3*Ny),iz_aux(3*Nz))
+    ! !
+    ! do ix=1,Nx
+    !    !
+    !    kxgrid_aux(ix) = kxgrid(ix) - 2*kxmax
+    !    kxgrid_aux(ix+Nx) = kxgrid(ix) 
+    !    kxgrid_aux(ix+2*Nx) = kxgrid(ix) + 2*kxmax
+    !    !
+    !    ix_aux(ix) = ix
+    !    ix_aux(ix+Nx) = ix
+    !    ix_aux(ix+2*Nx) = ix
+    !    !
+    ! end do
+    ! do iy=1,Ny
+    !    !
+    !    kygrid_aux(iy) = kygrid(iy) - 2*kymax
+    !    kygrid_aux(iy+Ny) = kygrid(iy) 
+    !    kygrid_aux(iy+2*Ny) = kygrid(iy) + 2*kymax
+    !    !
+    !    iy_aux(iy) = iy
+    !    iy_aux(iy+Ny) = iy
+    !    iy_aux(iy+2*Ny) = iy
+    !    !
+    ! end do
+    ! do iz=1,Nz
+    !    !
+    !    kzgrid_aux(iz) = kzgrid(iz) - 2*kzmax
+    !    kzgrid_aux(iz+Nz) = kzgrid(iz) 
+    !    kzgrid_aux(iz+2*Nz) = kzgrid(iz) + 2*kzmax
+    !    !
+    !    iz_aux(iz) = iz
+    !    iz_aux(iz+Nz) = iz
+    !    iz_aux(iz+2*Nz) = iz
+    !    !
+    ! end do
 
     unitk=free_unit()
     open(unit=unitk,file='mp_grid.out')
@@ -1321,16 +1521,16 @@ contains
        end do
     end do
     close(unitk)
-    unitk=free_unit()
-    open(unit=unitk,file='mp_grid_aux.out')    
-    do ix=1,3*Nx
-       do iy=1,3*Ny
-          do iz=1,3*Nz
-             write(unitk,'(10F18.10)') kxgrid_aux(ix),kygrid_aux(iy),kzgrid_aux(iz)
-          end do
-       end do
-    end do
-    close(unitk)
+    ! unitk=free_unit()
+    ! open(unit=unitk,file='mp_grid_aux.out')    
+    ! do ix=1,3*Nx
+    !    do iy=1,3*Ny
+    !       do iz=1,3*Nz
+    !          write(unitk,'(10F18.10)') kxgrid_aux(ix),kygrid_aux(iy),kzgrid_aux(iz)
+    !       end do
+    !    end do
+    ! end do
+    ! close(unitk)
     !
 
 
@@ -1363,56 +1563,56 @@ contains
     ! kygrid=kxgrid*KK(2)
     ! !
     ! !+-Next brillouin zones! -+!
-    Nx_=Nx*N_cut_off
-    Ny_=Ny*N_cut_off
-    Nz_=Nz*N_cut_off
+    ! Nx_=Nx*N_cut_off
+    ! Ny_=Ny*N_cut_off
+    ! Nz_=Nz*N_cut_off
 
-    allocate(kxr(Nx),kyr(Ny),kzr(Nz))
-    kmax=dble(Nx_-1)*0.5d0/dble(Nx_)
-    kxr = linspace(-kmax,kmax,Nx_)
-    !
-    kmax=dble(Ny_-1)*0.5d0/dble(Ny_)
-    kyr = linspace(-kmax,kmax,Ny_)
-    !
-    kmax=dble(Nz_-1)*0.5d0/dble(Nz_)
-    kzr = linspace(-kmax,kmax,Nz_)
-    !
-    if(mod(Nx_,2).eq.0) then
-       kxr=kxr-0.5d0/dble(Nx_)
-    end if
-    if(mod(Nx_,2).eq.0) then
-       kyr=kyr-0.5d0/dble(Ny_)
-    end if
-    if(mod(Nz_,2).eq.0) then
-       kzr=kzr-0.5d0/dble(Nz_)
-    end if
-    !
-    Lkr = Nx_*Ny_*Nz_
-    allocate(krl(Lkr,3),wtk_rl(Lkr),ikrl2ii(Lkr,3))
-    wtk_rl=1.d0/dble(Lkr)
-    !
-    !
-    unitk=free_unit()
-    open(unit=unitk,file='kRL_points.out')
-    ik=0
-    krl=0
-    do ix=1,Nx_
-       do iy=1,Nx_
-          do iz=1,Nz_
-             ik = ik + 1          
-             !
-             krl(ik,:)=krl(ik,:)+kxr(ix)*Bk1(:)
-             krl(ik,:)=krl(ik,:)+kyr(iy)*Bk2(:)
-             krl(ik,:)=krl(ik,:)+kzr(iz)*Bk3(:)
-             !
-             ikrl2ii(ik,1)=ix
-             ikrl2ii(ik,2)=iy
-             ikrl2ii(ik,3)=iz
-             write(unitk,'(10F18.10)') krl(ik,:)
-          end do
-       end do
-    end do
-    close(unitk)
+    ! allocate(kxr(Nx),kyr(Ny),kzr(Nz))
+    ! kmax=dble(Nx_-1)*0.5d0/dble(Nx_)
+    ! kxr = linspace(-kmax,kmax,Nx_)
+    ! !
+    ! kmax=dble(Ny_-1)*0.5d0/dble(Ny_)
+    ! kyr = linspace(-kmax,kmax,Ny_)
+    ! !
+    ! kmax=dble(Nz_-1)*0.5d0/dble(Nz_)
+    ! kzr = linspace(-kmax,kmax,Nz_)
+    ! !
+    ! if(mod(Nx_,2).eq.0) then
+    !    kxr=kxr-0.5d0/dble(Nx_)
+    ! end if
+    ! if(mod(Nx_,2).eq.0) then
+    !    kyr=kyr-0.5d0/dble(Ny_)
+    ! end if
+    ! if(mod(Nz_,2).eq.0) then
+    !    kzr=kzr-0.5d0/dble(Nz_)
+    ! end if
+    ! !
+    ! Lkr = Nx_*Ny_*Nz_
+    ! allocate(krl(Lkr,3),wtk_rl(Lkr),ikrl2ii(Lkr,3))
+    ! wtk_rl=1.d0/dble(Lkr)
+    ! !
+    ! !
+    ! unitk=free_unit()
+    ! open(unit=unitk,file='kRL_points.out')
+    ! ik=0
+    ! krl=0
+    ! do ix=1,Nx_
+    !    do iy=1,Nx_
+    !       do iz=1,Nz_
+    !          ik = ik + 1          
+    !          !
+    !          krl(ik,:)=krl(ik,:)+kxr(ix)*Bk1(:)
+    !          krl(ik,:)=krl(ik,:)+kyr(iy)*Bk2(:)
+    !          krl(ik,:)=krl(ik,:)+kzr(iz)*Bk3(:)
+    !          !
+    !          ikrl2ii(ik,1)=ix
+    !          ikrl2ii(ik,2)=iy
+    !          ikrl2ii(ik,3)=iz
+    !          write(unitk,'(10F18.10)') krl(ik,:)
+    !       end do
+    !    end do
+    ! end do
+    ! close(unitk)
     ! kxr=kxr*KK(1)
     ! kyr=kyr*KK(2)
     ! !

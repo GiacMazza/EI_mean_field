@@ -46,7 +46,7 @@ MODULE VARS_GLOBAL
   logical :: master
   character(len=100) :: init_HF,init_Hsb
 
-  logical :: whartree,only_LOC
+  logical :: whartree,only_LOC,wfock
 
 
   integer :: ir0
@@ -65,6 +65,7 @@ contains
     call parse_input_variable(init_Hsb,"init_Hsb_file","input.conf",default='Hsb.conf')
     call parse_input_variable(N_cut_off,"Nk_cutoff","input.conf",default=4)
     call parse_input_variable(whartree,"whartree","input.conf",default=.false.)
+    call parse_input_variable(wfock,"wfock","input.conf",default=.true.)
     call parse_input_variable(only_loc,"only_loc","input.conf",default=.false.)
 
 
