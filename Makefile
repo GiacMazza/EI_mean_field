@@ -6,7 +6,7 @@ FPP=
 #EXE=q_dep_EI
 #EXE=mf_HKw90
 #EXE=3b_cfr_kaneko
-EXE=2b_simple
+EXE=3b_simple
 
 
 HERE=`pwd`
