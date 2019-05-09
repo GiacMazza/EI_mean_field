@@ -363,14 +363,14 @@ program officina
 
   
   
-  xphi=0.50 
-  x_iter(6:7) = xphi
-  xtmp=x_iter(1:5)
   !
   uio=free_unit()
   open(unit=uio,file='hf_loop.out')
   allocate(H_Hf(Nso,Nso,Lk))
 
+  xphi=0.50 
+  x_iter(6:7) = xphi
+  xtmp=x_iter(1:5)
 
 
   do ihf=1,Nhf
@@ -426,7 +426,7 @@ program officina
   x_iter(5) = delta_hfr(2,3,ir0)!-0.2!-0.1*xi
   !
   x_iter(6) = delta_hfr(1,3,ir0)+delta_hfr(1,3,ir0+1)+0.5d0
-  x_iter(7) = delta_hfr(2,3,ir0)+delta_hfr(2,3,ir0+1)-0.5d0
+  x_iter(7) = delta_hfr(2,3,ir0)+delta_hfr(2,3,ir0+1)+0.3d0
   !
   write(*,*) x_iter(1)
   write(*,*) x_iter(2)
@@ -437,25 +437,25 @@ program officina
   write(*,*) x_iter(7)
 
 
-  ! H_Hf=HF_hamiltonian(x_iter)
-  ! H_Hf=H_Hf+Hk_w90
+  H_Hf=HF_hamiltonian(x_iter)
+  H_Hf=H_Hf+Hk_w90
 
-  ! !
-  ! call fix_mu(H_Hf,delta_hf,mu_fix)
-  ! iorb=1
-  ! jorb=3
-  ! do ik=1,Lk
-  !    write(569,'(10F18.10)') kpt_latt(ik,1),delta_hf(iorb,jorb,ik)
-  ! end do
+  !
+  call fix_mu(H_Hf,delta_hf,mu_fix)
+  iorb=1
+  jorb=3
+  do ik=1,Lk
+     write(569,'(10F18.10)') kpt_latt(ik,1),delta_hf(iorb,jorb,ik)
+  end do
 
 
-  ! do ir=1,nrpts
-  !    delta_hfr(:,:,ir)=0.d0
-  !    do ik=1,Lk
-  !       delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
-  !            delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
-  !    end do
-  ! end do
+  do ir=1,nrpts
+     delta_hfr(:,:,ir)=0.d0
+     do ik=1,Lk
+        delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
+             delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
+     end do
+  end do
 
   ! x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
   ! x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
@@ -466,8 +466,6 @@ program officina
   ! !
   ! x_iter(6) = delta_hfr(1,3,ir0)+delta_hfr(1,3,ir0+1)
   ! x_iter(7) = delta_hfr(2,3,ir0)+delta_hfr(2,3,ir0+1)
-
-
 
   !+- full loop -+!
   uio=free_unit()
@@ -673,6 +671,8 @@ contains
           Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(6)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
+          iorb=2; iso=(ispin-1)*Norb+iorb          
+          jorb=3; jso=(ispin-1)*Norb+jorb
           Hhf(jso,iso,ik) = -Vcell*x_iter(5)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
           Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(7)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
