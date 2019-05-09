@@ -338,9 +338,9 @@ program officina
   end do
   close(uio)
   
-  x_iter(1) = delta_hfr(1,1,ir0)+0.3
-  x_iter(2) = delta_hfr(2,2,ir0)+0.3
-  x_iter(3) = delta_hfr(3,3,ir0)-0.3
+  x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)+0.3
+  x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)+0.3
+  x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)-0.3
   !
   x_iter(4) = delta_hfr(1,3,ir0)+0.3+0.1*xi
   x_iter(5) = delta_hfr(2,3,ir0)+0.3-0.1*xi
@@ -381,11 +381,13 @@ program officina
         end do
      end do
      !
-     x_iter(1) = delta_hfr(1,1,ir0)
-     x_iter(2) = delta_hfr(2,2,ir0)
-     x_iter(3) = delta_hfr(3,3,ir0)     
+     x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
+     x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
+     x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
+     !
      x_iter(4) = delta_hfr(1,3,ir0)
      x_iter(5) = delta_hfr(2,3,ir0)
+     !
      x_iter(6) = delta_hfr(1,3,ir0)+delta_hfr(1,3,ir0+1)
      x_iter(7) = delta_hfr(2,3,ir0)+delta_hfr(2,3,ir0+1)
      !
