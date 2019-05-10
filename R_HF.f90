@@ -177,13 +177,15 @@ contains
 
   end subroutine find_chem_pot_latt
 
-  subroutine solve_HF_hamiltonian(Hhf,Deltas)
+  subroutine solve_HF_hamiltonian(Hhf,Deltas,eout)
     complex(8),dimension(:,:,:),intent(in) :: Hhf
     complex(8),dimension(:,:,:),intent(inout) :: Deltas
     real(8),dimension(size(Hhf,1)) :: Ehf
     complex(8),dimension(size(Hhf,1),size(Hhf,1)) :: Htmp    
     integer(8):: ik,i,j,ii,jj
     integer :: iorb,jorb
+    real(8) :: eout_
+    real(8),optional :: eout
     !
     if(size(Hhf,1).ne.Nso) stop "error in Hhf1"
     if(size(Hhf,2).ne.Nso) stop "error in Hhf2"
@@ -193,6 +195,7 @@ contains
     if(size(Deltas,2).ne.Nso) stop "error in Deltas2"
     if(size(Deltas,3).ne.Lk) stop "error in Deltas3"
     !
+    eout_=0.d0
     Deltas=0.d0             
     do ik=1,Lk
        !
@@ -200,6 +203,7 @@ contains
        call eigh(Htmp,Ehf)
        !
        do i=1,Nso
+          eout_=eout_+Ehf(i)*fermi(Ehf(i),beta)*wtk(ik)
           do j=i,Nso
              do jj=1,Nso
                 Deltas(i,j,ik) = Deltas(i,j,ik) + &
@@ -210,6 +214,7 @@ contains
        end do
        !
     end do
+    if(present(eout)) eout=eout_
   end subroutine solve_HF_hamiltonian
 
 
@@ -477,24 +482,37 @@ contains
 
 
   !+- TMP K-SPACE ROUTINES -+!
-  subroutine fix_mu(Hhf,delta_hf,mu) 
+  subroutine fix_mu(Hhf,delta_hf,mu,eout) 
     complex(8),dimension(Nso,Nso,Lk),intent(in) :: Hhf
     complex(8),dimension(Nso,Nso,Lk),intent(inout) :: delta_hf
     complex(8),dimension(Nso,Nso,Lk) :: Hhf_k,delta_hf_k
+    complex(8),dimension(Nso,Nso,Lk) :: Htmp
+
     real(8),intent(inout) :: mu    
     real(8),dimension(1) :: mu_,Nout
     integer :: iter,ik,ir
     real(8) :: x1,x2
+    real(8) :: eout_
+    real(8),optional :: eout
     !
     allocate(Hhf_tmp(Nso,Nso,Lk)); Hhf_tmp=Hhf
     allocate(delta_hf_tmp(Nso,Nso,Lk)); delta_hf_tmp=delta_hf
     x1=deltaN_fix(-100.d0)
     x2=deltaN_fix( 100.d0)
-    write(*,*) x1,x2
+    !write(*,*) x1,x2
     mu=brentq(deltaN_fix,-100.d0,5000.d0)
     Nout=deltaN_fix(mu)
-    !
-    write(530,*) Nout,Ndens,mu_
+    write(530,*) Nout,Ndens,mu
+
+    !+- compute energy -+!
+    if(present(eout)) then
+       do ik=1,Lk
+          Htmp(:,:,ik)=Hhf_tmp(:,:,ik)-mu*zeye(Nso)
+          call solve_HF_hamiltonian(Htmp,delta_hf_tmp,eout)
+          write(987,'(10F18.10)') mu
+       end do
+    end if
+    !+------------------+!
     delta_hf=delta_hf_tmp
     deallocate(delta_hf_tmp)
     deallocate(Hhf_tmp)

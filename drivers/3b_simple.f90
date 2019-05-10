@@ -43,7 +43,7 @@ program officina
 
   integer :: iso,jso,ispin,jspin,iorb,jorb,ik
   integer :: i,j,k,idim
-  integer :: Nhf,ihf,unit_err,unit_obs,unit_in,uio,Nobs
+  integer :: Nhf,ihf,unit_err,unit_obs,unit_in,uio,Nobs,jhf
   integer,dimension(:),allocatable :: units_loc_obs
   integer :: flen,iread
 
@@ -74,7 +74,7 @@ program officina
   type(rgb_color),dimension(2) :: color_bands
   character(len=1),dimension(4) :: kpoint_name
 
-
+  real(8) :: Eout
 
 
 
@@ -237,14 +237,14 @@ program officina
         !
         iorb=1
         iso=(ispin-1)*Norb+iorb
-        Hk_w90(iso,iso,ik) = 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))+1.7
+        Hk_w90(iso,iso,ik) = 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))+1.6
         iorb=2
         iso=(ispin-1)*Norb+iorb
-        Hk_w90(iso,iso,ik) = 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))+1.7
+        Hk_w90(iso,iso,ik) = 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))+1.6
         !
         iorb=3
         iso=(ispin-1)*Norb+iorb
-        Hk_w90(iso,iso,ik) = 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))-0.9
+        Hk_w90(iso,iso,ik) = 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))-0.8
         !
         iorb=1
         jorb=3
@@ -272,8 +272,6 @@ program officina
   !
   mu_fix=0.d0
   call fix_mu(Hk_w90,delta_hf,mu_fix)
-
-
   !
   allocate(delta_hfr(Nso,Nso,nrpts))
   do ir=1,nrpts
@@ -343,12 +341,12 @@ program officina
   end do
   close(uio)
 
-  x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
-  x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
-  x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
+  x_iter(1) = 0.d0!delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
+  x_iter(2) = 0.d0!delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
+  x_iter(3) = 2.d0!delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
   !
-  x_iter(4) = delta_hfr(1,3,ir0)!-0.3!+0.1*xi
-  x_iter(5) = delta_hfr(2,3,ir0)!-0.2!-0.1*xi
+  x_iter(4) = 0.d0!delta_hfr(1,3,ir0)!-0.3!+0.1*xi
+  x_iter(5) = 0.d0!delta_hfr(2,3,ir0)!-0.2!-0.1*xi
   !
   x_iter(6) = delta_hfr(1,3,ir0)+delta_hfr(1,3,ir0+1)+0.5d0
   x_iter(7) = delta_hfr(2,3,ir0)+delta_hfr(2,3,ir0+1)+0.3d0
@@ -360,19 +358,218 @@ program officina
   write(*,*) x_iter(5)
   write(*,*) x_iter(6)
   write(*,*) x_iter(7)
-
-  
-  
   !
-  uio=free_unit()
-  open(unit=uio,file='hf_loop.out')
+  
+
   allocate(H_Hf(Nso,Nso,Lk))
 
   xphi=0.50 
   x_iter(6:7) = xphi
   xtmp=x_iter(1:5)
+  
+  do i=1,5
+     xr_tmp(i) = dreal(xtmp(i))
+     xr_tmp(i+5) = dimag(xtmp(i))
+  end do
+
+  
+  uio=free_unit()
+  open(unit=uio,file='ehf_VS_phi.out')
+  write(*,*) 'ciao'
+  xphi=-0.025d0
+  do ihf=1,20
+     !
+     xphi=xphi+0.05d0          
+     ! do i=1,5
+     !    xtmp(i)=xr_tmp(i)+xi*xr_tmp(i+5)
+     ! end do
+     ! x_iter(1:5)=xtmp;
+     x_iter(6:7)=xphi
+     do jhf=1,Nhf
+        x_iter_=x_iter
+        !
+        H_Hf=HF_hamiltonian(x_iter)
+        H_Hf=H_Hf+Hk_w90
+        !
+        call fix_mu(H_Hf,delta_hf,mu_fix)
+        !
+        do ir=1,nrpts
+           delta_hfr(:,:,ir)=0.d0
+           do ik=1,Lk
+              delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
+                   delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
+           end do
+        end do
+        !
+        x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
+        x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
+        x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
+        !
+        x_iter(4) = delta_hfr(1,3,ir0)
+        x_iter(5) = delta_hfr(2,3,ir0)
+        !
+        x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_             
+        ! H_Hf=HF_hamiltonian(x_iter)
+        ! H_Hf=H_Hf+Hk_w90     
+        ! call fix_mu(H_Hf,delta_hf,mu_fix,Eout)
+        write(*,*) ihf,jhf
+        write(478,'(10F18.10)') dreal(x_iter(1:7))
+     end do
+     write(478,*)
+     write(478,*)
+     xtmp=x_iter(1:5)  
+     do i=1,5
+        xr_tmp(i) = dreal(xtmp(i))
+        xr_tmp(i+5) = dimag(xtmp(i))
+     end do
+     call fsolve(root_find_inner_loop,xr_tmp,tol=1.d-10)
+     ! x_iter(1:5)=xtmp;x_iter(6:7)=xphi
+     H_Hf=HF_hamiltonian(x_iter)
+     H_Hf=H_Hf+Hk_w90
+     !
+     call fix_mu(H_Hf,delta_hf,mu_fix,eout)
+     !
+     ! Eout=0.d0
+     ! do ik=1,Lk
+     !    do iso=1,Nso
+     !       do jso=1,Nso
+     !          Eout=Eout+H_Hf(iso,jso,ik)*delta_hf(iso,jso,ik)*wtk(ik)
+     !       end do
+     !    end do
+     ! end do
+     
+     !
+     !+- double counting term -+!
+     Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
+     Eout=Eout-2*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
+     !
+     Eout=Eout+Vcell*abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0
+     Eout=Eout+Vcell*abs(x_iter(6)-x_iter(4))**2.d0+abs(x_iter(7)-x_iter(5))**2.d0
+     !
+     write(uio,'(10F18.10)') dreal(xphi),Eout,Eout+mu_fix*(dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3)))     
+     write(479, '(10F18.10)') dreal(xphi),dreal(delta_hfr(1,3,ir0)+delta_hfr(1,3,ir0+1)),Eout,Eout+mu_fix*(dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3)))
+     write(480, '(10F18.10)') dreal(xphi),dreal(x_iter(1:5))
+     
+  end do
+  close(uio)
+  stop
 
 
+
+  call fix_mu(Hk_w90,delta_hf,mu_fix)
+  do ir=1,nrpts
+     delta_hfr(:,:,ir)=0.d0
+     do ik=1,Lk
+        delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
+             delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
+     end do
+  end do
+  !
+  x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
+  x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
+  x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
+  !
+  x_iter(4) = delta_hfr(1,3,ir0)
+  x_iter(5) = delta_hfr(2,3,ir0)
+  x_iter(6) = 0.3
+  x_iter(7) = 0.3
+
+  uio=free_unit()
+  open(unit=uio,file='loop_phi.out')
+  write(*,*) 'ciao'
+  xphi=-0.3d0
+  do ihf=1,20
+     !
+     xphi_=xphi
+     x_iter(6:7)=xphi
+     do jhf=1,20        
+        x_iter_=x_iter
+        !
+        H_Hf=HF_hamiltonian(x_iter)
+        H_Hf=H_Hf+Hk_w90
+        !
+        call fix_mu(H_Hf,delta_hf,mu_fix)
+        !
+        do ir=1,nrpts
+           delta_hfr(:,:,ir)=0.d0
+           do ik=1,Lk
+              delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
+                   delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
+           end do
+        end do
+        !
+        x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
+        x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
+        x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
+        !
+        x_iter(4) = delta_hfr(1,3,ir0)
+        x_iter(5) = delta_hfr(2,3,ir0)
+        !
+        ! x_iter(6) = delta_hfr(1,3,ir0)+delta_hfr(1,3,ir0+1)
+        ! x_iter(7) = delta_hfr(2,3,ir0)+delta_hfr(2,3,ir0+1)
+        !
+        !
+        ! x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_             
+        ! H_Hf=HF_hamiltonian(x_iter)
+        ! H_Hf=H_Hf+Hk_w90     
+        ! call fix_mu(H_Hf,delta_hf,mu_fix,Eout)
+        write(*,*) ihf,jhf
+        !write(478,'(10F18.10)') dreal(x_iter(1:7))
+     end do
+     ! write(478,*)
+     ! write(478,*)
+     xtmp=x_iter(1:5)  
+     do i=1,5
+        xr_tmp(i) = dreal(xtmp(i))
+        xr_tmp(i+5) = dimag(xtmp(i))
+     end do
+     H_Hf=HF_hamiltonian(x_iter)
+     H_Hf=H_Hf+Hk_w90
+     !    
+     call fix_mu(H_Hf,delta_hf,mu_fix,eout)
+     
+     do ir=1,nrpts
+        delta_hfr(:,:,ir)=0.d0
+        do ik=1,Lk
+           delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
+                delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
+        end do
+     end do
+     xphi=delta_hfr(1,3,ir0)+delta_hfr(1,3,ir0+1)
+     xphi=xphi*wmix+(1.d0-wmix)*xphi_
+
+     !
+     ! Eout=0.d0
+     ! do ik=1,Lk
+     !    do iso=1,Nso
+     !       do jso=1,Nso
+     !          Eout=Eout+H_Hf(iso,jso,ik)*delta_hf(iso,jso,ik)*wtk(ik)
+     !       end do
+     !    end do
+     ! end do
+     
+     !
+     !+- double counting term -+!
+     !write(480, '(10F18.10)') dreal(xphi),Eout,mu_fix
+     Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
+     Eout=Eout-2*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
+     !
+     Eout=Eout+Vcell*abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0
+     Eout=Eout+Vcell*abs(x_iter(6)-x_iter(4))**2.d0+abs(x_iter(7)-x_iter(5))**2.d0
+     !
+     write(uio,'(10F18.10)') dreal(xphi),Eout,Eout+mu_fix*(dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3)))
+     !write(479, '(10F18.10)') dreal(xphi),dreal(x_iter)
+     !
+  end do
+  close(uio)
+
+
+  stop
+  
+  !
+  uio=free_unit()
+  open(unit=uio,file='hf_loop.out')
+  !
   do ihf=1,Nhf
      write(uio,'(20F18.10)') dreal(x_iter),dimag(x_iter),mu_fix
      write(346,'(20F18.10)') xphi
@@ -390,7 +587,7 @@ program officina
      x_iter(1:5)=xtmp;x_iter(6:7)=xphi
      H_Hf=HF_hamiltonian(x_iter)
      H_Hf=H_Hf+Hk_w90
-     call fix_mu(H_Hf,delta_hf,mu_fix)
+     call fix_mu(H_Hf,delta_hf,mu_fix,eout)
      do ir=1,nrpts
         delta_hfr(:,:,ir)=0.d0
         do ik=1,Lk
@@ -407,9 +604,16 @@ program officina
      x_iter(5) = delta_hfr(2,3,ir0)
      !
      xphi = delta_hfr(1,3,ir0)+delta_hfr(1,3,ir0+1);x_iter(6:7)=xphi
-     ! x_iter(6) = delta_hfr(1,3,ir0)+delta_hfr(1,3,ir0+1)
-     ! x_iter(7) = delta_hfr(2,3,ir0)+delta_hfr(2,3,ir0+1)
-     write(345,'(20F18.10)') x_iter(1),xr_tmp(1)
+
+
+     Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
+     Eout=Eout-2*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
+     !
+     Eout=Eout+Vcell*abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0
+     Eout=Eout+Vcell*abs(x_iter(6)-x_iter(4))**2.d0+abs(x_iter(7)-x_iter(5))**2.d0
+
+     
+     write(345,'(20F18.10)') dreal(x_iter(6)),eout,eout+mu_fix*(dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3)))
      !
      xphi=xphi*wmix+(1.d0-wmix)*xphi_     
      !
