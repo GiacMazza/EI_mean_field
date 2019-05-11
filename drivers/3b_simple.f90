@@ -372,6 +372,12 @@ program officina
      xr_tmp(i+5) = dimag(xtmp(i))
   end do
 
+  !+- TO DO THINGS -+!
+  !+- do recast the thing in a root finder -+!
+  !+- plot bands before and after the 'phase transition' -+!
+  !+- vary split btw the bands -+!
+  !+- delta_hfr -> compute only necessary during loop only the final result -+!
+  
   
   uio=free_unit()
   open(unit=uio,file='ehf_VS_phi.out')
