@@ -34,7 +34,7 @@ INCARGS=$(shell pkg-config --cflags dmft_tools scifor)
 
 
 FFLAG += -ffree-line-length-none  $(INCARGS) 
-#FFLAG+=-O0 -p -g -Wall -fbounds-check -fbacktrace -Wuninitialized
+FFLAG+=-O0 -p -g -Wall -fbounds-check -fbacktrace -Wuninitialized
 
 BRANCH=_$(shell git rev-parse --abbrev-ref HEAD)
 ifeq ($(BRANCH),_master)

@@ -97,7 +97,10 @@ program officina
 
 
   integer :: Nkpath
+  integer :: ipath
   real(8) :: vhyb
+
+  complex(8) :: testFT
   !
 
   !+- START MPI -+!
@@ -129,6 +132,7 @@ program officina
 
   call parse_input_variable(Nkpath,"Nkpath","input.conf",default=300)
   call parse_input_variable(vhyb,"vhyb","input.conf",default=0.05d0)
+  call parse_input_variable(ipath,"ipath","input.conf",default=0)
 
 
   !
@@ -154,27 +158,30 @@ program officina
   call inv(Bkinv)
   !+ k-space path
   allocate(kpath(4,3))
-  ! !+- M-point
-  ! kpath(1,:)=0.5d0*Bk1+0.5d0*Bk3
-  ! !+- Z-point
-  ! kpath(2,:)=0.5d0*Bk3
-  ! !+- G-point
-  ! kpath(3,:)=0.d0
-  ! !+- X-point
-  ! kpath(4,:)=0.5d0*Bk1
 
-  !+- X-point
-  kpath(1,:)=0.5d0*Bk1;write(*,*) kpath(1,:)
-  !+- G-point
-  kpath(2,:)=0.d0;write(*,*) kpath(2,:)
-  !+- X-point
-  kpath(3,:)=0.5d0*Bk1;write(*,*) kpath(3,:)
-  !+- M-point
-  kpath(4,:)=0.5d0*Bk1+0.5d0*Bk3;write(*,*) kpath(4,:)
-
+  select case(ipath)
+  case(0)
+     !+- X-point
+     kpath(1,:)=0.5d0*Bk1;write(*,*) kpath(1,:)
+     !+- G-point
+     kpath(2,:)=0.d0;write(*,*) kpath(2,:)
+     !+- X-point
+     kpath(3,:)=0.5d0*Bk1;write(*,*) kpath(3,:)
+     !+- M-point
+     kpath(4,:)=0.5d0*Bk1+0.5d0*Bk3;write(*,*) kpath(4,:)
+  case(1)
+     !+- M-point
+     kpath(1,:)=0.5d0*Bk1+0.5d0*Bk3
+     !+- Z-point
+     kpath(2,:)=0.5d0*Bk3
+     !+- G-point
+     kpath(3,:)=0.d0
+     !+- X-point
+     kpath(4,:)=0.5d0*Bk1     
+  end select
   
-
   !+- build a monkhorst-pack grid -+!  
+  !
   call build_mp_grid(Nk_x,Nk_y,Nk_z)
   !
   Lk=Nk_x*Nk_y*Nk_z
@@ -246,7 +253,7 @@ program officina
   !+---------------------------------+!  
   file_name=reg(read_tns)//reg(file_w90_hr)  
   !+- read the w90 output -+!
-  allocate(Hk_w90(Nso,Nso,Lk),Hloc(Nso,Nso))
+  allocate(Hloc(Nso,Nso))
   call read_w90_hr(R1,R2,R3,Hr_w90,Hloc,irvec,ndegen,trim(file_name),1,6,1)
   nrpts=size(irvec,1)
   allocate(rpt_latt(nrpts,3))
@@ -379,14 +386,14 @@ program officina
   ! 
 
   !+- new MP grid -+!
-  Nk_x=1000
-  Nk_x=2
-  Nk_x=2
+  Nk_x=100
+  Nk_y=20
+  Nk_z=5
   call build_mp_grid(Nk_x,Nk_y,Nk_z)
   !
   deallocate(kpt_latt,ik_stride,wtk,igr2ik)
   Lk=Nk_x*Nk_y*Nk_z
-  allocate(kpt_latt(Lk,3),ik_stride(Lk,3),wtk(Lk),igr2ik(Nk_x,Nk_y,Nk_z))
+  allocate(kpt_latt(Lk,3),ik_stride(Lk,3),wtk(Lk),igr2ik(Nk_x,Nk_y,Nk_z),Hk_w90(Nso,Nso,Lk))
   wtk=1.d0/dble(Lk)
   ik=0
   kpt_latt=0.d0
@@ -523,7 +530,11 @@ program officina
      do ispin=1,Nspin
         do iorb=1,4
            iso=(ispin-1)*Norb+iorb
-           Hr_w90(iso,iso,ir0) = Hr_w90(iso,iso,ir0) + 1.7
+           Hr_w90(iso,iso,ir0) = Hr_w90(iso,iso,ir0) + 1.7d0
+        end do
+        do iorb=5,6
+           iso=(ispin-1)*Norb+iorb
+           Hr_w90(iso,iso,ir0) = Hr_w90(iso,iso,ir0) - 0.9d0
         end do
         !
         jso=(ispin-1)*Norb+1
@@ -553,16 +564,48 @@ program officina
         end do
         !
      end do
-     do ispin=1,Nspin
-        do iorb=5,6
-           iso=(ispin-1)*Norb+iorb
-           Hr_w90(iso,iso,ir0) = Hr_w90(iso,iso,ir0) - 0.9
-        end do
-     end do
   end if
   !
-  mu_fix=4.d0
-  call find_chem_pot_latt(Hr_w90,delta_hfr,mu_fix)
+  !stop
+  
+  allocate(delta_hf(Nso,Nso,Lk))
+  do ik=1,Lk
+     !call FT_r2q(kpt_latt(ik,:),Hk_w90(:,:,ik),Hr_w90)
+     Hk_w90(:,:,ik)=0.d0
+     do ir=1,nrpts     
+        Hk_w90(:,:,ik) = Hk_w90(:,:,ik) + &
+             exp(-xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*Hr_w90(:,:,ir)/dble(ndegen(ir))
+     end do
+  end do
+  ! !
+  mu_fix=0.d0
+  call fix_mu(Hk_w90,delta_hf,mu_fix)
+  !
+  !allocate(delta_hfr(Nso,Nso,nrpts))
+  do ir=1,nrpts
+     !call FT_q2r(rpt_latt(ir,:),delta_hfr(:,:,ir),delta_hf) !+- be careful with FT; make a choice for the FT of operators!!
+     !+- this choice is consistent w/ the interaction Hamiltonian written as (n_{R (1,2)} + n_{R+d (1,2)}) n_{R 3}
+     delta_hfr(:,:,ir)=0.d0
+     testFT=0.d0
+     do ik=1,Lk
+        delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
+             delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
+        testFT=testFT+exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
+        
+        if(ir.eq.103) then
+           write(433,'(10F18.10)') rpt_latt(ir,:),kpt_latt(ik,:),dot_product(rpt_latt(ir,:),kpt_latt(ik,:))
+        end if
+
+     end do
+     write(431,'(10F18.10)') rpt_latt(ir,:),testFT!,dot_product(rpt_latt(ir,:),kpt_latt(ik,:))
+  end do
+
+  do ik=1,Lk
+     write(432,'(10F18.10)') delta_hf(5,5,ik)
+  end do
+
+  ! mu_fix=4.d0
+  ! call find_chem_pot_latt(Hr_w90,delta_hfr,mu_fix)
   
   allocate(kpt_path(3*Nkpath,3))
   allocate(Hktmp(Nso,Nso))
@@ -596,18 +639,13 @@ program officina
         j=(i-1)*Nkpath + ik
         kpt_path(j,:) = kpath(i,:) + dble(ik-1)/dble(Nkpath)*delta_kpath
         modk=modk+sqrt(dot_product(delta_kpath/dble(Nkpath),delta_kpath/dble(Nkpath)))
-        ! modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
         !
         Hktmp=0.d0
         call FT_r2q(kpt_path(j,:),Hktmp,Hr_w90)
         !
         !
-        write(264,'(30F18.10)') modk,Hktmp(1,1:6)
-        write(265,'(30F18.10)') modk,Hktmp(7,7:12)
         !
         call eigh(Hktmp,ek_out)
-        ! Ta_fat=abs(Hktmp(1,:))**2.d0+abs(Hktmp(2,:))**2.d0+abs(Hktmp(3,:))**2.d0+abs(Hktmp(4,:))**2.d0
-        ! Ni_fat=abs(Hktmp(5,:))**2.d0+abs(Hktmp(6,:))**2.d0
 
         Ta_fat=abs(Hktmp(1,:))**2.d0+abs(Hktmp(2,:))**2.d0+abs(Hktmp(3,:))**2.d0+abs(Hktmp(4,:))**2.d0
         Ni_fat=abs(Hktmp(5,:))**2.d0+abs(Hktmp(6,:))**2.d0
@@ -617,7 +655,7 @@ program officina
            if(Ni_fat(iso).lt.1.d-5) Ni_fat(iso)=0.d0;Ta_fat(iso)=1.d0-Ni_fat(iso)
         end do
         
-        write(uio,'(30F18.10)') modk,ek_out-mu_fix,Ta_fat,Ni_fat
+        write(uio,'(30F18.10)') modk,ek_out-mu_fix,Ta_fat,Ni_fat        
         write(unit_in,'(30F18.10)') modk,Ta_fat,Ni_fat
         !
      end do
@@ -625,8 +663,6 @@ program officina
   end do
   close(uio)
   close(unit_in)  
-
-  
 
   !
   open(unit_in,file='Deltar_bare_real.tns')
@@ -667,12 +703,29 @@ program officina
      modk=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
      !     
      write(unit_in,'(50F10.5)') modk,Rlat(1:3), &
+          ! dreal(delta_hfr(1,1,stride2D(ir))), &
+          ! dreal(delta_hfr(2,2,stride2D(ir))), &
+          ! dreal(delta_hfr(3,3,stride2D(ir))), &
+          ! dreal(delta_hfr(4,4,stride2D(ir))), &
+          ! dreal(delta_hfr(5,5,stride2D(ir))), &
+          ! dreal(delta_hfr(6,6,stride2D(ir)))
           dreal(delta_hfr(1,1:6,stride2D(ir))), &
           dreal(delta_hfr(2,2:6,stride2D(ir))), &
           dreal(delta_hfr(3,3:6,stride2D(ir))), &
           dreal(delta_hfr(4,4:6,stride2D(ir))), &
           dreal(delta_hfr(5,5:6,stride2D(ir))), &
           dreal(delta_hfr(6,6,stride2D(ir)))
+
+  end do
+  close(unit_in)
+
+  open(unit_in,file='deltar_info.tns')
+  ir=4
+  do iso=1,Nso
+     do jso=iso,Nso
+        ir=ir+1
+        write(unit_in,*) iso,jso,ir
+     end do
   end do
   close(unit_in)
   open(unit_in,file='2d_deltar_bare_imag.tns')
