@@ -39,7 +39,11 @@ program officina
   integer,dimension(:,:),allocatable :: irvec2d,itmp
   integer,dimension(:),allocatable :: stride2D,stride2D_
 
-  integer :: nr2d
+  integer,dimension(:,:),allocatable :: irvec1d
+  integer,dimension(:),allocatable :: stride1D,stride1D_
+
+
+  integer :: nr2d,nr1d
 
   integer :: iso,jso,ispin,jspin,iorb,jorb,ik
   integer :: i,j,k,idim
@@ -58,7 +62,7 @@ program officina
 
   real(8),dimension(2) :: Uq_read,Vq_read
 
-  character(len=100) :: fileRlattice,file_w90_hr,file_UV,read_tns
+  character(len=200) :: fileRlattice,file_w90_hr,file_UV,read_tns
   character(len=200) :: file_name
 
   integer,allocatable :: Nkvect(:)
@@ -101,6 +105,8 @@ program officina
   real(8) :: vhyb
 
   complex(8) :: testFT
+  logical :: bool_ir
+  logical :: read_UV
   !
 
   !+- START MPI -+!
@@ -128,6 +134,7 @@ program officina
   call parse_input_variable(cf_ext,"cf_ext","input.conf",default=0.d0)
   call parse_input_variable(Ucut_off,"U_CUT","input.conf",default=20.d0)
   call parse_input_variable(H1d,"H1D","input.conf",default=.false.)
+  call parse_input_variable(read_UV,"READ_UV","input.conf",default=.false.)
   call parse_input_variable(alphaU,"alphaU","input.conf",default=1.d0)
 
   call parse_input_variable(Nkpath,"Nkpath","input.conf",default=300)
@@ -278,111 +285,133 @@ program officina
   irvec2d(:,1)=itmp(1:nr2d,1)
   irvec2d(:,2)=itmp(1:nr2d,2)
   stride2D=stride2D_(1:nr2d)
+
+  !
+  deallocate(itmp);allocate(itmp(nrpts,1))  
+  allocate(stride1D_(nrpts))
+  i=0
+  do ir=1,nrpts
+     if(irvec(ir,2).eq.0.and.irvec(ir,3).eq.0) then
+        i=i+1
+        itmp(i,1) = irvec(ir,1)
+        stride1D_(i) = ir
+     end if
+  end do
+  nr1d=i
+  write(*,*) "nr-points on x chain",nr1d
+  allocate(irvec1d(nr1d,1));   allocate(stride1D(nr1d)); 
+  irvec1d(:,1)=itmp(1:nr1d,1)
+  stride1D=stride1D_(1:nr1d)
+
+
+
   !
   !+- read local interaction term -+!
-  allocate(Uloc_TNS(Nso,Nso))
-  flen=file_length('TNS_Uloc.dat')
-  if(flen.ne.Nso*Nso) stop "error in reading Uloc"
-  unit_in=free_unit(); 
-  open(unit=unit_in,file='TNS_Uloc.dat',status="old",action="read")  
-  do i=1,Nso
-     do j=1,Nso
-        read(unit_in,*) tmpi,tmpj,Uloc_TNS(j,i)
-     end do
-  end do
-  close(unit_in)
-  
-  !+- read U(q) -+!
-  file_name=reg(read_tns)//reg(file_UV)
-  open(unit=unit_in,file=trim(file_name),status="old",action="read")  
-  read(unit_in,*) 
-  read(unit_in,*) 
-  allocate(read_tmp(9))
-  !
-  allocate(Uq_TNS(Nso,Nso,Lk),Vq_TNS(Nso,Nso,Lk),check_Uloc(Nso,Nso))
-  check_Uloc=0.d0
-  ik=0
-  do ix=1,Nk_x
-     do iz=1,Nk_z
-        do iy=1,Nk_y
-           ik=ik+1
-           !
-           do i=1,Nso
-              do j=1,Nso
-                 read(unit_in,*) read_tmp(1:9),Vq_read,Uq_read
-                 Uq_TNS(i,j,ik) = Uq_read(1)+xi*Uq_read(2)
-                 Vq_TNS(i,j,ik) = Vq_read(1)+xi*Vq_read(2)                 
-                 check_Uloc(i,j) = check_Uloc(i,j) + Uq_TNS(i,j,ik)*wtk(ik)
-              end do
-           end do
-           !
+  if(read_UV) then
+     allocate(Uloc_TNS(Nso,Nso))
+     flen=file_length('TNS_Uloc.dat')
+     if(flen.ne.Nso*Nso) stop "error in reading Uloc"
+     unit_in=free_unit(); 
+     open(unit=unit_in,file='TNS_Uloc.dat',status="old",action="read")  
+     do i=1,Nso
+        do j=1,Nso
+           read(unit_in,*) tmpi,tmpj,Uloc_TNS(j,i)
         end do
      end do
-  end do
-  close(unit_in)
-
-  open(unit_in,file='read_Uq.tns')
-  do ik=1,Lk
-     !+- here print out Uq vs |q| -+!
-     modk=kpt_latt(ik,1)**2.d0+kpt_latt(ik,2)**2.d0+kpt_latt(ik,3)**2.d0
-     modk=sqrt(modk)     
-     write(unit_in,'(50F10.5)') modk,Uq_TNS(1,1:6,ik),Uq_TNS(2,2:6,ik),Uq_TNS(3,3:6,ik),Uq_TNS(4,4:6,ik),Uq_TNS(5,5:6,ik),Uq_TNS(6,6,ik)
-  end do
-  close(unit_in)
-  allocate(Ur_TNS(Nso,Nso,nrpts))
-  open(unit_in,file='Ur_full_space.tns')
-  !+- get the full real space interaction -+!
-  Ur_TNS=0.d0
-  do ir=1,nrpts
+     close(unit_in)
+     
+     !+- read U(q) -+!
+     file_name=reg(read_tns)//reg(file_UV)
+     open(unit=unit_in,file=trim(file_name),status="old",action="read")  
+     read(unit_in,*) 
+     read(unit_in,*) 
+     allocate(read_tmp(9))
      !
-     call FT_q2r(rpt_latt(ir,:),Ur_TNS(:,:,ir),Uq_TNS)
-     modk=rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0
-     modk=sqrt(modk)
-     write(unit_in,'(50F10.5)') modk,rpt_latt(ir,1:3),Ur_TNS(1,1:6,ir),Ur_TNS(2,2:6,ir),Ur_TNS(3,3:6,ir),Ur_TNS(4,4:6,ir),Ur_TNS(5,5:6,ir),Ur_TNS(6,6,ir)
-     !
-  end do
-  close(unit_in)
-  Rlat=-1000.0
-  do ir=1,nrpts
-     do i=1,3
-        if(rpt_latt(ir,i).gt.Rlat(i)) Rlat(i)=rpt_latt(ir,i)
+     allocate(Uq_TNS(Nso,Nso,Lk),Vq_TNS(Nso,Nso,Lk),check_Uloc(Nso,Nso))
+     check_Uloc=0.d0
+     ik=0
+     do ix=1,Nk_x
+        do iz=1,Nk_z
+           do iy=1,Nk_y
+              ik=ik+1
+              !
+              do i=1,Nso
+                 do j=1,Nso
+                    read(unit_in,*) read_tmp(1:9),Vq_read,Uq_read
+                    Uq_TNS(i,j,ik) = Uq_read(1)+xi*Uq_read(2)
+                    Vq_TNS(i,j,ik) = Vq_read(1)+xi*Vq_read(2)                 
+                    check_Uloc(i,j) = check_Uloc(i,j) + Uq_TNS(i,j,ik)*wtk(ik)
+                 end do
+              end do
+              !
+           end do
+        end do
      end do
-  end do
-  write(*,*) 'largest components of R vectors in the supercell',Rlat
-  checkR=1000.d0
-  do i=1,3
-     if(Rlat(i).lt.checkR) checkR=Rlat(i)
-  end do
-  write(*,*) 'largest radius sphere in the supercell',checkR,Rlat
-  if(checkR.lt.Ucut_off) then
-     write(*,*) 'cut-off larger than the largest radius sphere in the supercell' 
-     Ucut_off=checkR
-     write(*,*) 'New cut-off set to',Ucut_off 
-  end if
-  open(unit_in,file='Ur_truncated.tns')
-  Ur_TNS=0.d0
-  do ir=1,nrpts
-     modk=rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0
-     !     
-     modk=sqrt(modk)
-     if(modk.lt.Ucut_off) then
+     close(unit_in)
+
+     open(unit_in,file='read_Uq.tns')
+     do ik=1,Lk
+        !+- here print out Uq vs |q| -+!
+        modk=kpt_latt(ik,1)**2.d0+kpt_latt(ik,2)**2.d0+kpt_latt(ik,3)**2.d0
+        modk=sqrt(modk)     
+        write(unit_in,'(50F10.5)') modk,Uq_TNS(1,1:6,ik),Uq_TNS(2,2:6,ik),Uq_TNS(3,3:6,ik),Uq_TNS(4,4:6,ik),Uq_TNS(5,5:6,ik),Uq_TNS(6,6,ik)
+     end do
+     close(unit_in)
+     allocate(Ur_TNS(Nso,Nso,nrpts))
+     open(unit_in,file='Ur_full_space.tns')
+     !+- get the full real space interaction -+!
+     Ur_TNS=0.d0
+     do ir=1,nrpts
+        !
         call FT_q2r(rpt_latt(ir,:),Ur_TNS(:,:,ir),Uq_TNS)
+        modk=rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0
+        modk=sqrt(modk)
+        write(unit_in,'(50F10.5)') modk,rpt_latt(ir,1:3),Ur_TNS(1,1:6,ir),Ur_TNS(2,2:6,ir),Ur_TNS(3,3:6,ir),Ur_TNS(4,4:6,ir),Ur_TNS(5,5:6,ir),Ur_TNS(6,6,ir)
+        !
+     end do
+     close(unit_in)
+     Rlat=-1000.0
+     do ir=1,nrpts
+        do i=1,3
+           if(rpt_latt(ir,i).gt.Rlat(i)) Rlat(i)=rpt_latt(ir,i)
+        end do
+     end do
+     write(*,*) 'largest components of R vectors in the supercell',Rlat
+     checkR=1000.d0
+     do i=1,3
+        if(Rlat(i).lt.checkR) checkR=Rlat(i)
+     end do
+     write(*,*) 'largest radius sphere in the supercell',checkR,Rlat
+     if(checkR.lt.Ucut_off) then
+        write(*,*) 'cut-off larger than the largest radius sphere in the supercell' 
+        Ucut_off=checkR
+        write(*,*) 'New cut-off set to',Ucut_off 
      end if
-     write(unit_in,'(50F10.5)') modk,rpt_latt(ir,1:3),Ur_TNS(1,1:6,ir),Ur_TNS(2,2:6,ir),Ur_TNS(3,3:6,ir),Ur_TNS(4,4:6,ir),Ur_TNS(5,5:6,ir),Ur_TNS(6,6,ir)
-  end do
-  close(unit_in)  
-  !
-  !+- transform back to momentum space -+!
-  !
-  open(unit_in,file='Uq_truncated.tns')
-  Uq_TNS=0.d0
-  do ik=1,Lk
-     call FT_r2q(kpt_latt(ik,:),Uq_TNS(:,:,ik),Ur_TNS)
-     modk=kpt_latt(ik,1)**2.d0+kpt_latt(ik,2)**2.d0+kpt_latt(ik,3)**2.d0
-     modk=sqrt(modk)
-     write(unit_in,'(50F9.5)') modk,Uq_TNS(1,1:6,ik),Uq_TNS(2,2:6,ik),Uq_TNS(3,3:6,ik),Uq_TNS(4,4:6,ik),Uq_TNS(5,5:6,ik),Uq_TNS(6,6,ik)
-  end do
-  close(unit_in)
+     open(unit_in,file='Ur_truncated.tns')
+     Ur_TNS=0.d0
+     do ir=1,nrpts
+        modk=rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0
+        !     
+        modk=sqrt(modk)
+        if(modk.lt.Ucut_off) then
+           call FT_q2r(rpt_latt(ir,:),Ur_TNS(:,:,ir),Uq_TNS)
+        end if
+        write(unit_in,'(50F10.5)') modk,rpt_latt(ir,1:3),Ur_TNS(1,1:6,ir),Ur_TNS(2,2:6,ir),Ur_TNS(3,3:6,ir),Ur_TNS(4,4:6,ir),Ur_TNS(5,5:6,ir),Ur_TNS(6,6,ir)
+     end do
+     close(unit_in)  
+     !
+     !+- transform back to momentum space -+!
+     !
+     open(unit_in,file='Uq_truncated.tns')
+     Uq_TNS=0.d0
+     do ik=1,Lk
+        call FT_r2q(kpt_latt(ik,:),Uq_TNS(:,:,ik),Ur_TNS)
+        modk=kpt_latt(ik,1)**2.d0+kpt_latt(ik,2)**2.d0+kpt_latt(ik,3)**2.d0
+        modk=sqrt(modk)
+        write(unit_in,'(50F9.5)') modk,Uq_TNS(1,1:6,ik),Uq_TNS(2,2:6,ik),Uq_TNS(3,3:6,ik),Uq_TNS(4,4:6,ik),Uq_TNS(5,5:6,ik),Uq_TNS(6,6,ik)
+     end do
+     close(unit_in)
+  end if
   ! 
 
   !+- new MP grid -+!
@@ -421,9 +450,12 @@ program officina
   
   !
   allocate(Hr_w90_tmp(Nso,Nso,nrpts)); Hr_w90_tmp=Hr_w90
-  deallocate(Hr_w90)
-  allocate(Ur_tmp(Nso,Nso,nrpts)) ; Ur_tmp=Ur_TNS
-  deallocate(Ur_TNS)            !
+  deallocate(Hr_w90)  
+  !
+  if(read_UV) then
+     allocate(Ur_tmp(Nso,Nso,nrpts)) ; Ur_tmp=Ur_TNS
+     deallocate(Ur_TNS) 
+  end if
   !
   Nso=Norb*Nspin
   allocate(Hr_w90(Nso,Nso,nrpts))
@@ -441,11 +473,12 @@ program officina
   !
 
   Hr_w90=dreal(Hr_w90)
-
+  
+  
   !+- bare bands -+!
   allocate(delta_hfr(Nso,Nso,nrpts),delta_hfr_(Nso,Nso,nrpts),H_hf(Nso,Nso,nrpts))
   call init_var_params_latt(delta_hfr,Hr_w90)
-  
+  !
   ! do ispin=1,Nspin
   !    do iorb=1,4
   !       iso=(ispin-1)*Norb+iorb
@@ -458,8 +491,7 @@ program officina
   !       Hr_w90(iso,iso,ir0) = Hr_w90(iso,iso,ir0) - cf_ext
   !    end do
   ! end do
-
-
+  !
   if(H1d) then
      !
      tk(1:4) = -0.8d0
@@ -664,51 +696,89 @@ program officina
   close(uio)
   close(unit_in)  
 
-  !
-  open(unit_in,file='Deltar_bare_real.tns')
-  modk=0.d0
-  do ir=1,nrpts
-     modk=sqrt(rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0)
-     !     
-     write(unit_in,'(50F10.5)') modk,rpt_latt(ir,1:3), &
-          dreal(delta_hfr(1,1,ir)), &
-          dreal(delta_hfr(5,5,ir))
+  !  
+  open(unit_in,file='deltar_info.tns')
+  ir=4
+  do iso=1,Nso
+     do jso=1,Nso
+        ir=ir+1
+        write(unit_in,*) iso,jso,ir
+     end do
+  end do
+  close(unit_in)
 
-          ! dreal(delta_hfr(2,2:6,ir)), &
-          ! dreal(delta_hfr(3,3:6,ir)), &
-          ! dreal(delta_hfr(4,4:6,ir)), &
-          ! dreal(delta_hfr(5,5:6,ir)), &
-          ! dreal(delta_hfr(6,6,ir))
-  end do
-  close(unit_in)
-  open(unit_in,file='Deltar_bare_imag.tns')
+  open(unit_in,file='deltar_bare_real_chain.tns')
   modk=0.d0
-  do ir=1,nrpts
-     modk=sqrt(rpt_latt(ir,1)**2.d0+rpt_latt(ir,2)**2.d0+rpt_latt(ir,3)**2.d0)
+  do ir=1,nr1d
+     !
+     Rlat=irvec1d(ir,1)*R1
+     modk=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
      !     
-     write(unit_in,'(50F10.5)') modk,rpt_latt(ir,1:3), &
-          dimag(delta_hfr(1,1:6,ir)), &
-          dimag(delta_hfr(2,2:6,ir)), &
-          dimag(delta_hfr(3,3:6,ir)), &
-          dimag(delta_hfr(4,4:6,ir)), &
-          dimag(delta_hfr(5,5:6,ir)), &
-          dimag(delta_hfr(6,6,ir))
+     write(unit_in,'(50F10.5)') modk,Rlat(1:3), &
+          dreal(delta_hfr(1,1:6,stride1D(ir))), &
+          dreal(delta_hfr(2,1:6,stride1D(ir))), &
+          dreal(delta_hfr(3,1:6,stride1D(ir))), &
+          dreal(delta_hfr(4,1:6,stride1D(ir))), &
+          dreal(delta_hfr(5,1:6,stride1D(ir))), &
+          dreal(delta_hfr(6,1:6,stride1D(ir)))
   end do
   close(unit_in)
+  !
+  open(unit_in,file='deltar_bare_imag_chain.tns')
+  modk=0.d0
+  do ir=1,nr1d
+     !
+     Rlat=irvec1d(ir,1)*R1
+     modk=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
+     !     
+     write(unit_in,'(50F10.5)') modk,Rlat(1:3), &
+          dimag(delta_hfr(1,1:6,stride1D(ir))), &
+          dimag(delta_hfr(2,1:6,stride1D(ir))), &
+          dimag(delta_hfr(3,1:6,stride1D(ir))), &
+          dimag(delta_hfr(4,1:6,stride1D(ir))), &
+          dimag(delta_hfr(5,1:6,stride1D(ir))), &
+          dimag(delta_hfr(6,1:6,stride1D(ir)))
+  end do
+  close(unit_in)
+  !
+  ! open(unit_in,file='1d_chain.tns')
+  ! modk=0.d0
+  ! do ir=1,nrpts
+  !    !
+  !    do jr=1,nrpts
+  !       bool_ir=irvec(ir,3).eq.irvec(jr,3)
+  !       bool_ir=bool_ir.and.irvec(ir,2).eq.0
+  !       bool_ir=bool_ir.and.irvec(jr,2).eq.0
+  !       if(bool_ir) then
+  !          Rlat=irvec(ir,1)*R1+irvec(ir,3)*R3
+  !          modk=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
+  !          !     
+  !          write(unit_in,'(50F10.5)') modk,Rlat(1:3), &
+  !               dreal(delta_hfr(1,1:6,ir)), &
+  !               dreal(delta_hfr(2,2:6,ir)), &
+  !               dreal(delta_hfr(3,3:6,ir)), &
+  !               dreal(delta_hfr(4,4:6,ir)), &
+  !               dreal(delta_hfr(5,5:6,ir)), &
+  !               dreal(delta_hfr(6,6,ir))
+  !       end if
+  !    end do
+
+  !    if(bool_ir) then
+  !       write(unit_in,'(50F10.5)')
+  !       write(unit_in,'(50F10.5)')
+  !    end if
+
+  ! end do
+  ! close(unit_in)
+
   
-  open(unit_in,file='2d_deltar_bare_real.tns')
+  open(unit_in,file='deltar_bare_real_plane.tns')
   modk=0.d0
   do ir=1,nr2d
      Rlat=irvec2d(ir,1)*R1+irvec2d(ir,2)*R3
      modk=sqrt(Rlat(1)**2.d0+Rlat(2)**2.d0+Rlat(3)**2.d0)
      !     
      write(unit_in,'(50F10.5)') modk,Rlat(1:3), &
-          ! dreal(delta_hfr(1,1,stride2D(ir))), &
-          ! dreal(delta_hfr(2,2,stride2D(ir))), &
-          ! dreal(delta_hfr(3,3,stride2D(ir))), &
-          ! dreal(delta_hfr(4,4,stride2D(ir))), &
-          ! dreal(delta_hfr(5,5,stride2D(ir))), &
-          ! dreal(delta_hfr(6,6,stride2D(ir)))
           dreal(delta_hfr(1,1:6,stride2D(ir))), &
           dreal(delta_hfr(2,2:6,stride2D(ir))), &
           dreal(delta_hfr(3,3:6,stride2D(ir))), &
@@ -719,16 +789,7 @@ program officina
   end do
   close(unit_in)
 
-  open(unit_in,file='deltar_info.tns')
-  ir=4
-  do iso=1,Nso
-     do jso=iso,Nso
-        ir=ir+1
-        write(unit_in,*) iso,jso,ir
-     end do
-  end do
-  close(unit_in)
-  open(unit_in,file='2d_deltar_bare_imag.tns')
+  open(unit_in,file='deltar_bare_imag_plane.tns')
   modk=0.d0
   do ir=1,nr2d
      Rlat=irvec2d(ir,1)*R1+irvec2d(ir,2)*R3
