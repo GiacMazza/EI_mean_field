@@ -771,15 +771,14 @@ program officina
 
 
   xpi(1)=0.5d0
-  xpi(2)=-0.3d0
+  xpi(2)=-0.2d0
   !
-  x_iter(1) = 0.d0
-  x_iter(2) = 0.d0
-  x_iter(3) = 2.d0
+  x_iter(1) = 0.05d0 !+- Delta_{11} (0)
+  x_iter(2) = 0.15d0 !+- Delta_{22} (0)
+  x_iter(3) = 1.8d0  !+- Delta_{33} (0)
   !
-  x_iter(4) = 0.20
-  x_iter(5) = 0.1
-  !
+  x_iter(4) = 0.20   !+- Delta_{13} (0)
+  x_iter(5) = 0.1    !+- Delta_{23} (0)
   !
   uio=free_unit()
   open(unit=uio,file='loop_phi_12free.out')
