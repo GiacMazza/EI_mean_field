@@ -6,8 +6,8 @@ FPP=
 #EXE=q_dep_EI
 #EXE=mf_HKw90
 #EXE=3b_cfr_kaneko
-#EXE=3b_simple
-EXE=tns_symmetry_breaking
+EXE=3b_simple
+#EXE=tns_symmetry_breaking
 
 
 HERE=`pwd`
@@ -34,7 +34,7 @@ INCARGS=$(shell pkg-config --cflags dmft_tools scifor)
 
 
 FFLAG += -ffree-line-length-none  $(INCARGS) 
-FFLAG+=-O0 -p -g -Wall -fbounds-check -fbacktrace -Wuninitialized
+#FFLAG+=-O0 -p -g -Wall -fbounds-check -fbacktrace -Wuninitialized
 
 BRANCH=_$(shell git rev-parse --abbrev-ref HEAD)
 ifeq ($(BRANCH),_master)
