@@ -113,6 +113,7 @@ program officina
   real(8) :: Evalence,Econduction,tconduction,tvalence
   real(8) :: w0gap
   logical :: fix_phi
+  logical :: hf_in
   !
 
   !+- START MPI -+!
@@ -554,22 +555,37 @@ program officina
   !
 
 
+  inquire(file='hf_symm_final.out',exist=hf_in)
+
+  if(hf_in) then
+     !
+     flen=file_length('hf_symm_final.out')
+     if(flen.eq.11) then
+        call read_array('hf_symm_final.out',x_iter)
+        xphi=x_iter(10)
+     end if
+     !
+  else
+     xphi=0.5d0
+     !
+     x_iter(1) = 0.d0
+     x_iter(2) = 0.d0
+     x_iter(3) = 2.d0
+     !
+     x_iter(4) = 0.1d0
+     x_iter(5) = 0.1d0
+     !  
+     x_iter(6) = 0.0d0
+     !
+     x_iter(7) = 0.0d0
+     x_iter(8) = -0.5d0
+     x_iter(9) = 0.0d0
+     !
+     x_iter(10:11)= xphi
+  end if
+
+  call save_array('hf_symm.init',x_iter)
   
-  xphi=0.5d0
-  !
-  x_iter(1) = 0.d0
-  x_iter(2) = 0.d0
-  x_iter(3) = 2.d0
-  !
-  x_iter(4) = 0.1d0
-  x_iter(5) = 0.1d0
-  !  
-  x_iter(6) = 0.1d0
-  !
-  x_iter(7) = 0.1d0
-  x_iter(8) = 0.1d0
-  x_iter(9) = 0.1d0
-  !
   !
   uio=free_unit()
   open(unit=uio,file='loop_phi_12symm.out')
@@ -577,10 +593,9 @@ program officina
   do ihf=1,Nhf
      !
      xphi_=xphi
-     x_iter(10:11)= xphi
      do jhf=1,Nhf_
         !
-        write(*,*) 'self-consistency phi loop',ihf,xphi
+        if(jhf.eq.1) write(*,*) 'self-consistency phi loop',ihf,xphi
         x_iter_=x_iter
         !
         H_Hf=HF_hamiltonian(x_iter)
@@ -622,7 +637,7 @@ program officina
         xtmp(i)=xr_tmp(i)+xi*xr_tmp(i+9)
      end do
      x_iter(1:9)=xtmp;
-     x_iter(10:11) =  xphi
+     !
      !
      H_Hf=HF_hamiltonian(x_iter)
      H_Hf=H_Hf+Hk_w90
@@ -637,9 +652,11 @@ program officina
      end do
      xphi=dreal(delta_hfr(1,3,ir0)+delta_hfr(1,3,ir0+1))
      xphi=wmix*xphi+(1-wmix)*xphi_
+     x_iter(10:11) =  xphi
      xphi_=xphi
      !
      !+- double counting term -+!
+     !
      Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
      Eout=Eout-2*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
      !
@@ -647,11 +664,14 @@ program officina
      Eout=Eout + 2.d0*Vcell*(abs(x_iter(8)-x_iter(4))**2.d0+abs(x_iter(9)-x_iter(5))**2.d0)
      !
      Eout=Eout - Wcell*dreal(x_iter(1))*dreal(x_iter(2))
-     Eout=Eout - Wcell*abs(x_iter(1))**2.d0 - Wcell*abs(x_iter(2))**2.d0-Wcell*abs(x_iter(3))**2.d0
+     Eout=Eout + 2.d0*Wcell*abs(x_iter(6))
      !
-     Eout=Eout + 2.d0*Wcell*abs(x_iter(7))**2.d0 
-     Eout=Eout + 2.d0*Wcell*abs(x_iter(8))**2.d0 
-     Eout=Eout + 2.d0*Wcell*abs(x_iter(9))**2.d0      
+     
+     ! Eout=Eout - Wcell*abs(x_iter(1))**2.d0 - Wcell*abs(x_iter(2))**2.d0-Wcell*abs(x_iter(3))**2.d0
+     ! !
+     ! Eout=Eout + 2.d0*Wcell*abs(x_iter(7))**2.d0 
+     ! Eout=Eout + 2.d0*Wcell*abs(x_iter(8))**2.d0 
+     ! Eout=Eout + 2.d0*Wcell*abs(x_iter(9))**2.d0      
      !
      write(uio, '(20F18.10)') dreal(xphi),dreal(x_iter(1:9)),Eout+mu_fix*(dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))), &
           dreal(delta_hfr(1,3,ir0)+delta_hfr(1,3,ir0+1)),dreal(delta_hfr(2,3,ir0)+delta_hfr(2,3,ir0+1))
@@ -659,6 +679,9 @@ program officina
      !
   end do
   close(uio)
+
+  call save_array('hf_symm_final.out',x_iter)
+
   
   H_Hf=HF_hamiltonian(x_iter)
   H_Hf=H_Hf+Hk_w90
@@ -689,21 +712,38 @@ program officina
   close(uio)
 
 
-  xpi(1) = 0.5d0
-  xpi(2) = -0.3d0
-  !
-  x_iter(1) = 0.d0
-  x_iter(2) = 0.d0
-  x_iter(3) = 2.d0
-  !
-  x_iter(4) = 0.1d0
-  x_iter(5) = 0.1d0
-  !  
-  x_iter(6) = 0.1d0
-  !
-  x_iter(7) = 0.1d0
-  x_iter(8) = 0.1d0
-  x_iter(9) = 0.1d0
+
+  inquire(file='hf_free_final.out',exist=hf_in)
+
+  if(hf_in) then
+     !
+     flen=file_length('hf_free_final.out')
+     if(flen.eq.11) then
+        call read_array('hf_free_final.out',x_iter)
+        xpi=x_iter(10:11)
+     end if
+     !
+  else
+     xpi(1)=0.5d0
+     xpi(2)=-0.67d0
+     !
+     x_iter(1) = 0.d0
+     x_iter(2) = 0.d0
+     x_iter(3) = 2.d0
+     !
+     x_iter(4) = 0.1d0
+     x_iter(5) = 0.1d0
+     !  
+     x_iter(6) = 0.0d0
+     !
+     x_iter(7) = 0.0d0
+     x_iter(8) = -0.5d0
+     x_iter(9) = 0.0d0
+     !
+     x_iter(10:11)= xpi
+  end if
+
+  call save_array('hf_free.init',x_iter)
   !
   !
   uio=free_unit()
@@ -715,7 +755,7 @@ program officina
      x_iter(10:11)= xpi
      do jhf=1,Nhf_
         !
-        write(*,*) 'self-consistency phi loop',ihf,xpi
+        if(jhf.eq.1) write(*,*) 'self-consistency phi loop',ihf,xpi
         x_iter_=x_iter
         !
         H_Hf=HF_hamiltonian(x_iter)
@@ -744,9 +784,12 @@ program officina
         x_iter(8) = delta_hfr(2,2,ir0+1)
         x_iter(9) = delta_hfr(3,3,ir0+1)
         !
-        x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_             
+        x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_
+        write(678,'(20F18.10)') dreal(x_iter(:))        
         !
      end do
+     write(678,'(20F18.10)')
+     write(678,'(20F18.10)') 
      xtmp=x_iter(1:9)  
      do i=1,9
         xr_tmp(i) = dreal(xtmp(i))
@@ -757,7 +800,6 @@ program officina
         xtmp(i)=xr_tmp(i)+xi*xr_tmp(i+9)
      end do
      x_iter(1:9)=xtmp;
-     x_iter(10:11)=xpi
      !
      H_Hf=HF_hamiltonian(x_iter)
      H_Hf=H_Hf+Hk_w90
@@ -774,6 +816,7 @@ program officina
      xpi(2)=dreal(delta_hfr(2,3,ir0)+delta_hfr(2,3,ir0+1))
      !
      xpi=wmix*xpi+(1-wmix)*xpi_
+     x_iter(10:11)=xpi
      xpi_=xpi
      !
      !+- double counting term -+!
@@ -784,19 +827,23 @@ program officina
      Eout=Eout + 2.d0*Vcell*(abs(x_iter(8)-x_iter(4))**2.d0+abs(x_iter(9)-x_iter(5))**2.d0)
      !
      Eout=Eout - Wcell*dreal(x_iter(1))*dreal(x_iter(2))
-     Eout=Eout - Wcell*abs(x_iter(1))**2.d0 - Wcell*abs(x_iter(2))**2.d0-Wcell*abs(x_iter(3))**2.d0
+     Eout=Eout + 2.d0*Wcell*abs(x_iter(6))
      !
-     Eout=Eout + 2.d0*Wcell*abs(x_iter(7))**2.d0 
-     Eout=Eout + 2.d0*Wcell*abs(x_iter(8))**2.d0 
-     Eout=Eout + 2.d0*Wcell*abs(x_iter(9))**2.d0      
+     ! Eout=Eout - Wcell*abs(x_iter(1))**2.d0 - Wcell*abs(x_iter(2))**2.d0-Wcell*abs(x_iter(3))**2.d0
      !
-     write(uio, '(20F18.10)') dreal(xpi),dreal(x_iter(1:9)),Eout+mu_fix*(dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))), &
+     ! Eout=Eout + 2.d0*Wcell*abs(x_iter(7))**2.d0 
+     ! Eout=Eout + 2.d0*Wcell*abs(x_iter(8))**2.d0 
+     ! Eout=Eout + 2.d0*Wcell*abs(x_iter(9))**2.d0      
+     !
+     write(uio, '(20F18.10)') dreal(xpi),dreal(x_iter(1:9)),Eout+mu_fix*(dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))),Eout, &
           dreal(delta_hfr(1,3,ir0)+delta_hfr(1,3,ir0+1)),dreal(delta_hfr(2,3,ir0)+delta_hfr(2,3,ir0+1))
      !
      !
   end do
   close(uio)
-  
+  !
+  call save_array('hf_free_final.out',x_iter)
+  !
   H_Hf=HF_hamiltonian(x_iter)
   H_Hf=H_Hf+Hk_w90
   call fix_mu(H_Hf,delta_hf,mu_fix,eout)
@@ -1233,20 +1280,22 @@ contains
           iorb=1
           iso=(ispin-1)*Norb+iorb
           Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(1)+2.d0*Vcell*x_iter(3)
-          Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + Wcell*x_iter(2) + 2.d0*Wcell*x_iter(1)
-          Hhf(iso,iso,ik) = Hhf(iso,iso,ik) - 2.d0*Wcell*dreal((x_iter(7)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))))
+          Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + Wcell*x_iter(2) 
+          ! Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Wcell*x_iter(1)
+          ! Hhf(iso,iso,ik) = Hhf(iso,iso,ik) - 2.d0*Wcell*dreal((x_iter(7)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))))
           !
           iorb=2
           iso=(ispin-1)*Norb+iorb
           Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(2)+2.d0*Vcell*x_iter(3)          
-          Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + Wcell*x_iter(1) + 2.d0*Wcell*x_iter(2)
-          Hhf(iso,iso,ik) = Hhf(iso,iso,ik) - 2.d0*Wcell*dreal((x_iter(8)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))))
+          Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + Wcell*x_iter(1) 
+          ! Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Wcell*x_iter(2)
+          ! Hhf(iso,iso,ik) = Hhf(iso,iso,ik) - 2.d0*Wcell*dreal((x_iter(8)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))))
           !
           iorb=3
           iso=(ispin-1)*Norb+iorb
           Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(3)+2.d0*Vcell*(x_iter(2)+x_iter(1))
-          Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Wcell*x_iter(3)
-          Hhf(iso,iso,ik) = Hhf(iso,iso,ik) - 2.d0*Wcell*dreal((x_iter(9)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))))
+          ! Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Wcell*x_iter(3)          
+          ! Hhf(iso,iso,ik) = Hhf(iso,iso,ik) - 2.d0*Wcell*dreal((x_iter(9)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))))
           !
           
           !
@@ -1264,7 +1313,7 @@ contains
           !
           iorb=1; iso=(ispin-1)*Norb+iorb          
           jorb=2; jso=(ispin-1)*Norb+jorb
-          Hhf(jso,iso,ik) = -Wcell*x_iter(6)  !*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = Hhf(jso,iso,ik)-Wcell*x_iter(6)  !*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           
           
