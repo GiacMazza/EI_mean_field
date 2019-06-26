@@ -490,17 +490,27 @@ contains
 
     real(8),intent(inout) :: mu    
     real(8),dimension(1) :: mu_,Nout
-    integer :: iter,ik,ir
+    integer :: iter,ik,ir,im
     real(8) :: x1,x2
+    real(8) :: mu1,mu2
     real(8) :: eout_
     real(8),optional :: eout
     !
     allocate(Hhf_tmp(Nso,Nso,Lk)); Hhf_tmp=Hhf
     allocate(delta_hf_tmp(Nso,Nso,Lk)); delta_hf_tmp=delta_hf
-    x1=deltaN_fix(-100.d0)
-    x2=deltaN_fix( 100.d0)
+
+    mu1=-10.d0
+    mu2= 10.d0
+    ! do im=1,100
+    !    mu1=mu1-0.1
+    !    mu2=mu2+0.1
+    !    x1=deltaN_fix(mu1)
+    !    x2=deltaN_fix(mu2)
+    !    if(x1*x2.lt.0.d0) exit
+    ! end do
+    
     !write(*,*) x1,x2
-    mu=brentq(deltaN_fix,-100.d0,5000.d0)
+    mu=brentq(deltaN_fix,mu1,mu2)
     Nout=deltaN_fix(mu)
     write(530,*) Nout,Ndens,mu
 
@@ -509,7 +519,7 @@ contains
        do ik=1,Lk
           Htmp(:,:,ik)=Hhf_tmp(:,:,ik)-mu*zeye(Nso)
           call solve_HF_hamiltonian(Htmp,delta_hf_tmp,eout)
-          write(987,'(10F18.10)') mu
+          !          write(987,'(10F18.10)') mu
        end do
     end if
     !+------------------+!
