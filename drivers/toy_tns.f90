@@ -629,6 +629,11 @@ program officina
      !
      x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_             
      !
+
+     H_Hf=HF_hamiltonian(x_iter)
+     H_Hf=H_Hf+Hk_w90
+     call fix_mu(H_Hf,delta_hf,mu_fix,eout)
+
      !+- double counting term -+!
      Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
      Eout=Eout-2*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
@@ -746,6 +751,9 @@ program officina
      !
      x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_             
      !
+     H_Hf=HF_hamiltonian(x_iter)
+     H_Hf=H_Hf+Hk_w90
+     call fix_mu(H_Hf,delta_hf,mu_fix,eout)     
      !+- double counting term -+!
      Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
      Eout=Eout-2*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
@@ -792,8 +800,33 @@ program officina
   end do
   close(uio)
 
-  inquire(file='hf_BLS_free_final.out',exist=hf_in)
-  
+
+
+  unit_in=free_unit()
+  open(unit=unit_in,file='TNS_bands_BLS_symm.out')
+  do ir=1,nrpts
+     call FT_q2r(rpt_latt(ir,:),Hr_w90(:,:,ir),H_hf)
+  end do
+  modk=0.d0
+  do i=1,2
+     delta_kpath=kpath(i+1,:)-kpath(i,:)
+     do ik=1,100
+        j=(i-1)*100 + ik
+        kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
+        modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
+        !
+        call FT_r2q(kpt_path(j,:),Hktmp,Hr_w90)
+        !
+        call eigh(Hktmp,ek_out)
+        write(unit_in,'(30F18.10)') modk,ek_out-mu_fix
+        !
+     end do
+     !
+  end do
+  close(unit_in)
+
+
+  inquire(file='hf_BLS_free_final.out',exist=hf_in)  
   if(hf_in) then
      !
      flen=file_length('hf_BLS_free_final.out')
@@ -861,7 +894,11 @@ program officina
      x_iter(10) = dreal(delta_hfr(1,3,ir0)+delta_hfr(1,3,ir0+1))
      x_iter(11) = dreal(delta_hfr(2,3,ir0)+delta_hfr(2,3,ir0+1))
      !
-     x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_             
+     x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_
+     !
+     H_Hf=HF_hamiltonian(x_iter)
+     H_Hf=H_Hf+Hk_w90
+     call fix_mu(H_Hf,delta_hf,mu_fix,eout)     
      !
      !+- double counting term -+!
      Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
@@ -911,18 +948,9 @@ program officina
   end do
   close(uio)
 
-  
-  stop
 
-
-
-
-
-
-
-  !+- plot bands for the fixed value of the order parameter -+!
   unit_in=free_unit()
-  open(unit=unit_in,file='TNS_bands.out')
+  open(unit=unit_in,file='TNS_bands_BLS_free.out')
   do ir=1,nrpts
      call FT_q2r(rpt_latt(ir,:),Hr_w90(:,:,ir),H_hf)
   end do
@@ -943,6 +971,33 @@ program officina
      !
   end do
   close(unit_in)
+
+  
+  stop
+
+  !+- plot bands for the fixed value of the order parameter -+!
+  ! unit_in=free_unit()
+  ! open(unit=unit_in,file='TNS_bands_BLS_free.out')
+  ! do ir=1,nrpts
+  !    call FT_q2r(rpt_latt(ir,:),Hr_w90(:,:,ir),H_hf)
+  ! end do
+  ! modk=0.d0
+  ! do i=1,2
+  !    delta_kpath=kpath(i+1,:)-kpath(i,:)
+  !    do ik=1,100
+  !       j=(i-1)*100 + ik
+  !       kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
+  !       modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
+  !       !
+  !       call FT_r2q(kpt_path(j,:),Hktmp,Hr_w90)
+  !       !
+  !       call eigh(Hktmp,ek_out)
+  !       write(unit_in,'(30F18.10)') modk,ek_out-mu_fix
+  !       !
+  !    end do
+  !    !
+  ! end do
+  ! close(unit_in)
 
   !+- plot final bands -+!
 

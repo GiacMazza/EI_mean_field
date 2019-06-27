@@ -7,8 +7,8 @@ FPP=
 #EXE=mf_HKw90
 #EXE=3b_cfr_kaneko
 EXE=3b_simple
-EXE=3b_full
-#EXE=toy_tns
+#EXE=3b_full
+EXE=toy_tns
 #EXE=tns_symmetry_breaking
 
 
