@@ -151,7 +151,7 @@ contains
             deltaN = deltaN + dreal(delta_hf_k(iso,iso,ik)*wtk(ik))
          end do
       end do
-      write(531,'(10F18.10)') deltaN,Ndens
+      !write(531,'(10F18.10)') deltaN,Ndens
       deltaN(1)=deltaN(1)-Ndens
     end function delta_N
 
