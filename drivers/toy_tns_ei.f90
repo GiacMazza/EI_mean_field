@@ -746,17 +746,17 @@ program officina
         x_iter(10:11)= xphi
      end if
      
-     call save_array('hf_BLS_symm.init',x_iter)
+     call save_array('hf_EI_symm.init',x_iter)
   
      !
      uio=free_unit()
-     open(unit=uio,file='loop_phi_BLS_symm.out')
+     open(unit=uio,file='loop_phi_EI_symm.out')
      !
      do ihf=1,Nhf
         !
         x_iter_=x_iter
         !
-        H_Hf=HF_hamiltonian(x_iter)
+        H_Hf=HF_hamiltonian_ei(x_iter)
         H_Hf=H_Hf+Hk_w90
         !
         call fix_mu(H_Hf,delta_hf,mu_fix)
@@ -787,7 +787,7 @@ program officina
         !
         x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_             
         !
-        H_Hf=HF_hamiltonian(x_iter)
+        H_Hf=HF_hamiltonian_ei(x_iter)
         H_Hf=H_Hf+Hk_w90
         call fix_mu(H_Hf,delta_hf,mu_fix,eout)     
         !+- double counting term -+!
@@ -806,21 +806,21 @@ program officina
         !
      end do
 
-     if(HF_solve) then
-        xr_iter=dreal(x_iter)
-        call fsolve(root_find_HF,xr_iter,tol=1.d-12)
-        x_iter=xr_iter 
-     end if
+     ! if(HF_solve) then
+     !    xr_iter=dreal(x_iter)
+     !    call fsolve(root_find_HF,xr_iter,tol=1.d-12)
+     !    x_iter=xr_iter 
+     ! end if
      write(uio, '(20F18.10)') dreal(x_iter(1:11)),Eout+mu_fix*(dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))),Eout
      close(uio)
-     call save_array('hf_BLS_symm_final.out',x_iter)  
-     H_Hf=HF_hamiltonian(x_iter)
+     call save_array('hf_EI_symm_final.out',x_iter)  
+     H_Hf=HF_hamiltonian_ei(x_iter)
      H_Hf=H_Hf+Hk_w90
      call fix_mu(H_Hf,delta_hf,mu_fix,eout)
      
      !+- plot real space hybridizations -+!
      uio=free_unit()
-     open(unit=uio,file='hyb_TNS_VS_r_BLS_symm.out')
+     open(unit=uio,file='hyb_TNS_VS_r_EI_symm.out')
      obs=0.d0
      do ir=1,nrpts
         delta_hfr(:,:,ir)=0.d0
@@ -842,7 +842,7 @@ program officina
      close(uio)
 
      unit_in=free_unit()
-     open(unit=unit_in,file='TNS_bands_BLS_symm.out')
+     open(unit=unit_in,file='TNS_bands_EI_symm.out')
      do ir=1,nrpts
         call FT_q2r(rpt_latt(ir,:),Hr_w90(:,:,ir),H_hf)
      end do
@@ -865,7 +865,7 @@ program officina
      close(unit_in)
   end if
   
-  inquire(file='hf_BLS_free_final.out',exist=hf_in)  
+  inquire(file='hf_EI_free_final.out',exist=hf_in)  
   if(hf_in) then
      !
      flen=file_length('hf_BLS_free_final.out')
