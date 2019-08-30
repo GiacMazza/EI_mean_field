@@ -728,7 +728,7 @@ program officina
         end if
         !
      else
-        xphi=0.5d0
+        xphi=0.2d0
         !
         x_iter(1) = 0.5d0
         x_iter(2) = 0.5d0
@@ -1628,14 +1628,14 @@ contains
           !
           iorb=1; iso=(ispin-1)*Norb+iorb          
           jorb=3; jso=(ispin-1)*Norb+jorb
-          Hhf(jso,iso,ik) = -Vcell*x_iter(4)*(1.d0+exp(-xi*dot_product(R1,kpt_latt(ik,:))))
-          ! Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(10)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
+          Hhf(jso,iso,ik) = -Vcell*x_iter(4)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(10)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
           iorb=2; iso=(ispin-1)*Norb+iorb          
           jorb=3; jso=(ispin-1)*Norb+jorb
-          Hhf(jso,iso,ik) = -Vcell*x_iter(5)*(1.d0+exp(-xi*dot_product(R1,kpt_latt(ik,:))))
-          ! Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(11)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
+          Hhf(jso,iso,ik) = -Vcell*x_iter(5)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(11)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
        end do
