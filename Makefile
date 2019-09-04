@@ -9,9 +9,9 @@ FPP=
 EXE=3b_simple
 #EXE=3b_full
 #EXE=toy_tns
-EXE=toy_tns_ei
+#EXE=toy_tns_ei
 #EXE=tns_symmetry_breaking
-
+EXE=two_chains_tns
 
 HERE=`pwd`
 DIR=${HERE}/drivers
@@ -37,7 +37,7 @@ INCARGS=$(shell pkg-config --cflags dmft_tools scifor)
 
 
 FFLAG += -ffree-line-length-none  $(INCARGS) 
-#FFLAG+=-O0 -p -g -Wall -fbounds-check -fbacktrace -Wuninitialized
+FFLAG+=-O0 -p -g -Wall -fbounds-check -fbacktrace -Wuninitialized
 
 BRANCH=_$(shell git rev-parse --abbrev-ref HEAD)
 ifeq ($(BRANCH),_master)

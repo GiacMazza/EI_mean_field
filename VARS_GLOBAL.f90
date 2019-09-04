@@ -49,7 +49,7 @@ MODULE VARS_GLOBAL
   logical :: whartree,only_LOC,wfock
 
 
-  integer :: ir0
+  integer :: ir0,irL,irR
   integer,dimension(:),allocatable :: ir_mirror
 
 

@@ -132,7 +132,7 @@ contains
     do ir=1,nrpts
        call FT_q2r(rpt_latt(ir,:),delta_hf(:,:,ir),delta_hf_k)
     end do
-    write(530,*) Nout,Ndens,mu_,iter
+    !write(530,*) Nout,Ndens,mu_,iter
     !
   contains
     !
@@ -171,7 +171,7 @@ contains
             deltaN = deltaN + dreal(delta_hf_k(iso,iso,ik)*wtk(ik))
          end do
       end do
-      write(531,'(10F18.10)') deltaN,Ndens,xmu
+      !write(531,'(10F18.10)') deltaN,Ndens,xmu
       deltaN=deltaN-Ndens
     end function delta_Nb
 
@@ -512,7 +512,7 @@ contains
     !write(*,*) x1,x2
     mu=brentq(deltaN_fix,mu1,mu2)
     Nout=deltaN_fix(mu)
-    write(530,*) Nout,Ndens,mu
+    !write(530,*) Nout,Ndens,mu
 
     !+- compute energy -+!
     if(present(eout)) then
@@ -544,7 +544,7 @@ contains
           deltaN = deltaN + dreal(delta_hf_tmp(iso,iso,ik)*wtk(ik))
        end do
     end do
-    write(531,'(10F18.10)') deltaN,Ndens,xmu
+    !write(531,'(10F18.10)') deltaN,Ndens,xmu
     deltaN=deltaN-Ndens
   end function deltaN_fix
     

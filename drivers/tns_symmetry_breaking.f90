@@ -186,7 +186,7 @@ program officina
      !+- X-point
      kpath(4,:)=0.5d0*Bk1     
   end select
-  
+  !
   !+- build a monkhorst-pack grid -+!  
   !
   call build_mp_grid(Nk_x,Nk_y,Nk_z)
