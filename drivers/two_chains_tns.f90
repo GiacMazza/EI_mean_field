@@ -112,7 +112,7 @@ program officina
   real(8),dimension(18) :: xr_tmp
 
   real(8) :: Ucell,Vcell,Wcell
-  real(8) :: Evalence,Econduction,tconduction,tvalence,tt_hyb,nn_hyb
+  real(8) :: Evalence,Econduction,tconduction,tvalence,tt_hyb,nn_hyb,tn_hyb
   real(8) :: w0gap
   logical :: fix_phi  !+-> HF calculation with fixed order parameter <-+!
   logical :: hf_symm  !+-> HF calculation w/ symmetric order parameter <-+!
@@ -161,6 +161,7 @@ program officina
 
   call parse_input_variable(tt_hyb,"tt_hyb","input.conf",default=0.0d0)
   call parse_input_variable(nn_hyb,"nn_hyb","input.conf",default=0.0d0)
+  call parse_input_variable(tn_hyb,"tn_hyb","input.conf",default=0.0d0)
 
   
   call parse_input_variable(w0gap,"w0gap","input.conf",default=0.0d0)
@@ -404,7 +405,26 @@ program officina
         Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + nn_hyb*(exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         !
+
+        !+- Interchain Ta-Ni hopping -+!
+        iorb = 2
+        jorb = 6
+        iso  = (ispin-1)*Norb+iorb
+        jso  = (ispin-1)*Norb+jorb
+        Rlat=R1
+        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + tn_hyb*xi*dsin(dot_product(Rlat,kpt_latt(ik,:)))
+        Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         !
+        !+- Interchain Ta-Ni hopping -+!
+        iorb = 3
+        jorb = 4
+        iso  = (ispin-1)*Norb+iorb
+        jso  = (ispin-1)*Norb+jorb
+        Rlat=R1
+        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + tn_hyb*xi*dsin(dot_product(Rlat,kpt_latt(ik,:)))
+        Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
+
+        
      end do
      !
      !
