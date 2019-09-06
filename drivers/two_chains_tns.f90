@@ -161,7 +161,7 @@ program officina
 
   call parse_input_variable(tt_hyb,"tt_hyb","input.conf",default=0.0d0)
   call parse_input_variable(nn_hyb,"nn_hyb","input.conf",default=0.0d0)
-  call parse_input_variable(tn_hyb,"nn_hyb","input.conf",default=0.0d0)
+  call parse_input_variable(tn_hyb,"tn_hyb","input.conf",default=0.0d0)
 
   
   call parse_input_variable(w0gap,"w0gap","input.conf",default=0.0d0)
@@ -416,8 +416,8 @@ program officina
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         !
         !+- Interchain Ta-Ni hopping -+!
-        iorb = 1
-        jorb = 5
+        iorb = 3
+        jorb = 4
         iso  = (ispin-1)*Norb+iorb
         jso  = (ispin-1)*Norb+jorb
         Rlat=R1
