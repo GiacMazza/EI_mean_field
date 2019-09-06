@@ -20,7 +20,7 @@ program officina
   complex(8),dimension(:,:,:),allocatable :: Hr_w90,Hr_w90_tmp,Hr_toy
   real(8) :: mu_fix
   real(8) :: Uintra,Uinter,Delta_CF
-  real(8) :: Uq,thop,err_hf
+  real(8) :: Uq,thop,err_hf,hf_conv
   !real(8),dimension(3,3) :: Bkinv
 
   real(8),dimension(3) :: ktest
@@ -108,7 +108,7 @@ program officina
   complex(8),dimension(9) :: xtmp,xtmp_
   complex(8) :: xphi,xphi_
   complex(8),dimension(2) :: xpi,xpi_
-  real(8),dimension(11) :: xr_iter
+  real(8),dimension(14) :: xr_iter
   real(8),dimension(18) :: xr_tmp
 
   real(8) :: Ucell,Vcell,Wcell
@@ -119,7 +119,7 @@ program officina
   logical :: HF_solve !+-> HF calculation with a root-finder routine  <-+
   logical :: hf_in
 
-  real(8) :: phi_start,phi_end,dphi,ntot
+  real(8) :: phi_start,phi_end,dphi,ntot,test,err
   integer :: Nphi
   integer :: ixr(3)
   !
@@ -175,6 +175,9 @@ program officina
   call parse_input_variable(hf_symm,"hf_symm","input.conf",default=.false.)
   call parse_input_variable(hf_solve,"hf_solve","input.conf",default=.false.)
 
+  call parse_input_variable(hf_conv,"hf_conv","input.conf",default=1.d-10)
+
+  
   !
   call get_global_vars
 
@@ -722,9 +725,13 @@ program officina
   !
   uio=free_unit()
   open(unit=uio,file='loop_phi_symm.out')
+  unit_err=free_unit()
+  open(unit=unit_err,file='err_symm.out')
   !
+  err_hf=1.d0
   do ihf=1,Nhf
      write(*,*) "symmetric HF: loop nr",ihf,'/',Nhf
+     write(unit_err,*) err_hf
      !
      x_iter_=x_iter
      !
@@ -784,16 +791,35 @@ program officina
      ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
      ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
      write(uio, '(20F18.10)') dreal(x_iter(1:14)),Eout+mu_fix*ntot,Eout
+     err_hf=0.d0
+     do i=1,14
+        err_hf=err_hf+abs(x_iter(i)-x_iter_(i))**2.d0
+     end do
+     if(err_hf.lt.hf_conv) exit
      !
-     !
+     ! 
+     ! xr_iter=dreal(x_iter)
+     ! xr_iter=root_find_HF(xr_iter)
+     ! test=0.d0
+     ! forall(i=1:14) test=test+xr_iter(i)**2.d0
+     ! write(500,*) test
+     ! 
+     ! 
   end do
-  ! if(HF_solve) then
-  !    xr_iter=dreal(x_iter)
-  !    call fsolve(root_find_HF,xr_iter,tol=1.d-12)
-  !    x_iter=xr_iter 
-  ! end if
-  ! write(uio, '(20F18.10)') dreal(x_iter(1:11)),Eout+mu_fix*(dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))),Eout  
-  close(uio)  
+  if(HF_solve) then
+     xr_iter=dreal(x_iter)
+     call fsolve(root_find_HF,xr_iter,tol=1.d-12)
+     x_iter=xr_iter
+  end if
+  ! xr_iter=root_find_HF(xr_iter)
+  ! test=0.d0
+  ! forall(i=1:14) test=test+xr_iter(i)**2.d0
+  ! write(*,*) 'test',test
+  ! ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
+  ! ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
+  ! write(uio, '(20F18.10)') dreal(x_iter(1:14)),Eout+mu_fix*ntot,Eout
+  close(uio)
+  close(unit_err)
   call save_array('hf_symm_final.out',x_iter)
   H_Hf=HF_hamiltonian(x_iter)
   H_Hf=H_Hf+Hk_toy
@@ -941,8 +967,8 @@ program officina
      x_iter(4) = 0.1d0
      x_iter(5) = 0.1d0
      !  
-     x_iter(6) = 0.43d0
-     x_iter(7) = -0.43d0
+     x_iter(6) = 0.4d0
+     x_iter(7) = -0.4d0
      !
      x_iter(8) = 0.1d0
      x_iter(9) = 0.1d0
@@ -961,9 +987,14 @@ program officina
   !
   uio=free_unit()
   open(unit=uio,file='loop_phi_BLS_free.out')
+  unit_err=free_unit()
+  open(unit=unit_err,file='err_BLS.out')
   !
+  err_hf=1.0
   do ihf=1,Nhf
-          !
+     !
+     write(*,*) "BLS HF: loop nr",ihf,'/',Nhf
+     write(unit_err,*) err_hf
      x_iter_=x_iter
      !
      H_Hf=HF_hamiltonian(x_iter)
@@ -1021,16 +1052,30 @@ program officina
      !
      ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
      ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
-     write(uio, '(20F18.10)') dreal(x_iter(1:14)),Eout+mu_fix*ntot,Eout     
+     write(uio, '(20F18.10)') dreal(x_iter(1:14)),Eout+mu_fix*ntot,Eout
+     err_hf=0.d0
+     do i=1,14
+        err_hf=err_hf+abs(x_iter(i)-x_iter_(i))**2.d0
+     end do
+     if(err_hf.lt.hf_conv) exit
      !
      !
   end do
-  ! if(HF_solve) then
-  !    xr_iter=dreal(x_iter)
-  !    call fsolve(root_find_HF,xr_iter,tol=1.d-12)
-  !    x_iter=xr_iter 
-  ! end if
-  ! write(uio, '(20F18.10)') dreal(x_iter(1:11)),Eout+mu_fix*(dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))),Eout  
+  if(HF_solve) then
+     xr_iter=dreal(x_iter)
+     call fsolve(root_find_HF,xr_iter,tol=1.d-12)
+     x_iter=xr_iter 
+  end if
+  !
+  ! xr_iter=root_find_HF(xr_iter)
+  ! ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
+  ! ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
+  ! write(uio, '(20F18.10)') dreal(x_iter(1:14)),Eout+mu_fix*ntot,Eout  
+  ! test=0.d0
+  ! forall(i=1:14) test=test+xr_iter(i)**2.d0
+  ! write(*,*) 'test',test
+  !
+  close(unit_err)
   close(uio)
   !stop
   !
@@ -1188,7 +1233,7 @@ contains
     integer :: i,j
     real(8) :: mu_fix
 
-    if(size(x).ne.14) stop 'delta HF s(x)/= 18'
+    if(size(x).ne.14) stop 'delta HF s(x)/= 14'
     !
     do i=1,14
        xhf(i) = x(i) + xi*0.d0
