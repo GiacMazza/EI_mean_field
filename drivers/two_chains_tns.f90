@@ -415,19 +415,42 @@ program officina
         iso  = (ispin-1)*Norb+iorb
         jso  = (ispin-1)*Norb+jorb
         Rlat=R1
-        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + tn_hyb*xi*dsin(dot_product(Rlat,kpt_latt(ik,:)))
+        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + tn_hyb*exp(xi*dot_product(Rlat,kpt_latt(ik,:)))
+        Rlat=-R1
+        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) - tn_hyb*exp(xi*dot_product(Rlat,kpt_latt(ik,:)))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         !
-        !+- Interchain Ta-Ni hopping -+!
-        iorb = 3
-        jorb = 4
+        iorb = 1
+        jorb = 6
         iso  = (ispin-1)*Norb+iorb
         jso  = (ispin-1)*Norb+jorb
-        Rlat=R1
-        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + tn_hyb*xi*dsin(dot_product(Rlat,kpt_latt(ik,:)))
+        Rlat=-R3+R1
+        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + tn_hyb*exp(xi*dot_product(Rlat,kpt_latt(ik,:)))
+        Rlat=-R3-R1
+        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) - tn_hyb*exp(xi*dot_product(Rlat,kpt_latt(ik,:)))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
-
+                
+        !+- Interchain Ta-Ni hopping -+!
+        iorb = 4
+        jorb = 3
+        iso  = (ispin-1)*Norb+iorb
+        jso  = (ispin-1)*Norb+jorb
+        Rlat=  R1
+        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) - tn_hyb*exp(xi*dot_product(Rlat,kpt_latt(ik,:)))
+        Rlat= -R1
+        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + tn_hyb*exp(xi*dot_product(Rlat,kpt_latt(ik,:)))
+        Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         
+        iorb = 5
+        jorb = 3
+        iso  = (ispin-1)*Norb+iorb
+        jso  = (ispin-1)*Norb+jorb
+        Rlat = R1+R3
+        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) - tn_hyb*exp(xi*dot_product(Rlat,kpt_latt(ik,:)))
+        Rlat= -R1+R3
+        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + tn_hyb*exp(xi*dot_product(Rlat,kpt_latt(ik,:)))
+        Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
+        !
      end do
      !
      !
@@ -484,6 +507,7 @@ program officina
      end do
      !
      write(unit_in,'(100F10.5)') Rlat(1),dreal(obs(:)),dreal(obs(:))
+
      !
   end do
   ! 
