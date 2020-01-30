@@ -1691,7 +1691,7 @@ contains
     integer :: ir,nrpts
     real(8),dimension(3) :: Rlat
     real(8) :: dotRk
-    !
+
     nrpts=size(irvec,1)    
     Hk=0.d0
     do ir=1,nrpts
@@ -1699,7 +1699,7 @@ contains
        dotRk=dot_product(Rlat,kpoint)
        Hk=Hk+Hr_w90(:,:,ir)*exp(xi*dotRK)/dble(ndegen(ir))
     end do
-    !
+
   end subroutine get_Hk_w90
 
 
