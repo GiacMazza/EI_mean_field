@@ -32,7 +32,7 @@ program officina
 
   complex(8),dimension(:,:),allocatable :: Hloc,Hktmp
   complex(8),dimension(:,:,:),allocatable :: Hk_w90,Hk_w90_tmp,Hk_toy
-  complex(8),dimension(:,:,:),allocatable :: Hh_rhf
+  complex(8),dimension(:,:,:),allocatable :: Hk_rhf
   
   complex(8),dimension(:,:,:,:,:),allocatable :: Hk_w90_reshape,Hk_hf_reshape
   real(8),dimension(:,:),allocatable :: kpts,kpt_path
@@ -728,46 +728,8 @@ program officina
   H_Hf=HF_hamiltonian(x_iter)
   H_Hf=H_Hf+Hk_toy
   call fix_mu(H_Hf,delta_hf,mu_fix,eout)
-  
-  !+- H_Hf is the final hf hamiltonian (including the effects of Urhf and Vrhf)
-  !+- now go for the subtraction 
-  allocate(Hk_rhf(Nso,Nso,Lk))
   !
-  Hk_rhf=H_Hf-Hk_toy 
-  Hk_toy=Hk_toy-Hk_rhf
-  !
-  !+- plot the bands of the rhf-subtracted hamiltonian -+!
-  !
-
-  unit_in=free_unit()
-  open(unit=unit_in,file='TNS_bands_hk_rhf.out')
-  do ir=1,nrpts
-     call FT_q2r(rpt_latt(ir,:),Hr_toy(:,:,ir),H_hf)
-  end do
-  modk=0.d0
-  do i=1,3
-     delta_kpath=kpath(i+1,:)-kpath(i,:)
-     do ik=1,100
-        j=(i-1)*100 + ik
-        kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
-        modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
-        !
-        call FT_r2q(kpt_path(j,:),Hktmp,Hr_toy)
-        !
-        call eigh(Hktmp,ek_out)
-        !
-        !
-        write(unit_in,'(30F18.10)') modk,ek_out-mu_fix
-        !
-        !
-     end do
-     !
-  end do
-  close(unit_in)
-  close(uio)
-
-
-
+  ! 
   !+- plot real space hybridizations -+!
   uio=free_unit()
   open(unit=uio,file='hyb_TNS_VS_r_symm.out')
@@ -843,8 +805,49 @@ program officina
   end do
   close(unit_in)
   close(uio)
+  
+  !
+  !
+  !+- H_Hf is the final hf hamiltonian (including the effects of Urhf and Vrhf)
+  !+- now go for the subtraction -+!
+  !
+  !
+  allocate(Hk_rhf(Nso,Nso,Lk))
+  Hk_rhf=H_Hf-Hk_toy 
+  Hk_toy=Hk_toy-Hk_rhf
+  call fix_mu(Hk_toy,delta_hf,mu_fix,eout)
+  !
+  !+- plot the bands of the rhf-subtracted hamiltonian -+!
+  !
+  unit_in=free_unit()
+  open(unit=unit_in,file='TNS_bands_hk_rhf.out')
+  do ir=1,nrpts
+     call FT_q2r(rpt_latt(ir,:),Hr_toy(:,:,ir),Hk_toy)
+  end do
+  modk=0.d0
+  do i=1,3
+     delta_kpath=kpath(i+1,:)-kpath(i,:)
+     do ik=1,100
+        j=(i-1)*100 + ik
+        kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
+        modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
+        !
+        call FT_r2q(kpt_path(j,:),Hktmp,Hr_toy)
+        !
+        call eigh(Hktmp,ek_out)
+        !
+       write(unit_in,'(30F18.10)') modk,ek_out-mu_fix
+        !
+     end do
+     !
+  end do
+  close(unit_in)
+  close(uio)
+
   !
 
+  Ucell = Ucell_
+  Vcell = Vcell_
 
 
   !+- loop with broken-symmetry phase -+!

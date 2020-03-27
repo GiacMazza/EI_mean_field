@@ -11,7 +11,8 @@ EXE=3b_simple
 #EXE=toy_tns
 #EXE=toy_tns_ei
 #EXE=tns_symmetry_breaking
-EXE=two_chains_tns
+#EXE=two_chains_tns
+EXE=two_chains_restric_hf
 #EXE=fulltwo_chains_tns
 #EXE=sweep_V_two_chains_tns
 
