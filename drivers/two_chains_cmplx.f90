@@ -888,9 +888,12 @@ program officina
   Eout=Eout-2.d0*dreal(lgr_op(3)*x_iter(13))
   Eout=Eout-2.d0*dreal(lgr_op(4)*x_iter(14))
 
+  ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
+  ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
+  
   uio=free_unit()
   open(unit=uio,file='energy_vs_op_phase.out')
-  write(uio,'(10F18.10)') x_iter(6),lgr_op(1),Eout
+  write(uio,'(10F18.10)') x_iter(6),lgr_op(1),Eout+mu_fix*ntot
   close(uio)
 
   stop
@@ -1006,8 +1009,8 @@ program officina
 contains
   !
   function hf_fix_lgr_params_(xlgr) result(xdelta_op)
-    real(8),dimension(:),intent(in) :: xlgr
-    !real(8),dimension(:) :: xlgr
+    !real(8),dimension(:),intent(in) :: xlgr
+    real(8),dimension(:) :: xlgr
     real(8),dimension(size(xlgr)) :: xdelta_op
     complex(8),dimension(:,:,:),allocatable :: Hhf
     complex(8),dimension(:,:,:),allocatable :: deltahfr,deltahf
