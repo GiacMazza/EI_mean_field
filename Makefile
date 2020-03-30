@@ -6,31 +6,36 @@ FPP=
 #EXE=q_dep_EI
 #EXE=mf_HKw90
 #EXE=3b_cfr_kaneko
-EXE=3b_simple
+#EXE=3b_simple
 #EXE=3b_full
 #EXE=toy_tns
 #EXE=toy_tns_ei
 #EXE=tns_symmetry_breaking
 #EXE=two_chains_tns
-EXE=two_chains_restric_hf
+#EXE=two_chains_restric_hf
 #EXE=fulltwo_chains_tns
+EXE=two_chains_cmplx
 #EXE=sweep_V_two_chains_tns
 
-HERE=`pwd`
-DIR=${HERE}/drivers
-DIREXE=${HOME}/.project_bin
+
+DIR=./drivers
+DIREXE=${HOME}/.bin
 
 .SUFFIXES: .f90
 
 #
-OBJS=VARS_GLOBAL.o HF.o  R_HF.o
+#OBJS=VARS_GLOBAL.o HF.o  R_HF.o
+OBJS=VARS_GLOBAL.o R_HF.o
 
 LIBDIR=$(HOME)/opt_local
 #LIBDIR=/opt/
 
 
-LIBARGS=$(shell pkg-config --libs   dmft_tools scifor)
+
 INCARGS=$(shell pkg-config --cflags dmft_tools scifor)
+LIBARGS=$(shell pkg-config --libs   dmft_tools)
+LIBARGS+=$(shell pkg-config --libs   scifor)
+
 
 #$(FC) $(FPPFLAG) $(FFLAG) $(INCARGS) $(OBJS) $(DIR)/$(EXE).f90 -o $(DIREXE)/$(EXE)$(BRANCH) $(LIBARGS)
 
@@ -56,7 +61,7 @@ compile: version $(OBJS)
 	@echo " !+------------------------------------------------- "
 	@echo " ..................... compile ..................... "
 	@echo " !+------------------------------------------------- "
-	$(FC)  $(FFLAG) $(INCARGS) $(OBJS) $(DIR)/$(EXE).f90 -o $(DIREXE)/$(EXE)$(BRANCH) $(LIBARGS)
+	$(FC)  $(FFLAG)  $(OBJS) $(DIR)/$(EXE).f90 -o $(DIREXE)/$(EXE)$(BRANCH) $(LIBARGS)
 	@echo " !+--------------------------------------+! "
 	@echo " .................. done .................. "
 	@echo " !+--------------------------------------+! "
