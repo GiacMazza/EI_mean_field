@@ -623,21 +623,21 @@ program officina
      x_iter(2) = 0.1d0
      x_iter(3) = 1.8d0
      !
-     x_iter(4) = 0.1d0*exp(2.d0*pi*xi*op_phase)
-     x_iter(5) = 0.1d0*exp(2.d0*pi*xi*op_phase)
+     x_iter(4) =  0.1d0*exp(0.5d0*pi*xi)
+     x_iter(5) =  0.1d0*exp(0.5d0*pi*xi)
      !  
-     x_iter(6) = 0.4d0*exp(2.d0*pi*xi*op_phase)
-     x_iter(7) = -0.4d0*exp(2.d0*pi*xi*op_phase)
+     x_iter(6) =  0.4d0*exp(0.5d0*pi*xi)
+     x_iter(7) = -0.4d0*exp(0.5d0*pi*xi)
      !
-     x_iter(8) = 0.1d0
-     x_iter(9) = 0.1d0
+     x_iter(8) =  0.1d0
+     x_iter(9) =  0.1d0
      x_iter(10) = 1.8d0
      !
-     x_iter(11) = 0.1d0*exp(2.d0*pi*xi*op_phase)
-     x_iter(12) = 0.1d0*exp(2.d0*pi*xi*op_phase)
+     x_iter(11) = 0.1d0*exp(0.5d0*pi*xi)
+     x_iter(12) = 0.1d0*exp(0.5d0*pi*xi)
      !  
-     x_iter(13) = -0.4d0*exp(2.d0*pi*xi*op_phase)
-     x_iter(14) = 0.4d0*exp(2.d0*pi*xi*op_phase)     
+     x_iter(13) = -0.4d0*exp(0.5d0*pi*xi)
+     x_iter(14) =  0.4d0*exp(0.5d0*pi*xi)     
   end if
   !
   !
@@ -937,7 +937,8 @@ contains
 
 
   function fix_lgr_params(xlgr) result(xdelta_op)
-    real(8),dimension(:),intent(in) :: xlgr
+    !real(8),dimension(:),intent(in) :: xlgr
+    real(8),dimension(:) :: xlgr
     real(8),dimension(size(xlgr)) :: xdelta_op
     complex(8),dimension(:,:,:),allocatable :: Hhf
     complex(8),dimension(:,:,:),allocatable :: deltahfr,deltahf
