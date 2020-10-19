@@ -14,8 +14,8 @@ FPP=
 #EXE=two_chains_tns
 #EXE=two_chains_restric_hf
 #EXE=fulltwo_chains_tns
-EXE=two_chains_cmplx
-#EXE=sweep_V_two_chains_tns
+#EXE=two_chains_cmplx
+EXE=sweep_V_two_chains_tns
 
 
 DIR=./drivers
@@ -27,7 +27,7 @@ DIREXE=${HOME}/.bin
 #OBJS=VARS_GLOBAL.o HF.o  R_HF.o
 OBJS=VARS_GLOBAL.o R_HF.o
 
-LIBDIR=$(HOME)/opt_local
+LIBDIR=$(HOME)/gm_opt
 #LIBDIR=/opt/
 
 
@@ -35,6 +35,11 @@ LIBDIR=$(HOME)/opt_local
 INCARGS=$(shell pkg-config --cflags dmft_tools scifor)
 LIBARGS=$(shell pkg-config --libs   dmft_tools)
 LIBARGS+=$(shell pkg-config --libs   scifor)
+
+
+INCARGS=-I/users/gmazza/gm_opt/dmft_tools/gnu/include -I/users/gmazza/gm_opt/scifor/gnu/include
+LIBARGS =-L/usr/lib64 -llapack -lblas -L/users/gmazza/gm_opt/dmft_tools/gnu/lib -L/users/gmazza/gm_opt/scifor/gnu/lib -ldmft_tools -lscifor
+
 
 
 #$(FC) $(FPPFLAG) $(FFLAG) $(INCARGS) $(OBJS) $(DIR)/$(EXE).f90 -o $(DIREXE)/$(EXE)$(BRANCH) $(LIBARGS)

@@ -5,7 +5,7 @@ program officina
   !
   USE VARS_GLOBAL
   USE DMFT_VECTORS
-  USE HF
+  !USE HF
   USE HF_real
   !
   !
@@ -229,6 +229,12 @@ program officina
   !
   Lk=Nk_x*Nk_y
   Nk_z=1
+  allocate(Nkvect(3));
+  Nkvect(1)=Nk_x
+  Nkvect(2)=Nk_y
+  Nkvect(3)=Nk_z
+
+
   allocate(kpt_latt(Lk,3),ik_stride(Lk,3),wtk(Lk),igr2ik(Nk_x,Nk_y,Nk_z))
   wtk=1.d0/dble(Lk)
   ik=0
@@ -255,12 +261,14 @@ program officina
   file_name=reg(read_tns)//reg(file_w90_hr)  
   !+-  read the w90 output -> this is just to have the w90 hamiltonian in hand <-  -+!
   allocate(Hloc(Nso,Nso))
-  call read_w90_hr(R1,R2,R3,Hr_w90,Hloc,irvec,ndegen,trim(file_name),1,6,1)
+  call TB_hr_to_hk(R1,R2,R3,hk_w90,Hloc,trim(file_name),1,6,1,Nkvect)
+
+  !call read_w90_hr(R1,R2,R3,Hr_w90,Hloc,irvec,ndegen,trim(file_name),1,6,1)
   !
   nrpts=Nk_x*Nk_y
   write(*,*) 'nrpts',nrpts
-  deallocate(irvec); allocate(irvec(nrpts,3))
-  deallocate(ndegen); allocate(ndegen(nrpts));ndegen=1
+  if(allocated(irvec)) deallocate(irvec); allocate(irvec(nrpts,3))
+  if(allocated(ndegen)) deallocate(ndegen); allocate(ndegen(nrpts));ndegen=1
   !
   allocate(rpt_latt(nrpts,3))
   irvec=0;ir=0

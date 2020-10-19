@@ -5,7 +5,7 @@ program officina
   !
   USE VARS_GLOBAL
   USE DMFT_VECTORS
-  USE HF
+  !USE HF
   USE HF_real
   !
   !
@@ -65,7 +65,7 @@ program officina
   character(len=100) :: fileRlattice,file_w90_hr,file_UV,read_tns
   character(len=200) :: file_name
 
-  integer,allocatable :: Nkvect(:)
+  integer(4),allocatable :: Nkvect(:)
 
 
   real(8),dimension(:),allocatable :: kx,ky,kz
@@ -223,6 +223,11 @@ program officina
   !
   Lk=Nk_x*Nk_y
   Nk_z=1
+  allocate(Nkvect(3));
+  Nkvect(1)=Nk_x
+  Nkvect(2)=Nk_y
+  Nkvect(3)=Nk_z
+
   allocate(kpt_latt(Lk,3),ik_stride(Lk,3),wtk(Lk),igr2ik(Nk_x,Nk_y,Nk_z))
   wtk=1.d0/dble(Lk)
   ik=0
@@ -248,8 +253,10 @@ program officina
   !
   file_name=reg(read_tns)//reg(file_w90_hr)  
   !+-  read the w90 output -> this is just to have the w90 hamiltonian in hand <-  -+!
-  allocate(Hloc(Nso,Nso))
-  call read_w90_hr(R1,R2,R3,Hr_w90,Hloc,irvec,ndegen,trim(file_name),1,6,1)
+  allocate(Hloc(Nso,Nso))  
+  !call read_w90_hr(R1,R2,R3,Hr_w90,Hloc,irvec,ndegen,trim(file_name),1,6,1)
+  call TB_hr_to_hk(R1,R2,R3,hk_w90,Hloc,trim(file_name),1,6,1,Nkvect)
+  stop
   !
   nrpts=Nk_x*Nk_y
   write(*,*) 'nrpts',nrpts
@@ -1278,7 +1285,7 @@ contains
 
   function root_find_HF(x) result(out_x)
     implicit none
-    real(8),dimension(:) :: x
+    real(8),dimension(:),intent(in) :: x
     real(8),dimension(size(x)) :: out_x
     complex(8),dimension(14) :: xhf,xhf_
     complex(8),dimension(Nso,Nso,Lk) :: H_Hf

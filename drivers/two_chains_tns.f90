@@ -5,7 +5,7 @@ program officina
   !
   USE VARS_GLOBAL
   USE DMFT_VECTORS
-  USE HF
+  !USE HF
   USE HF_real
   !
   !
@@ -217,6 +217,11 @@ program officina
   !
   Lk=Nk_x*Nk_y
   Nk_z=1
+  allocate(Nkvect(3));
+  Nkvect(1)=Nk_x
+  Nkvect(2)=Nk_y
+  Nkvect(3)=Nk_z
+
   allocate(kpt_latt(Lk,3),ik_stride(Lk,3),wtk(Lk),igr2ik(Nk_x,Nk_y,Nk_z))
   wtk=1.d0/dble(Lk)
   ik=0
@@ -243,12 +248,15 @@ program officina
   file_name=reg(read_tns)//reg(file_w90_hr)  
   !+-  read the w90 output -> this is just to have the w90 hamiltonian in hand <-  -+!
   allocate(Hloc(Nso,Nso))
-  call read_w90_hr(R1,R2,R3,Hr_w90,Hloc,irvec,ndegen,trim(file_name),1,6,1)
+  !call read_w90_hr(R1,R2,R3,Hr_w90,Hloc,irvec,ndegen,trim(file_name),1,6,1)
+  call TB_hr_to_hk(R1,R2,R3,hk_w90,Hloc,trim(file_name),1,6,1,Nkvect)
+  !stop
+
   !
   nrpts=Nk_x*Nk_y
   write(*,*) 'nrpts',nrpts
-  deallocate(irvec); allocate(irvec(nrpts,3))
-  deallocate(ndegen); allocate(ndegen(nrpts));ndegen=1
+  if(allocated(irvec)) deallocate(irvec); allocate(irvec(nrpts,3))
+  if(allocated(ndegen)) deallocate(ndegen); allocate(ndegen(nrpts));ndegen=1
   !
   allocate(rpt_latt(nrpts,3))
   irvec=0;ir=0
@@ -1187,209 +1195,209 @@ program officina
 
 
   
-  inquire(file='hf_BLS_symm_final.out',exist=hf_in)  
-  if(hf_in) then
-     !
-     flen=file_length('hf_BLS_symm_final.out')
-     if(flen.eq.14) then
-        call read_array('hf_BLS_symm_final.out',x_iter)
-     end if
-     !
-  else
-     !
-     x_iter(1) = 0.1d0
-     x_iter(2) = 0.1d0
-     x_iter(3) = 1.8d0
-     !
-     x_iter(4) = 0.1d0
-     x_iter(5) = 0.1d0
-     !  
-     x_iter(6) = 0.4d0
-     x_iter(7) = -0.4d0
-     !
-     x_iter(8) = 0.1d0
-     x_iter(9) = 0.1d0
-     x_iter(10) = 1.8d0
-     !
-     x_iter(11) = 0.1d0
-     x_iter(12) = 0.1d0
-     !  
-     x_iter(13) = 0.4d0
-     x_iter(14) = -0.4d0     
-  end if
-  !
-  !
-  call save_array('hf_BLS_symm.init',x_iter)
-  !
-  !
-  uio=free_unit()
-  open(unit=uio,file='loop_phi_BLS_symm.out')
-  unit_err=free_unit()
-  open(unit=unit_err,file='err_BLS_symm.out')
-  !
-  err_hf=1.0
-  do ihf=1,Nhf
-     !
-     write(*,*) "BLS HF: loop nr",ihf,'/',Nhf
-     write(unit_err,*) err_hf
-     x_iter_=x_iter
-     !
-     H_Hf=HF_hamiltonian(x_iter)
-     H_Hf=H_Hf+Hk_toy
-     !
-     call fix_mu(H_Hf,delta_hf,mu_fix)
-     !
-     do i=1,3!
-        ir=ixr(i)
-        delta_hfr(:,:,ir)=0.d0
-        do ik=1,Lk
-           delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
-                delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
-        end do
-     end do
-     !
-     x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
-     x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
-     x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
-     !
-     x_iter(4) = delta_hfr(1,3,ir0)
-     x_iter(5) = delta_hfr(2,3,ir0)
-     !
-     x_iter(6) = dreal(delta_hfr(1,3,ir0)+delta_hfr(1,3,irR))
-     x_iter(7) = dreal(delta_hfr(2,3,ir0)+delta_hfr(2,3,irR))
-     !
-     x_iter(8) = delta_hfr(4,4,ir0)+delta_hfr(4+Norb,4+Norb,ir0)
-     x_iter(9) = delta_hfr(5,5,ir0)+delta_hfr(5+Norb,5+Norb,ir0)
-     x_iter(10) = delta_hfr(6,6,ir0)+delta_hfr(6+Norb,6+Norb,ir0)
-     !
-     x_iter(11) = delta_hfr(4,6,ir0)
-     x_iter(12) = delta_hfr(5,6,ir0)
-     !
-     x_iter(13) = dreal(delta_hfr(4,6,ir0)+delta_hfr(4,6,irL))
-     x_iter(14) = dreal(delta_hfr(5,6,ir0)+delta_hfr(5,6,irL))
-     !
-     x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_             
-     !     
-     H_Hf=HF_hamiltonian(x_iter)
-     H_Hf=H_Hf+Hk_toy
-     call fix_mu(H_Hf,delta_hf,mu_fix,eout)
+  ! inquire(file='hf_BLS_symm_final.out',exist=hf_in)  
+  ! if(hf_in) then
+  !    !
+  !    flen=file_length('hf_BLS_symm_final.out')
+  !    if(flen.eq.14) then
+  !       call read_array('hf_BLS_symm_final.out',x_iter)
+  !    end if
+  !    !
+  ! else
+  !    !
+  !    x_iter(1) = 0.1d0
+  !    x_iter(2) = 0.1d0
+  !    x_iter(3) = 1.8d0
+  !    !
+  !    x_iter(4) = 0.1d0
+  !    x_iter(5) = 0.1d0
+  !    !  
+  !    x_iter(6) = 0.4d0
+  !    x_iter(7) = -0.4d0
+  !    !
+  !    x_iter(8) = 0.1d0
+  !    x_iter(9) = 0.1d0
+  !    x_iter(10) = 1.8d0
+  !    !
+  !    x_iter(11) = 0.1d0
+  !    x_iter(12) = 0.1d0
+  !    !  
+  !    x_iter(13) = 0.4d0
+  !    x_iter(14) = -0.4d0     
+  ! end if
+  ! !
+  ! !
+  ! call save_array('hf_BLS_symm.init',x_iter)
+  ! !
+  ! !
+  ! uio=free_unit()
+  ! open(unit=uio,file='loop_phi_BLS_symm.out')
+  ! unit_err=free_unit()
+  ! open(unit=unit_err,file='err_BLS_symm.out')
+  ! !
+  ! err_hf=1.0
+  ! do ihf=1,Nhf
+  !    !
+  !    write(*,*) "BLS HF: loop nr",ihf,'/',Nhf
+  !    write(unit_err,*) err_hf
+  !    x_iter_=x_iter
+  !    !
+  !    H_Hf=HF_hamiltonian(x_iter)
+  !    H_Hf=H_Hf+Hk_toy
+  !    !
+  !    call fix_mu(H_Hf,delta_hf,mu_fix)
+  !    !
+  !    do i=1,3!
+  !       ir=ixr(i)
+  !       delta_hfr(:,:,ir)=0.d0
+  !       do ik=1,Lk
+  !          delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
+  !               delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
+  !       end do
+  !    end do
+  !    !
+  !    x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
+  !    x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
+  !    x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
+  !    !
+  !    x_iter(4) = delta_hfr(1,3,ir0)
+  !    x_iter(5) = delta_hfr(2,3,ir0)
+  !    !
+  !    x_iter(6) = dreal(delta_hfr(1,3,ir0)+delta_hfr(1,3,irR))
+  !    x_iter(7) = dreal(delta_hfr(2,3,ir0)+delta_hfr(2,3,irR))
+  !    !
+  !    x_iter(8) = delta_hfr(4,4,ir0)+delta_hfr(4+Norb,4+Norb,ir0)
+  !    x_iter(9) = delta_hfr(5,5,ir0)+delta_hfr(5+Norb,5+Norb,ir0)
+  !    x_iter(10) = delta_hfr(6,6,ir0)+delta_hfr(6+Norb,6+Norb,ir0)
+  !    !
+  !    x_iter(11) = delta_hfr(4,6,ir0)
+  !    x_iter(12) = delta_hfr(5,6,ir0)
+  !    !
+  !    x_iter(13) = dreal(delta_hfr(4,6,ir0)+delta_hfr(4,6,irL))
+  !    x_iter(14) = dreal(delta_hfr(5,6,ir0)+delta_hfr(5,6,irL))
+  !    !
+  !    x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_             
+  !    !     
+  !    H_Hf=HF_hamiltonian(x_iter)
+  !    H_Hf=H_Hf+Hk_toy
+  !    call fix_mu(H_Hf,delta_hf,mu_fix,eout)
      
-     !+- double counting term -+!
-     Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
-     Eout=Eout-2*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
-     !
-     Eout=Eout + 2.d0*Vcell*(abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0)
-     Eout=Eout + 2.d0*Vcell*(abs(x_iter(6)-x_iter(4))**2.d0+abs(x_iter(7)-x_iter(5))**2.d0)
-     !
-     Eout=Eout-Ucell*0.25d0*(dreal(x_iter(8))**2.d0+dreal(x_iter(9))**2.d0+dreal(x_iter(10))**2.d0)
-     Eout=Eout-2*Vcell*(dreal(x_iter(8))*dreal(x_iter(10))+dreal(x_iter(9))*dreal(x_iter(10)))
-     !
-     Eout=Eout + 2.d0*Vcell*(abs(x_iter(11))**2.d0+abs(x_iter(12))**2.d0)
-     Eout=Eout + 2.d0*Vcell*(abs(x_iter(13)-x_iter(11))**2.d0+abs(x_iter(14)-x_iter(12))**2.d0)
-     !
-     ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
-     ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
-     write(uio, '(20F18.10)') dreal(x_iter(1:14)),Eout+mu_fix*ntot,Eout
-     err_hf=0.d0
-     do i=1,14
-        err_hf=err_hf+abs(x_iter(i)-x_iter_(i))**2.d0
-     end do
-     if(err_hf.lt.hf_conv) exit
-     !
-     !
-  end do
-  if(HF_solve) then
-     xr_iter=dreal(x_iter)
-     call fsolve(root_find_HF,xr_iter,tol=1.d-12)
-     x_iter=xr_iter 
-  end if
-  !
-  !
-  close(unit_err)
-  close(uio)
-  !
-  !
-  call save_array('hf_BLS_symm_final.out',x_iter)
-  !
-  H_Hf=HF_hamiltonian(x_iter)
-  H_Hf=H_Hf+Hk_toy
-  call fix_mu(H_Hf,delta_hf,mu_fix,eout)
+  !    !+- double counting term -+!
+  !    Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
+  !    Eout=Eout-2*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
+  !    !
+  !    Eout=Eout + 2.d0*Vcell*(abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0)
+  !    Eout=Eout + 2.d0*Vcell*(abs(x_iter(6)-x_iter(4))**2.d0+abs(x_iter(7)-x_iter(5))**2.d0)
+  !    !
+  !    Eout=Eout-Ucell*0.25d0*(dreal(x_iter(8))**2.d0+dreal(x_iter(9))**2.d0+dreal(x_iter(10))**2.d0)
+  !    Eout=Eout-2*Vcell*(dreal(x_iter(8))*dreal(x_iter(10))+dreal(x_iter(9))*dreal(x_iter(10)))
+  !    !
+  !    Eout=Eout + 2.d0*Vcell*(abs(x_iter(11))**2.d0+abs(x_iter(12))**2.d0)
+  !    Eout=Eout + 2.d0*Vcell*(abs(x_iter(13)-x_iter(11))**2.d0+abs(x_iter(14)-x_iter(12))**2.d0)
+  !    !
+  !    ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
+  !    ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
+  !    write(uio, '(20F18.10)') dreal(x_iter(1:14)),Eout+mu_fix*ntot,Eout
+  !    err_hf=0.d0
+  !    do i=1,14
+  !       err_hf=err_hf+abs(x_iter(i)-x_iter_(i))**2.d0
+  !    end do
+  !    if(err_hf.lt.hf_conv) exit
+  !    !
+  !    !
+  ! end do
+  ! if(HF_solve) then
+  !    xr_iter=dreal(x_iter)
+  !    call fsolve(root_find_HF,xr_iter,tol=1.d-12)
+  !    x_iter=xr_iter 
+  ! end if
+  ! !
+  ! !
+  ! close(unit_err)
+  ! close(uio)
+  ! !
+  ! !
+  ! call save_array('hf_BLS_symm_final.out',x_iter)
+  ! !
+  ! H_Hf=HF_hamiltonian(x_iter)
+  ! H_Hf=H_Hf+Hk_toy
+  ! call fix_mu(H_Hf,delta_hf,mu_fix,eout)
 
-  !+- plot real space hybridizations -+!
-  uio=free_unit()
-  open(unit=uio,file='hyb_TNS_VS_r_BLS_symm.out')
-  !allocate(obs(Nso*Nso))
-  obs=0.d0
-  do ir=1,nrpts
-     delta_hfr(:,:,ir)=0.d0
-     do ik=1,Lk
-        delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
-             delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
-     end do
-  end do
-  do ir=1,nr1d
-     Rlat=irvec1d(ir,1)*R1
-     iso=0
-     do i=1,Norb
-        do j=1,Norb
-           iso=iso+1
-           obs(iso) = delta_hfr(i,j,stride1D(ir))
-        end do
-     end do
-     !
-     write(uio,'(100F10.5)') Rlat(1),dreal(obs(:)),dreal(obs(:))
-     !
-  end do
-  close(uio)
+  ! !+- plot real space hybridizations -+!
+  ! uio=free_unit()
+  ! open(unit=uio,file='hyb_TNS_VS_r_BLS_symm.out')
+  ! !allocate(obs(Nso*Nso))
+  ! obs=0.d0
+  ! do ir=1,nrpts
+  !    delta_hfr(:,:,ir)=0.d0
+  !    do ik=1,Lk
+  !       delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
+  !            delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
+  !    end do
+  ! end do
+  ! do ir=1,nr1d
+  !    Rlat=irvec1d(ir,1)*R1
+  !    iso=0
+  !    do i=1,Norb
+  !       do j=1,Norb
+  !          iso=iso+1
+  !          obs(iso) = delta_hfr(i,j,stride1D(ir))
+  !       end do
+  !    end do
+  !    !
+  !    write(uio,'(100F10.5)') Rlat(1),dreal(obs(:)),dreal(obs(:))
+  !    !
+  ! end do
+  ! close(uio)
 
-  unit_in=free_unit()
-  open(unit=unit_in,file='TNS_bands_BLS_symm.out')
-  uio=free_unit()
-  open(uio,file='TNS_fat_BLS_symm.out')  
-  do ir=1,nrpts
-     call FT_q2r(rpt_latt(ir,:),Hr_toy(:,:,ir),H_hf)
-  end do
-  modk=0.d0
-  do i=1,3
-     delta_kpath=kpath(i+1,:)-kpath(i,:)
-     do ik=1,100
-        j=(i-1)*100 + ik
-        kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
-        modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
-        !
-        call FT_r2q(kpt_path(j,:),Hktmp,Hr_toy)
-        !
-        call eigh(Hktmp,ek_out)
-        !
-        Ta_fat=0.d0
-        do ispin=1,2
-           do iorb=1,2
-              iso=(ispin-1)*Norb+iorb
-              Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
-           end do
-           do iorb=4,5
-              iso=(ispin-1)*Norb+iorb
-              Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
-           end do
-        end do
-        Ni_fat=0.d0
-        do ispin=1,2
-           iorb=3
-           iso=(ispin-1)*Norb+iorb
-           Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0
-           iorb=6
-           iso=(ispin-1)*Norb+iorb
-           Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0           
-        end do
-        !
-        write(unit_in,'(30F18.10)') modk,ek_out-mu_fix
-        write(uio,'(30F18.10)') modk,Ta_fat,Ni_fat        
-        !
-     end do
-     !
-  end do
-  close(unit_in)
-  close(uio)
+  ! unit_in=free_unit()
+  ! open(unit=unit_in,file='TNS_bands_BLS_symm.out')
+  ! uio=free_unit()
+  ! open(uio,file='TNS_fat_BLS_symm.out')  
+  ! do ir=1,nrpts
+  !    call FT_q2r(rpt_latt(ir,:),Hr_toy(:,:,ir),H_hf)
+  ! end do
+  ! modk=0.d0
+  ! do i=1,3
+  !    delta_kpath=kpath(i+1,:)-kpath(i,:)
+  !    do ik=1,100
+  !       j=(i-1)*100 + ik
+  !       kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
+  !       modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
+  !       !
+  !       call FT_r2q(kpt_path(j,:),Hktmp,Hr_toy)
+  !       !
+  !       call eigh(Hktmp,ek_out)
+  !       !
+  !       Ta_fat=0.d0
+  !       do ispin=1,2
+  !          do iorb=1,2
+  !             iso=(ispin-1)*Norb+iorb
+  !             Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
+  !          end do
+  !          do iorb=4,5
+  !             iso=(ispin-1)*Norb+iorb
+  !             Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
+  !          end do
+  !       end do
+  !       Ni_fat=0.d0
+  !       do ispin=1,2
+  !          iorb=3
+  !          iso=(ispin-1)*Norb+iorb
+  !          Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0
+  !          iorb=6
+  !          iso=(ispin-1)*Norb+iorb
+  !          Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0           
+  !       end do
+  !       !
+  !       write(unit_in,'(30F18.10)') modk,ek_out-mu_fix
+  !       write(uio,'(30F18.10)') modk,Ta_fat,Ni_fat        
+  !       !
+  !    end do
+  !    !
+  ! end do
+  ! close(unit_in)
+  ! close(uio)
   
   stop
   
@@ -1401,7 +1409,7 @@ contains
 
   function root_find_HF(x) result(out_x)
     implicit none
-    real(8),dimension(:) :: x
+    real(8),dimension(:),intent(in) :: x
     real(8),dimension(size(x)) :: out_x
     complex(8),dimension(14) :: xhf,xhf_
     complex(8),dimension(Nso,Nso,Lk) :: H_Hf
