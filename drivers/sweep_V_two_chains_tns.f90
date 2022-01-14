@@ -833,59 +833,59 @@ program officina
      close(uio)
      !
      !+ BANDS -+!
-     unit_in=free_unit()
-     file_name="TNS_bands"//reg(txtfy(ivint,Npad=4))//".out"
-     file_name=trim(file_name)
-     open(unit=unit_in,file=file_name)
-     uio=free_unit()
-     file_name="TNS_fat"//reg(txtfy(ivint,Npad=4))//".out"
-     file_name=trim(file_name)
-     open(uio,file=file_name)  
-     do ir=1,nrpts
-        call FT_q2r(rpt_latt(ir,:),Hr_toy(:,:,ir),H_hf)
-     end do
-     modk=0.d0
-     do i=1,3
-        delta_kpath=kpath(i+1,:)-kpath(i,:)
-        do ik=1,100
-           j=(i-1)*100 + ik
-           kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
-           modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
-           !
-           call FT_r2q(kpt_path(j,:),Hktmp,Hr_toy)
-           !
-           call eigh(Hktmp,ek_out)
-           !
-           Ta_fat=0.d0
-           do ispin=1,2
-              do iorb=1,2
-                 iso=(ispin-1)*Norb+iorb
-                 Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
-              end do
-              do iorb=4,5
-                 iso=(ispin-1)*Norb+iorb
-                 Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
-              end do
-           end do
-           Ni_fat=0.d0
-           do ispin=1,2
-              iorb=3
-              iso=(ispin-1)*Norb+iorb
-              Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0
-              iorb=6
-              iso=(ispin-1)*Norb+iorb
-              Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0           
-           end do
-           !
-           write(unit_in,'(30F18.10)') modk,ek_out-mu_fix
-           write(uio,'(30F18.10)') modk,Ta_fat,Ni_fat        
-           !
-           !
-        end do
-        !
-     end do
-     close(unit_in)
-     close(uio)
+     ! unit_in=free_unit()
+     ! file_name="TNS_bands"//reg(txtfy(ivint,Npad=4))//".out"
+     ! file_name=trim(file_name)
+     ! open(unit=unit_in,file=file_name)
+     ! uio=free_unit()
+     ! file_name="TNS_fat"//reg(txtfy(ivint,Npad=4))//".out"
+     ! file_name=trim(file_name)
+     ! open(uio,file=file_name)  
+     ! do ir=1,nrpts
+     !    call FT_q2r(rpt_latt(ir,:),Hr_toy(:,:,ir),H_hf)
+     ! end do
+     ! modk=0.d0
+     ! do i=1,3
+     !    delta_kpath=kpath(i+1,:)-kpath(i,:)
+     !    do ik=1,100
+     !       j=(i-1)*100 + ik
+     !       kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
+     !       modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
+     !       !
+     !       call FT_r2q(kpt_path(j,:),Hktmp,Hr_toy)
+     !       !
+     !       call eigh(Hktmp,ek_out)
+     !       !
+     !       Ta_fat=0.d0
+     !       do ispin=1,2
+     !          do iorb=1,2
+     !             iso=(ispin-1)*Norb+iorb
+     !             Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
+     !          end do
+     !          do iorb=4,5
+     !             iso=(ispin-1)*Norb+iorb
+     !             Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
+     !          end do
+     !       end do
+     !       Ni_fat=0.d0
+     !       do ispin=1,2
+     !          iorb=3
+     !          iso=(ispin-1)*Norb+iorb
+     !          Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0
+     !          iorb=6
+     !          iso=(ispin-1)*Norb+iorb
+     !          Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0           
+     !       end do
+     !       !
+     !       write(unit_in,'(30F18.10)') modk,ek_out-mu_fix
+     !       write(uio,'(30F18.10)') modk,Ta_fat,Ni_fat        
+     !       !
+     !       !
+     !    end do
+     !    !
+     ! end do
+     ! close(unit_in)
+     ! close(uio)
   end do
 
   stop

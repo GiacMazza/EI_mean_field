@@ -12,10 +12,11 @@ FPP=
 #EXE=toy_tns_ei
 #EXE=tns_symmetry_breaking
 #EXE=two_chains_tns
+EXE=tns_6bands
 #EXE=two_chains_restric_hf
 #EXE=fulltwo_chains_tns
 #EXE=two_chains_cmplx
-EXE=sweep_V_two_chains_tns
+#EXE=sweep_V_two_chains_tns
 
 
 DIR=./drivers
@@ -37,9 +38,10 @@ LIBARGS=$(shell pkg-config --libs   dmft_tools)
 LIBARGS+=$(shell pkg-config --libs   scifor)
 
 
-INCARGS=-I/users/gmazza/gm_opt/dmft_tools/gnu/include -I/users/gmazza/gm_opt/scifor/gnu/include
-LIBARGS =-L/usr/lib64 -llapack -lblas -L/users/gmazza/gm_opt/dmft_tools/gnu/lib -L/users/gmazza/gm_opt/scifor/gnu/lib -ldmft_tools -lscifor
-
+scifor_DIR=$(HOME)/gm_opt/scifor/gnu/4.7.4
+dmft_tools_DIR=$(HOME)/gm_opt/dmft_tools/gnu/2.3.0-10-g6ae56d5
+INCARGS =  -I$(dmft_tools_DIR)/include -I$(scifor_DIR)/include
+LIBARGS =  -L$(dmft_tools_DIR)/lib   -L$(scifor_DIR)/lib -L/usr/lib64  -ldmft_tools  -lscifor -llapack -lblas 
 
 
 #$(FC) $(FPPFLAG) $(FFLAG) $(INCARGS) $(OBJS) $(DIR)/$(EXE).f90 -o $(DIREXE)/$(EXE)$(BRANCH) $(LIBARGS)
@@ -50,7 +52,7 @@ LIBARGS =-L/usr/lib64 -llapack -lblas -L/users/gmazza/gm_opt/dmft_tools/gnu/lib 
 
 
 FFLAG += -ffree-line-length-none  $(INCARGS) 
-#FFLAG+=-O0 -p -g -Wall -fbounds-check -fbacktrace -Wuninitialized
+FFLAG+=-O0 -p -g -Wall -fbounds-check -fbacktrace -Wuninitialized
 
 BRANCH=_$(shell git rev-parse --abbrev-ref HEAD)
 ifeq ($(BRANCH),_master)

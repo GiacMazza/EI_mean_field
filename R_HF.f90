@@ -23,6 +23,7 @@ MODULE HF_real
 
 
   complex(8),dimension(:,:,:),allocatable :: Hhf_tmp,delta_hf_tmp
+  logical :: tmp_print
 
 contains
 
@@ -482,7 +483,7 @@ contains
 
 
   !+- TMP K-SPACE ROUTINES -+!
-  subroutine fix_mu(Hhf,delta_hf,mu,eout) 
+  subroutine fix_mu(Hhf,delta_hf,mu,eout,iprint) 
     complex(8),dimension(Nso,Nso,Lk),intent(in) :: Hhf
     complex(8),dimension(Nso,Nso,Lk),intent(inout) :: delta_hf
     complex(8),dimension(Nso,Nso,Lk) :: Hhf_k,delta_hf_k
@@ -495,9 +496,13 @@ contains
     real(8) :: mu1,mu2
     real(8) :: eout_
     real(8),optional :: eout
+    logical,optional :: iprint
     !
     allocate(Hhf_tmp(Nso,Nso,Lk)); Hhf_tmp=Hhf
     allocate(delta_hf_tmp(Nso,Nso,Lk)); delta_hf_tmp=delta_hf
+
+    tmp_print=.false.
+    if(present(iprint)) tmp_print=iprint
 
     mu1=-10.d0
     mu2= 10.d0
@@ -516,11 +521,12 @@ contains
 
     !+- compute energy -+!
     if(present(eout)) then
+       eout=0.d0
        do ik=1,Lk
           Htmp(:,:,ik)=Hhf_tmp(:,:,ik)-mu*zeye(Nso)
-          call solve_HF_hamiltonian(Htmp,delta_hf_tmp,eout)
           !          write(987,'(10F18.10)') mu
        end do
+       call solve_HF_hamiltonian(Htmp,delta_hf_tmp,eout)
     end if
     !+------------------+!
     delta_hf=delta_hf_tmp
@@ -544,7 +550,7 @@ contains
           deltaN = deltaN + dreal(delta_hf_tmp(iso,iso,ik)*wtk(ik))
        end do
     end do
-    !write(531,'(10F18.10)') deltaN,Ndens,xmu
+    if(tmp_print) write(531,'(10F18.10)') deltaN,Ndens,xmu
     deltaN=deltaN-Ndens
   end function deltaN_fix
     
