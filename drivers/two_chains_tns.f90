@@ -1037,7 +1037,7 @@ program officina
      x_iter(5) = 0.1d0
      !  
      x_iter(6) = 0.4d0
-     x_iter(7) = -0.4d0
+     x_iter(7) = 0.4d0
      !
      x_iter(8) = 0.1d0
      x_iter(9) = 0.1d0
@@ -1047,7 +1047,7 @@ program officina
      x_iter(12) = 0.1d0
      !  
      x_iter(13) = -0.4d0
-     x_iter(14) = 0.4d0     
+     x_iter(14) = -0.4d0     
   end if
   !
   !
