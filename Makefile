@@ -13,6 +13,7 @@
 #EXE=toy_tns_ei
 #EXE=tns_symmetry_breaking
 EXE=two_chains_tns
+EXE=two_chains_dynamics
 #EXE=tns_6bands
 #EXE=two_chains_restric_hf
 #EXE=fulltwo_chains_tns

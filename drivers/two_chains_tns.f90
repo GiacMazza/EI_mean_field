@@ -468,6 +468,24 @@ program officina
      !
      !
   end do
+
+  !+- tmp debug denis
+  ik=1;ispin=1
+  uio=free_unit()
+  open(unit=uio,file='Hk_test.out')  
+  do iorb=1,6
+     write(uio,'(10F18.10)') dreal(Hk_toy(iorb,1:6,ik))
+  end do
+  write(uio,*)
+  write(uio,*)
+  do iorb=1,6
+     write(uio,'(10F18.10)') dimag(Hk_toy(iorb,1:6,ik))
+  end do
+
+  close(uio)
+  !+-----------------
+
+  
   !
   allocate(Hr_toy(Nso,Nso,nrpts))
   do ir=1,nrpts
@@ -479,7 +497,8 @@ program officina
   !    call FT_r2q(kpt_latt(ik,:),Hk_toy(:,:,ik),Hr_toy)
   ! end do  
   mu_fix=0.d0
-  call fix_mu(Hk_toy,delta_hf,mu_fix)  
+  call fix_mu(Hk_toy,delta_hf,mu_fix,eout)
+  write(*,*) 'mu_fix',mu_fix
   !
   allocate(delta_hfr(Nso,Nso,nrpts))
   do ir=1,nrpts
@@ -633,7 +652,18 @@ program officina
   do iso=1,14
      write(*,*) x_iter(iso)
   end do
-  !stop
+
+
+  ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
+  ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
+
+  uio=free_unit()
+  open(unit=uio,file='bare_energy.out')
+  write(uio, '(20F18.10)') dreal(x_iter(1:14)),Eout+mu_fix*ntot,Eout
+  close(uio)
+  
+  
+  stop
   !
   allocate(H_Hf(Nso,Nso,Lk))
   !
@@ -1046,8 +1076,8 @@ program officina
      x_iter(11) = 0.1d0
      x_iter(12) = 0.1d0
      !  
-     x_iter(13) = -0.4d0
-     x_iter(14) = -0.4d0     
+     x_iter(13) = 0.4d0
+     x_iter(14) = 0.4d0     
   end if
   !
   !
