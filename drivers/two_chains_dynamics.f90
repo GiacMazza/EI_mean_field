@@ -73,7 +73,7 @@ program officina
   type(rgb_color),dimension(2) :: color_bands
   character(len=1),dimension(4) :: kpoint_name
 
-  real(8) :: Eout
+  real(8) :: Eout,EoutHF,EoutLgr
 
 
 
@@ -724,6 +724,7 @@ program officina
         H_Hf=H_Hf+Hk_toy
         !
         call fix_mu(H_Hf,delta_hf,mu_fix,eout)
+        eoutHF=eout
         !
         do i=1,3
            ir=ixr(i)
@@ -766,17 +767,21 @@ program officina
         Eout=Eout + 2.d0*Vcell*(abs(x_iter(13)-x_iter(11))**2.d0+abs(x_iter(14)-x_iter(12))**2.d0)
         !
         !+- lagrange parameter term -+!
-        Eout=Eout-4d0*dreal(phi_sgn(1)*x_iter(6)*lgr_iter) 
-        Eout=Eout-4d0*dreal(phi_sgn(2)*x_iter(7)*lgr_iter) 
-        Eout=Eout-4d0*dreal(phi_sgn(3)*x_iter(13)*lgr_iter) 
-        Eout=Eout-4d0*dreal(phi_sgn(4)*x_iter(14)*lgr_iter)         
+        EoutLgr = 0d0
+        EoutLgr = EoutLgr-4d0*dreal(phi_sgn(1)*x_iter(6)*lgr_iter) 
+        EoutLgr = EoutLgr-4d0*dreal(phi_sgn(2)*x_iter(7)*lgr_iter) 
+        EoutLgr = EoutLgr-4d0*dreal(phi_sgn(3)*x_iter(13)*lgr_iter) 
+        EoutLgr = EoutLgr-4d0*dreal(phi_sgn(4)*x_iter(14)*lgr_iter)        
+        Eout=Eout+EoutLgr
+        ! write(546,'(10F18.10)') phi_sgn(1)*x_iter(6)*lgr_iter,phi_sgn(2)*x_iter(7)*lgr_iter
+        ! write(547,'(10F18.10)') phi_sgn(3)*x_iter(13)*lgr_iter,phi_sgn(4)*x_iter(14)*lgr_iter
         !
         ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
         ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
         !
         uio=free_unit()
         open(unit=uio,file='loop_fixed_order_parameter.out',status='old',position='append')
-        write(uio, '(30F18.10)') dreal(x_iter(1:14)),Eout+mu_fix*ntot,Eout,dreal(lgr_iter),dimag(lgr_iter)
+        write(uio, '(40F18.10)') x_iter(1:14),Eout+mu_fix*ntot,EoutHF+mu_fix*ntot,EoutLgr,dreal(lgr_iter),dimag(lgr_iter)
         close(uio)        
         !
         x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_
@@ -1096,14 +1101,14 @@ contains
        do jso_=1,Nso
           !
           jsys=idelta2ivec(iso,jso_,ik)
-          yout(iso) = yout(iso) + H_hf_dyn(jso,jso_)*yin(jsys)
+          yout(iso) = yout(iso) + H_hf_dyn(jso,jso_,ik)*yin(jsys)
           !
           jsys=idelta2ivec(jso_,jso,ik)          
-          yout(iso) = yout(iso) - H_hf_dyn(jso_,iso)*yin(jsys)
+          yout(iso) = yout(iso) - H_hf_dyn(jso_,iso,ik)*yin(jsys)
           !
        end do
     end do
-    yout=-xi*yout/(hbar_ev_ps*1d3) !+- here the time is measured in fs 
+    yout=-xi*yout!/(hbar_ev_ps*1d3) !+- here the time is measured in fs 
     !
   end function HF_eqs_of_motion
 
@@ -1141,14 +1146,14 @@ contains
           jorb=3; jso=(ispin-1)*Norb+jorb
           Hhf(jso,iso,ik) = -Vcell*x_iter(4)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
           Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(6)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + lgr*phi_sgn(1)*(1.d0+exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + conjg(lgr*phi_sgn(1))*(1.d0+exp(-xi*dot_product(R1,kpt_latt(ik,:))))
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
           iorb=2; iso=(ispin-1)*Norb+iorb          
           jorb=3; jso=(ispin-1)*Norb+jorb
           Hhf(jso,iso,ik) = -Vcell*x_iter(5)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
           Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(7)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + lgr*phi_sgn(2)*(1.d0+exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + conjg(lgr*phi_sgn(2))*(1.d0+exp(-xi*dot_product(R1,kpt_latt(ik,:))))
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
           !
@@ -1168,7 +1173,7 @@ contains
           jorb=6; jso=(ispin-1)*Norb+jorb
           Hhf(jso,iso,ik) = -Vcell*x_iter(11)*(1.d0-exp(xi*dot_product(R1,kpt_latt(ik,:))))
           Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(13)*exp(xi*dot_product(R1,kpt_latt(ik,:)))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + lgr*phi_sgn(3)*(1.d0+exp(xi*dot_product(R1,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + conjg(lgr*phi_sgn(3))*(1.d0+exp(xi*dot_product(R1,kpt_latt(ik,:))))
 
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
@@ -1176,7 +1181,7 @@ contains
           jorb=6; jso=(ispin-1)*Norb+jorb
           Hhf(jso,iso,ik) = -Vcell*x_iter(12)*(1.d0-exp(xi*dot_product(R1,kpt_latt(ik,:))))
           Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(14)*exp(xi*dot_product(R1,kpt_latt(ik,:)))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + lgr*phi_sgn(4)*(1.d0+exp(xi*dot_product(R1,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + conjg(lgr*phi_sgn(4))*(1.d0+exp(xi*dot_product(R1,kpt_latt(ik,:))))
 
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
