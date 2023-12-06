@@ -14,6 +14,7 @@
 #EXE=tns_symmetry_breaking
 EXE=two_chains_tns
 EXE=two_chains_dynamics
+#EXE=two_chains_energy_fixed_phase
 #EXE=tns_6bands
 #EXE=two_chains_restric_hf
 #EXE=fulltwo_chains_tns
