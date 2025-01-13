@@ -42,7 +42,7 @@ MODULE VARS_GLOBAL
   integer :: Nk_x,Nk_y,Nk_z
   integer,allocatable :: ik_stride(:,:),ik_stride_aux(:,:)  
   
-  integer :: comm,rank,ierr
+  integer :: comm,rank,ierr,mpiERR
   logical :: master
   character(len=100) :: init_HF,init_Hsb
 
@@ -82,6 +82,24 @@ contains
     ! stop
     !
   end subroutine get_global_vars
-
+  
+  subroutine stops(msg)
+    character(len=*),optional :: msg
+    character(len=200) :: msg_
+    
+    msg_='stoppati!'
+    if(present(msg)) then
+       if(len(msg).gt.200) then
+          msg_='stoppati!'
+       else          
+          msg_=msg
+       end if
+    end if
+    call MPI_BARRIER(comm,mpiERR)
+    if(master) write(*,*) msg_
+    stop
+  end subroutine stops
+  
+  
 
 END MODULE VARS_GLOBAL

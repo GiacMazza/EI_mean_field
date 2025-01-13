@@ -535,8 +535,7 @@ program officina
         end do
      end do
      !
-     write(unit_in,'(100F10.5)') Rlat(1),dreal(obs(:)),dreal(obs(:))
-
+     write(unit_in,'(100F10.5)') Rlat(1),dreal(obs(:)),dimag(obs(:))
      !
   end do
   ! 
@@ -632,8 +631,8 @@ program officina
   x_iter(4) = delta_hfr(1,3,ir0)
   x_iter(5) = delta_hfr(2,3,ir0)
   !
-  x_iter(6) = dreal(delta_hfr(1,3,ir0)+delta_hfr(1,3,irR))
-  x_iter(7) = dreal(delta_hfr(2,3,ir0)+delta_hfr(2,3,irR))
+  x_iter(6) = delta_hfr(1,3,irR)!dreal(delta_hfr(1,3,ir0)+delta_hfr(1,3,irR))
+  x_iter(7) = delta_hfr(2,3,irR)!dreal(delta_hfr(2,3,ir0)+delta_hfr(2,3,irR))
   !
   x_iter(8) = delta_hfr(4,4,ir0)+delta_hfr(4+Norb,4+Norb,ir0)
   x_iter(9) = delta_hfr(5,5,ir0)+delta_hfr(5+Norb,5+Norb,ir0)
@@ -642,8 +641,8 @@ program officina
   x_iter(11) = delta_hfr(4,6,ir0)
   x_iter(12) = delta_hfr(5,6,ir0)
   !
-  x_iter(13) = dreal(delta_hfr(4,6,ir0)+delta_hfr(4,6,irL))
-  x_iter(14) = dreal(delta_hfr(5,6,ir0)+delta_hfr(5,6,irL))
+  x_iter(13) = delta_hfr(4,6,irL)!dreal(delta_hfr(4,6,ir0)+delta_hfr(4,6,irL))
+  x_iter(14) = delta_hfr(4,6,irL)!dreal(delta_hfr(5,6,ir0)+delta_hfr(5,6,irL))
   !
   write(*,*) "HF optimization: bare parameters"
   do iso=1,14
@@ -660,7 +659,7 @@ program officina
   close(uio)
   
   
-  stop
+  !stop
   !
   allocate(H_Hf(Nso,Nso,Lk))
   !
@@ -797,11 +796,11 @@ program officina
      x_iter(2) = 0.1d0
      x_iter(3) = 1.8d0
      !
-     x_iter(4) = 0.1d0
-     x_iter(5) = 0.1d0
+     x_iter(4) = 0.1d0   !<c*_{Ta1,i} c_{Ni,1}>
+     x_iter(5) = 0.1d0   !<c*_{Ta2,i} c_{Ni,1}>
      !  
-     x_iter(6) = 0.0d0
-     x_iter(7) = 0.0d0
+     x_iter(6) = -0.1d0  !<c*_{Ta1,i+1} c_{Ni,1}>
+     x_iter(7) = -0.1d0  !<c*_{Ta1,i+2} c_{Ni,1}>
      !
      x_iter(8) = 0.1d0
      x_iter(9) = 0.1d0
@@ -810,8 +809,8 @@ program officina
      x_iter(11) = 0.1d0
      x_iter(12) = 0.1d0
      !  
-     x_iter(13) = 0.0d0
-     x_iter(14) = 0.0d0     
+     x_iter(13) = -0.1d0
+     x_iter(14) = -0.1d0     
      !
   end if
   !
@@ -851,8 +850,8 @@ program officina
      x_iter(4) = delta_hfr(1,3,ir0)
      x_iter(5) = delta_hfr(2,3,ir0)
      !
-     x_iter(6) = dreal(delta_hfr(1,3,ir0)+delta_hfr(1,3,irR))
-     x_iter(7) = dreal(delta_hfr(2,3,ir0)+delta_hfr(2,3,irR))
+     x_iter(6) = delta_hfr(1,3,irR)!dreal(delta_hfr(1,3,ir0)+delta_hfr(1,3,irR))
+     x_iter(7) = delta_hfr(2,3,irR)!dreal(delta_hfr(2,3,ir0)+delta_hfr(2,3,irR))
      !
      x_iter(8) = delta_hfr(4,4,ir0)+delta_hfr(4+Norb,4+Norb,ir0)
      x_iter(9) = delta_hfr(5,5,ir0)+delta_hfr(5+Norb,5+Norb,ir0)
@@ -861,28 +860,29 @@ program officina
      x_iter(11) = delta_hfr(4,6,ir0)
      x_iter(12) = delta_hfr(5,6,ir0)
      !
-     x_iter(13) = dreal(delta_hfr(4,6,ir0)+delta_hfr(4,6,irL))
-     x_iter(14) = dreal(delta_hfr(5,6,ir0)+delta_hfr(5,6,irL))
+     x_iter(13) = delta_hfr(4,6,irL)!dreal(delta_hfr(4,6,ir0)+delta_hfr(4,6,irL))
+     x_iter(14) = delta_hfr(4,6,irL)!dreal(delta_hfr(5,6,ir0)+delta_hfr(5,6,irL))
      !
      x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_             
      !     
-     H_Hf=HF_hamiltonian(x_iter)
+     H_Hf=HF_hamiltonian(x_iter) !da cambiare 
      H_Hf=H_Hf+Hk_toy
-     call fix_mu(H_Hf,delta_hf,mu_fix,eout)
-     !
+     call fix_mu(H_Hf,delta_hf,mu_fix,eout)     !
      
      !+- double counting term -+!
      Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
      Eout=Eout-2*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
      !
      Eout=Eout + 2.d0*Vcell*(abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0)
-     Eout=Eout + 2.d0*Vcell*(abs(x_iter(6)-x_iter(4))**2.d0+abs(x_iter(7)-x_iter(5))**2.d0)
+     Eout=Eout + 2.d0*Vcell*(abs(x_iter(6))**2.d0+abs(x_iter(7))**2.d0)
+     !Eout=Eout + 2.d0*Vcell*(abs(x_iter(6)-x_iter(4))**2.d0+abs(x_iter(7)-x_iter(5))**2.d0)
      !
      Eout=Eout-Ucell*0.25d0*(dreal(x_iter(8))**2.d0+dreal(x_iter(9))**2.d0+dreal(x_iter(10))**2.d0)
      Eout=Eout-2*Vcell*(dreal(x_iter(8))*dreal(x_iter(10))+dreal(x_iter(9))*dreal(x_iter(10)))
      !
      Eout=Eout + 2.d0*Vcell*(abs(x_iter(11))**2.d0+abs(x_iter(12))**2.d0)
-     Eout=Eout + 2.d0*Vcell*(abs(x_iter(13)-x_iter(11))**2.d0+abs(x_iter(14)-x_iter(12))**2.d0)
+     Eout=Eout + 2.d0*Vcell*(abs(x_iter(13))**2.d0+abs(x_iter(14))**2.d0)
+     !Eout=Eout + 2.d0*Vcell*(abs(x_iter(13)-x_iter(11))**2.d0+abs(x_iter(14)-x_iter(12))**2.d0)
      !
      ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
      ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
@@ -892,14 +892,6 @@ program officina
         err_hf=err_hf+abs(x_iter(i)-x_iter_(i))**2.d0
      end do
      if(err_hf.lt.hf_conv) exit
-     !
-     ! 
-     ! xr_iter=dreal(x_iter)
-     ! xr_iter=root_find_HF(xr_iter)
-     ! test=0.d0
-     ! forall(i=1:14) test=test+xr_iter(i)**2.d0
-     ! write(500,*) test
-     ! 
      ! 
   end do
   if(HF_solve) then
@@ -942,58 +934,12 @@ program officina
         end do
      end do
      !
-     write(uio,'(100F10.5)') Rlat(1),dreal(obs(:)),dreal(obs(:))
+     write(uio,'(100F10.5)') Rlat(1),dreal(obs(:)),dimag(obs(:))
      !
   end do
   close(uio)
-
-
-  ! modk=0.d0
-  ! do i=1,3
-  !    delta_kpath=kpath(i+1,:)-kpath(i,:)
-  !    do ik=1,100
-  !       j=(i-1)*100 + ik
-  !       kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
-  !       modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
-  !       !
-  !       Hktmp=0.d0
-  !       call FT_r2q(kpt_path(j,:),Hktmp,Hr_toy)
-  !       !
-  !       ek_out=0.0d0
-  !       call eigh(Hktmp,ek_out)
-  !       !
-  !       Ta_fat=0.d0
-  !       do ispin=1,2
-  !          do iorb=1,2
-  !             iso=(ispin-1)*Norb+iorb
-  !             Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
-  !          end do
-  !          do iorb=4,5
-  !             iso=(ispin-1)*Norb+iorb
-  !             Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
-  !          end do
-  !       end do
-  !       Ni_fat=0.d0
-  !       do ispin=1,2
-  !          iorb=3
-  !          iso=(ispin-1)*Norb+iorb
-  !          Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0
-  !          iorb=6
-  !          iso=(ispin-1)*Norb+iorb
-  !          Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0           
-  !       end do
-  !       !
-  !       write(uio,'(30F18.10)') modk,ek_out-mu_fix
-  !       write(unit_in,'(30F18.10)') modk,Ta_fat,Ni_fat        
-  !       !
-  !    end do
-  !    !
-  ! end do
-  ! close(uio)
-  ! close(unit_in)
-
-
-  
+  !
+  !
   unit_in=free_unit()
   open(unit=unit_in,file='TNS_bands_symm.out')
   uio=free_unit()
@@ -1060,21 +1006,21 @@ program officina
      x_iter(2) = 0.1d0
      x_iter(3) = 1.8d0
      !
-     x_iter(4) = 0.1d0
-     x_iter(5) = 0.1d0
+     x_iter(4) = 0.1d0+xi*0.1
+     x_iter(5) = 0.1d0-xi*0.1
      !  
-     x_iter(6) = 0.4d0
-     x_iter(7) = 0.4d0
+     x_iter(6) = -0.1d0+xi*0.1
+     x_iter(7) = -0.1d0-xi*0.1
      !
      x_iter(8) = 0.1d0
      x_iter(9) = 0.1d0
      x_iter(10) = 1.8d0
      !
-     x_iter(11) = 0.1d0
-     x_iter(12) = 0.1d0
+     x_iter(11) = 0.1d0+xi*0.1
+     x_iter(12) = 0.1d0-xi*0.1
      !  
-     x_iter(13) = 0.4d0
-     x_iter(14) = 0.4d0     
+     x_iter(13) = -0.1d0+xi*0.1
+     x_iter(14) = -0.1d0-xi*0.1     
   end if
   !
   !
@@ -1106,7 +1052,8 @@ program officina
                 delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
         end do
      end do
-     !
+
+          !
      x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
      x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
      x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
@@ -1114,8 +1061,8 @@ program officina
      x_iter(4) = delta_hfr(1,3,ir0)
      x_iter(5) = delta_hfr(2,3,ir0)
      !
-     x_iter(6) = dreal(delta_hfr(1,3,ir0)+delta_hfr(1,3,irR))
-     x_iter(7) = dreal(delta_hfr(2,3,ir0)+delta_hfr(2,3,irR))
+     x_iter(6) = delta_hfr(1,3,irR)!dreal(delta_hfr(1,3,ir0)+delta_hfr(1,3,irR))
+     x_iter(7) = delta_hfr(2,3,irR)!dreal(delta_hfr(2,3,ir0)+delta_hfr(2,3,irR))
      !
      x_iter(8) = delta_hfr(4,4,ir0)+delta_hfr(4+Norb,4+Norb,ir0)
      x_iter(9) = delta_hfr(5,5,ir0)+delta_hfr(5+Norb,5+Norb,ir0)
@@ -1124,8 +1071,8 @@ program officina
      x_iter(11) = delta_hfr(4,6,ir0)
      x_iter(12) = delta_hfr(5,6,ir0)
      !
-     x_iter(13) = dreal(delta_hfr(4,6,ir0)+delta_hfr(4,6,irL))
-     x_iter(14) = dreal(delta_hfr(5,6,ir0)+delta_hfr(5,6,irL))
+     x_iter(13) = delta_hfr(4,6,irL)!dreal(delta_hfr(4,6,ir0)+delta_hfr(4,6,irL))
+     x_iter(14) = delta_hfr(4,6,irL)!dreal(delta_hfr(5,6,ir0)+delta_hfr(5,6,irL))
      !
      x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_             
      !     
@@ -1138,17 +1085,17 @@ program officina
      Eout=Eout-2*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
      !
      Eout=Eout + 2.d0*Vcell*(abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0)
-     Eout=Eout + 2.d0*Vcell*(abs(x_iter(6)-x_iter(4))**2.d0+abs(x_iter(7)-x_iter(5))**2.d0)
+     Eout=Eout + 2.d0*Vcell*(abs(x_iter(6))**2.d0+abs(x_iter(7))**2.d0)
      !
      Eout=Eout-Ucell*0.25d0*(dreal(x_iter(8))**2.d0+dreal(x_iter(9))**2.d0+dreal(x_iter(10))**2.d0)
      Eout=Eout-2*Vcell*(dreal(x_iter(8))*dreal(x_iter(10))+dreal(x_iter(9))*dreal(x_iter(10)))
      !
      Eout=Eout + 2.d0*Vcell*(abs(x_iter(11))**2.d0+abs(x_iter(12))**2.d0)
-     Eout=Eout + 2.d0*Vcell*(abs(x_iter(13)-x_iter(11))**2.d0+abs(x_iter(14)-x_iter(12))**2.d0)
+     Eout=Eout + 2.d0*Vcell*(abs(x_iter(13))**2.d0+abs(x_iter(14))**2.d0)
      !
      ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
      ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
-     write(uio, '(20F18.10)') dreal(x_iter(1:14)),Eout+mu_fix*ntot,Eout
+     write(uio, '(50F18.10)') dreal(x_iter(1:14)),dimag(x_iter(1:14)),Eout+mu_fix*ntot,Eout
      err_hf=0.d0
      do i=1,14
         err_hf=err_hf+abs(x_iter(i)-x_iter_(i))**2.d0
@@ -1203,7 +1150,7 @@ program officina
         end do
      end do
      !
-     write(uio,'(100F10.5)') Rlat(1),dreal(obs(:)),dreal(obs(:))
+     write(uio,'(100F10.5)') Rlat(1),dreal(obs(:)),dimag(obs(:))
      !
   end do
   close(uio)
@@ -1643,7 +1590,7 @@ contains
   !   !
   ! end function root_find_inner_loop_free
   !
-  function HF_hamiltonian(x_iter) result(Hhf)
+  function HF_hamiltonian(x_iter) result(Hhf) !+da cambiare con il caso generale
     implicit none
     complex(8) :: x_iter(14)
     complex(8),dimension(Nso,Nso,Lk) :: Hhf
@@ -1667,14 +1614,16 @@ contains
           !
           iorb=1; iso=(ispin-1)*Norb+iorb          
           jorb=3; jso=(ispin-1)*Norb+jorb
-          Hhf(jso,iso,ik) = -Vcell*x_iter(4)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(6)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
+          Hhf(jso,iso,ik) = -Vcell*(x_iter(4)+x_iter(6)*exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          !Hhf(jso,iso,ik) = -Vcell*x_iter(4)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          !Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(6)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
           iorb=2; iso=(ispin-1)*Norb+iorb          
           jorb=3; jso=(ispin-1)*Norb+jorb
-          Hhf(jso,iso,ik) = -Vcell*x_iter(5)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(7)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
+          Hhf(jso,iso,ik) = -Vcell*(x_iter(5)+x_iter(7)*exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = -Vcell*x_iter(5)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(7)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
           !
@@ -1692,21 +1641,23 @@ contains
           !
           iorb=4; iso=(ispin-1)*Norb+iorb          
           jorb=6; jso=(ispin-1)*Norb+jorb
-          Hhf(jso,iso,ik) = -Vcell*x_iter(11)*(1.d0-exp(xi*dot_product(R1,kpt_latt(ik,:))))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(13)*exp(xi*dot_product(R1,kpt_latt(ik,:)))
+          Hhf(jso,iso,ik) = -Vcell*(x_iter(11)+x_iter(13)*exp(xi*dot_product(R1,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = -Vcell*x_iter(11)*(1.d0-exp(xi*dot_product(R1,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(13)*exp(xi*dot_product(R1,kpt_latt(ik,:)))
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
           iorb=5; iso=(ispin-1)*Norb+iorb          
           jorb=6; jso=(ispin-1)*Norb+jorb
-          Hhf(jso,iso,ik) = -Vcell*x_iter(12)*(1.d0-exp(xi*dot_product(R1,kpt_latt(ik,:))))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(14)*exp(xi*dot_product(R1,kpt_latt(ik,:)))
+          Hhf(jso,iso,ik) = -Vcell*(x_iter(12)+x_iter(14)*exp(xi*dot_product(R1,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = -Vcell*x_iter(12)*(1.d0-exp(xi*dot_product(R1,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(14)*exp(xi*dot_product(R1,kpt_latt(ik,:)))
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
        end do
     end do
     !
   end function HF_hamiltonian
-    
+  
 
 
   function HF_hamiltonian_ei(x_iter) result(Hhf)
