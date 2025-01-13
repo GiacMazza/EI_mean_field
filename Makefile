@@ -13,7 +13,7 @@
 #EXE=toy_tns_ei
 #EXE=tns_symmetry_breaking
 EXE=two_chains_tns
-EXE=two_chains_dynamics
+#EXE=two_chains_dynamics
 #EXE=two_chains_energy_fixed_phase
 #EXE=tns_6bands
 #EXE=two_chains_restric_hf
@@ -64,7 +64,7 @@ REV=$(shell git rev-parse HEAD)
 VER = 'character(len=41),parameter :: revision = "$(REV)"' > revision.inc
 
 
-OBJS=VARS_GLOBAL.o R_HF.o
+OBJS=RK_VIDE.o VARS_GLOBAL.o R_HF.o
 
 
 ##$ Extends the implicit support of the Makefile to .f90 files

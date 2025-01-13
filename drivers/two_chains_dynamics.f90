@@ -6,6 +6,7 @@ program officina
   USE VARS_GLOBAL
   USE HF_real
   !
+  USE RK_IDE
   USE MPI
   !
   !
@@ -136,11 +137,11 @@ program officina
   !+- the dynamics
   complex(8),dimension(:),allocatable :: psit
   integer :: Nt_aux,Ndyn,it,Nt
-  real(8) :: tstart,tstop,time
+  real(8) :: tstart,tstop,tstep,time
 
   integer,dimension(:,:),allocatable :: ivec2idelta
   integer,dimension(:,:,:),allocatable :: idelta2ivec
-  
+  real(8),dimension(:),allocatable :: t_grid,t_grid_aux
   
   !+- START MPI -+!
   call init_MPI()
@@ -208,7 +209,9 @@ program officina
   call parse_input_variable(lgr_fix_verbose,"lgr_fix_verbose","input.conf",default=0)
   call parse_input_variable(lgr_fix_phase,"lgr_fix_phase","input.conf",default=.false.)
 
-  
+  call parse_input_variable(tstart,"TSTART","input.conf",default=0.d0)
+  call parse_input_variable(tstop,"TSTOP","input.conf",default=0.1d0)
+  call parse_input_variable(tstep,"TSTEP","input.conf",default=1.d-3)
   !
   call get_global_vars
 
@@ -271,7 +274,6 @@ program officina
            do idim=1,3
               kpt_latt(ik,idim) = kpt_latt(ik,idim) + kxgrid(i)*Bk1(idim)+kygrid(j)*Bk3(idim)
            end do
-           write(300,*) kpt_latt(ik,:)
         end do
      end do
   end do
@@ -774,7 +776,7 @@ program officina
         H_Hf=H_Hf+Hk_toy
         !
         call fix_mu(H_Hf,delta_hf,mu_fix,eout)
-        eoutHF=eout
+        eoutHF=eout        
         !
         do i=1,3
            ir=ixr(i)
@@ -804,7 +806,14 @@ program officina
         !
         x_iter(13) = delta_hfr(4,6,ir0)+delta_hfr(4,6,irL)
         x_iter(14) = delta_hfr(5,6,ir0)+delta_hfr(5,6,irL)
-        !           
+        !
+        !
+        !
+        ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
+        ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
+        !
+        !
+        !
         Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
         Eout=Eout-2d0*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
         Eout=Eout + 2.d0*Vcell*(abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0)
@@ -826,20 +835,19 @@ program officina
         ! write(546,'(10F18.10)') phi_sgn(1)*x_iter(6)*lgr_iter,phi_sgn(2)*x_iter(7)*lgr_iter
         ! write(547,'(10F18.10)') phi_sgn(3)*x_iter(13)*lgr_iter,phi_sgn(4)*x_iter(14)*lgr_iter
         !
-        ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
-        ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
+
         !
         uio=free_unit()
         open(unit=uio,file='loop_fixed_order_parameter.out',status='old',position='append')
         write(uio, '(40F18.10)') x_iter(1:14),Eout+mu_fix*ntot,EoutHF+mu_fix*ntot,EoutLgr,dreal(lgr_iter),dimag(lgr_iter)
         close(uio)        
         !
-        x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_
         err_hf=0.d0
         do i=1,14
            err_hf=err_hf+abs(x_iter(i)-x_iter_(i))**2.d0
         end do
         if(err_hf.lt.hf_conv) exit
+        x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_
      end do
      open(unit=uio,file='loop_fixed_order_parameter.out',status='old',position='append')
      write(uio, '(30F18.10)')
@@ -858,8 +866,17 @@ program officina
   !
   if(fix_phi) stop
   
-  !+- the dynamics -+!
+  !+- the dynamics -+!  
+  Nt=nint((tstop-tstart)/tstep)
+  if(master) write(*,*) 'number of time steps Nt',Nt
+  Nt_aux=2*Nt+1
+  allocate(t_grid(Nt),t_grid_aux(Nt_aux))
+  !
+  t_grid = linspace(tstart,tstep*real(Nt-1,8),Nt)
+  t_grid_aux = linspace(tstart,0.5d0*tstep*real(Nt_aux-1,8),Nt_aux)
 
+
+  
   !+- here put the option to go to the HF equilibrium   
   Ndyn=size(delta_hf)
   allocate(psit(Ndyn)); psit=0d0
@@ -873,19 +890,38 @@ program officina
         end do
      end do
   end do
+  ! eoutHF=0d0
+  ! do ik=1,Lk
+  !    do iso=1,Nso
+  !       eoutHF = eoutHF + H_hf(iso,iso,ik)*delta_hf(iso,iso,ik)*wtk(ik) 
+  !       do jso=iso+1,Nso
+  !          eoutHF = eoutHF + 2d0*dreal(H_hf(iso,jso,ik)*delta_hf(iso,jso,ik))*wtk(ik) 
+  !       end do
+  !    end do
+  ! end do
+  ! write(436,*) eoutHF
 
   allocate(H_hf_dyn(Nso,Nso,Lk)); H_hf_dyn=0d0
   
   unit_io=free_unit()
-  if(master) open(unit=unit_io,file='TNS_dynamics.out')
+  if(master) then
+     open(unit=unit_io,file='TNS_dynamics.out')
+     close(unit_io)
+  end if
 
   do it=1,Nt-1
      !
      call set_HF_get_obs(psit,x_iter,eout)
-     !!+- set the HF hamiltonian     
+     !
+     if(master.and.(mod(it,20).eq.0)) then
+        unit_io=free_unit()
+        open(unit=unit_io,file='TNS_dynamics.out',status='old',position='append')
+        write(unit_io,'(20F18.10)') t_grid(it),x_iter(1),x_iter(6),x_iter(7),eout
+        close(unit_io)        
+     end if
 
      !
-     ! psit = RK_step(Ndyn,4,tstep,t_grid(it),psit,HF_eqs_of_motion)
+     psit = RK_step(Ndyn,4,tstep,t_grid(it),psit,HF_eqs_of_motion)
      !     
   end do
   
@@ -893,10 +929,10 @@ program officina
   !
 contains
 
-  subroutine set_HF_get_obs(y,x_iter,eout)
+  subroutine set_HF_get_obs(y,x_iter_dyn,eout)
     implicit none
-    complex(8),intent(inout)  :: x_iter(14)
-    real(8),intent(inout)     :: eout
+    complex(8),intent(out)  :: x_iter_dyn(14)
+    real(8),intent(out)     :: eout
     complex(8),dimension(:),allocatable,intent(in) :: y
     complex(8),dimension(:,:,:),allocatable :: delta_hf_dyn
     integer :: iso,jso,ik,isys,i,ir
@@ -904,7 +940,7 @@ contains
     if(.not.allocated(y)) stop "psi2delta not allocated"
     if(size(y).ne.Ndyn)  stop "psi2delta size(y).ne.Ndyn"
     !
-    call psi2delta(y,delta_hf_dyn)
+    call psi2delta(y,delta_hf_dyn)    
     !
     do i=1,3
        ir=ixr(i)
@@ -915,28 +951,28 @@ contains
        end do
     end do
     !
-    x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
-    x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
-    x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
+    x_iter_dyn(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
+    x_iter_dyn(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
+    x_iter_dyn(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
     !
-    x_iter(4) = delta_hfr(1,3,ir0)
-    x_iter(5) = delta_hfr(2,3,ir0)
+    x_iter_dyn(4) = delta_hfr(1,3,ir0)
+    x_iter_dyn(5) = delta_hfr(2,3,ir0)
     !
-    x_iter(6) = delta_hfr(1,3,ir0)+delta_hfr(1,3,irR)
-    x_iter(7) = delta_hfr(2,3,ir0)+delta_hfr(2,3,irR)
+    x_iter_dyn(6) = delta_hfr(1,3,ir0)+delta_hfr(1,3,irR)
+    x_iter_dyn(7) = delta_hfr(2,3,ir0)+delta_hfr(2,3,irR)
     !
-    x_iter(8) = delta_hfr(4,4,ir0)+delta_hfr(4+Norb,4+Norb,ir0)
-    x_iter(9) = delta_hfr(5,5,ir0)+delta_hfr(5+Norb,5+Norb,ir0)
-    x_iter(10) = delta_hfr(6,6,ir0)+delta_hfr(6+Norb,6+Norb,ir0)
+    x_iter_dyn(8) = delta_hfr(4,4,ir0)+delta_hfr(4+Norb,4+Norb,ir0)
+    x_iter_dyn(9) = delta_hfr(5,5,ir0)+delta_hfr(5+Norb,5+Norb,ir0)
+    x_iter_dyn(10) = delta_hfr(6,6,ir0)+delta_hfr(6+Norb,6+Norb,ir0)
     !
-    x_iter(11) = delta_hfr(4,6,ir0)
-    x_iter(12) = delta_hfr(5,6,ir0)
+    x_iter_dyn(11) = delta_hfr(4,6,ir0)
+    x_iter_dyn(12) = delta_hfr(5,6,ir0)
     !
-    x_iter(13) = delta_hfr(4,6,ir0)+delta_hfr(4,6,irL)
-    x_iter(14) = delta_hfr(5,6,ir0)+delta_hfr(5,6,irL)
+    x_iter_dyn(13) = delta_hfr(4,6,ir0)+delta_hfr(4,6,irL)
+    x_iter_dyn(14) = delta_hfr(5,6,ir0)+delta_hfr(5,6,irL)
     !
     ! set the dynamical HF hamiltonian
-    H_hf_dyn=HF_hamiltonian(x_iter)
+    H_hf_dyn=HF_hamiltonian(x_iter_dyn)
     H_hf_dyn=H_hf_dyn+Hk_toy
     !
     eout=0d0
@@ -948,17 +984,17 @@ contains
           end do
        end do
     end do
-    Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
-    Eout=Eout-2d0*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
-    Eout=Eout + 2.d0*Vcell*(abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0)
-    Eout=Eout + 2.d0*Vcell*(abs(x_iter(6)-x_iter(4))**2.d0+abs(x_iter(7)-x_iter(5))**2.d0)
+    Eout=Eout-Ucell*0.25d0*(dreal(x_iter_dyn(1))**2.d0+dreal(x_iter_dyn(2))**2.d0+dreal(x_iter_dyn(3))**2.d0)
+    Eout=Eout-2d0*Vcell*(dreal(x_iter_dyn(1))*dreal(x_iter_dyn(3))+dreal(x_iter_dyn(2))*dreal(x_iter_dyn(3)))
+    Eout=Eout + 2.d0*Vcell*(abs(x_iter_dyn(4))**2.d0+abs(x_iter_dyn(5))**2.d0)
+    Eout=Eout + 2.d0*Vcell*(abs(x_iter_dyn(6)-x_iter_dyn(4))**2.d0+abs(x_iter_dyn(7)-x_iter_dyn(5))**2.d0)
     !
-    Eout=Eout-Ucell*0.25d0*(dreal(x_iter(8))**2.d0+dreal(x_iter(9))**2.d0+dreal(x_iter(10))**2.d0)
-    Eout=Eout-2d0*Vcell*(dreal(x_iter(8))*dreal(x_iter(10))+dreal(x_iter(9))*dreal(x_iter(10)))
+    Eout=Eout-Ucell*0.25d0*(dreal(x_iter_dyn(8))**2.d0+dreal(x_iter_dyn(9))**2.d0+dreal(x_iter_dyn(10))**2.d0)
+    Eout=Eout-2d0*Vcell*(dreal(x_iter_dyn(8))*dreal(x_iter_dyn(10))+dreal(x_iter_dyn(9))*dreal(x_iter_dyn(10)))
     !
-    Eout=Eout + 2.d0*Vcell*(abs(x_iter(11))**2.d0+abs(x_iter(12))**2.d0)
-    Eout=Eout + 2.d0*Vcell*(abs(x_iter(13)-x_iter(11))**2.d0+abs(x_iter(14)-x_iter(12))**2.d0)
-    !
+    Eout=Eout + 2.d0*Vcell*(abs(x_iter_dyn(11))**2.d0+abs(x_iter_dyn(12))**2.d0)
+    Eout=Eout + 2.d0*Vcell*(abs(x_iter_dyn(13)-x_iter_dyn(11))**2.d0+abs(x_iter_dyn(14)-x_iter_dyn(12))**2.d0)
+    
   end subroutine set_HF_get_obs
 
 
@@ -1207,18 +1243,18 @@ contains
        jso = ivec2idelta(isys,2)
        ik  = ivec2idelta(isys,3)       
        !
-       yout(iso) = 0d0
+       yout(isys) = 0d0
        do jso_=1,Nso
           !
           jsys=idelta2ivec(iso,jso_,ik)
-          yout(iso) = yout(iso) + H_hf_dyn(jso,jso_,ik)*yin(jsys)
+          yout(isys) = yout(isys) + H_hf_dyn(jso,jso_,ik)*yin(jsys)
           !
           jsys=idelta2ivec(jso_,jso,ik)          
-          yout(iso) = yout(iso) - H_hf_dyn(jso_,iso,ik)*yin(jsys)
+          yout(isys) = yout(isys) - H_hf_dyn(jso_,iso,ik)*yin(jsys)
           !
        end do
     end do
-    yout=-xi*yout!/(hbar_ev_ps*1d3) !+- here the time is measured in fs 
+    yout=-xi*yout/(hbar_ev_ps*1d3) !+- here the time is measured in fs
     !
   end function HF_eqs_of_motion
 
