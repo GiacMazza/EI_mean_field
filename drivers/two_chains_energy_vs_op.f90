@@ -119,10 +119,10 @@ program officina
   integer :: lgr_fix_verbose
   logical :: lgr_fix_phase
 
-  real(8) :: phi_start,phi_end,phi_phase,dphi,ntot,test,err
+  real(8) :: phi_startX,phi_stopX,phi_startY,phi_stopY,phi_phase,dphi,ntot,test,err
   real(8) :: phase_start,phase_end,dphase
   real(8),dimension(:),allocatable :: mod_phi,varphi
-  integer :: Nphi,Nphi_phase
+  integer :: Nop_x,Nop_y
   integer :: ixr(3)
   !
   real(8),dimension(4) :: phi_sgn
@@ -130,7 +130,7 @@ program officina
   real(8),dimension(2) :: lgr_iter_tmp
   real(8),dimension(1) :: lgr_iter_tmp_
 
-  complex(8),dimension(:),allocatable :: phi_list
+  complex(8),dimension(:,:),allocatable :: phi_list
   !
 
   !+- the dynamics
@@ -186,8 +186,6 @@ program officina
   call parse_input_variable(w0gap,"w0gap","input.conf",default=0.0d0)
   call parse_input_variable(hybloc,"hybloc","input.conf",default=0.d0)
   call parse_input_variable(fix_phi,"fix_phi","input.conf",default=.false.)
-  call parse_input_variable(phi_start,"phi_start","input.conf",default=0.01d0)
-  call parse_input_variable(phi_end,"phi_end","input.conf",default=0.2d0)
 
   call parse_input_variable(phase_start,"phase_start","input.conf",default=0.01d0)
   call parse_input_variable(phase_end,"phase_end","input.conf",default=0.2d0)
@@ -195,12 +193,16 @@ program officina
   
   call parse_input_variable(phi_phase,"phi_phase","input.conf",default=0d0)
 
-  call parse_input_variable(Nphi,"Nphi","input.conf",default=1)
-  call parse_input_variable(Nphi_phase,"Nphi_phase","input.conf",default=1)
-
+  call parse_input_variable(Nop_x,"Nop_x","input.conf",default=1)
+  call parse_input_variable(Nop_y,"Nop_y","input.conf",default=1)  
+  call parse_input_variable(phi_startX,"phi_startX","input.conf",default=1.d-3)
+  call parse_input_variable(phi_stopX,"phi_endX","input.conf",default=0.2d0)
+  !
+  call parse_input_variable(phi_startY,"phi_startX","input.conf",default=1.d-3)
+  call parse_input_variable(phi_stopY,"phi_endX","input.conf",default=0.2d0)
+  !
   call parse_input_variable(phi_sgn,"phi_sign","input.conf",default=[1.d0,-1.d0,-1.d0,1.d0])
-  
-  
+  !
   call parse_input_variable(hf_symm,"hf_symm","input.conf",default=.false.)
   call parse_input_variable(hf_solve,"hf_solve","input.conf",default=.false.)
 
@@ -644,80 +646,25 @@ program officina
   ! x_iter(14)=0.1d0
   !
   allocate(H_Hf(Nso,Nso,Lk))
+  
+  !+- create the list of OP -+!  
+  allocate(phi_list(Nop_x*Nop_y),2); phi_list=0d0
+  if(Nop_X>1) phiX=linspace(phi_startX,phi_stopX,Nop_x)
+  if(Nop_Y>1) phiY=linspace(phi_startY,phi_stopY,Nop_x)
 
-  ! x_iter_=x_iter
-  ! allocate(varphi(50)); varphi=linspace(0d0,0.5d0,50)
-  ! do j=1,50
-  !    x_iter_(6)=0.1d0*exp(xi*varphi(j))*phi_sgn(1)
-  !    x_iter_(7)=0.1d0*exp(xi*varphi(j))*phi_sgn(2)
-  !    x_iter_(13)=0.1d0*exp(xi*varphi(j))*phi_sgn(3)
-  !    x_iter_(14)=0.1d0*exp(xi*varphi(j))*phi_sgn(4)
-  !    !
-  !    H_Hf=HF_hamiltonian(x_iter_)
-  !    H_Hf=H_Hf+Hk_toy
-  !    !
-  !    call fix_mu(H_Hf,delta_hf,mu_fix,eout)     
-  !    do i=1,3
-  !       ir=ixr(i)
-  !       delta_hfr(:,:,ir)=0.d0
-  !       do ik=1,Lk
-  !          delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
-  !               delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
-  !       end do
-  !    end do
-  !    !
-  !    x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
-  !    x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
-  !    x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
-  !    !
-  !    x_iter(4) = delta_hfr(1,3,ir0)
-  !    x_iter(5) = delta_hfr(2,3,ir0)
-  !    !
-  !    x_iter(6) = delta_hfr(1,3,ir0)+delta_hfr(1,3,irR)
-  !    x_iter(7) = delta_hfr(2,3,ir0)+delta_hfr(2,3,irR)
-  !    !
-  !    x_iter(8) = delta_hfr(4,4,ir0)+delta_hfr(4+Norb,4+Norb,ir0)
-  !    x_iter(9) = delta_hfr(5,5,ir0)+delta_hfr(5+Norb,5+Norb,ir0)
-  !    x_iter(10) = delta_hfr(6,6,ir0)+delta_hfr(6+Norb,6+Norb,ir0)
-  !    !
-  !    x_iter(11) = delta_hfr(4,6,ir0)
-  !    x_iter(12) = delta_hfr(5,6,ir0)
-  !    !
-  !    x_iter(13) = delta_hfr(4,6,ir0)+delta_hfr(4,6,irL)
-  !    x_iter(14) = delta_hfr(5,6,ir0)+delta_hfr(5,6,irL)
-  !    !
-  !    write(700,'(20F18.10)') varphi(j),eout+mu_fix*4d0,x_iter(6),x_iter(7),x_iter(13),x_iter(14)
-  ! end do
-  ! stop
-  !
-  !
-  write(*,*) "HF optimization @ fixed phi: initial paramteres"
-  do ihf=1,size(x_iter)
-     write(*,*) x_iter(ihf)
-  end do
-  
-  !+- create the list of OP -+!
-  allocate(phi_list(Nphi*Nphi_phase));phi_list=0d0
-  if(allocated(varphi)) deallocate(varphi); allocate(varphi(Nphi_phase));
-  varphi=phase_start
-  if(Nphi_phase>1) varphi=linspace(phase_start,phase_end,Nphi_phase)
-  
-  allocate(mod_phi(Nphi));mod_phi=0d0
   uio=free_unit()
   open(unit=uio,file='list_phi.out')     
   ihf=0
-  do i=1,Nphi_phase        
-     if((-1d0)**i.lt.0d0) then
-        mod_phi=phi_start
-        if(Nphi>1) mod_phi=linspace(phi_start,phi_end,Nphi)
-     else
-        mod_phi=phi_start
-        if(Nphi>1) mod_phi=linspace(phi_end,phi_start,Nphi)
-     end if
-     do j=1,Nphi
+  do i=1,Nop_X
+     do j=1,Nop_Y
         ihf=ihf+1
-        phi_list(ihf) = mod_phi(j)*exp(xi*varphi(i)*pi)
-        write(uio,'(5F18.10)') phi_list(ihf)
+        phi_list(ihf,1)=phiX(i)
+        if(mod(i,2).ne.0) then
+           phi_list(ihf,2)=phiY(j) 
+        else
+           phi_list(ihf,2)=phiY(NopY+1-j) 
+        end if
+        write(uio,'(5F18.10)') phi_list(ihf,:)
      end do
   end do
   close(uio)
@@ -736,9 +683,7 @@ program officina
   open(unit=unit_io,file='ENE_VS_OP.out')
   close(unit_io)
   !
-  ! dphi = (phi_end-phi_start)/dble(Nphi)
-  ! xphi=(phi_start-dphi)*exp(xi*phi_phase*pi)
-  do ihf=1,size(phi_list)
+  do ihf=1,size(phi_list,1)
      !
      xphi=phi_list(ihf)
      write(*,*) 'fixed phi loop',ihf,xphi
@@ -755,17 +700,11 @@ program officina
         !
         x_iter_=x_iter
         !
-        !+- here I should fix the lgr params
-        if(lgr_fix_phase) then        
-           lgr_iter_tmp_(1)=abs(lgr_iter(1))
-           call fsolve(fix_lgr_params_,lgr_iter_tmp_,tol=1.d-8)                   
-           lgr_iter=lgr_iter_tmp_(1)*dreal(xphi)/abs(xphi)+xi*lgr_iter_tmp_(1)*dimag(xphi)/abs(xphi)
-        else
-           lgr_iter_tmp(1)=dreal(lgr_iter(1))
-           lgr_iter_tmp(2)=dimag(lgr_iter(1))
-           call fsolve(fix_lgr_params,lgr_iter_tmp,tol=1.d-8)
-           lgr_iter=lgr_iter_tmp(1)+xi*lgr_iter_tmp(2)
-        end if
+        !+- here I fix the lgr params
+        lgr_iter_tmp(1)=dreal(lgr_iter(1))
+        lgr_iter_tmp(2)=dimag(lgr_iter(1))
+        call fsolve(fix_lgr_params,lgr_iter_tmp,tol=1.d-8)
+        lgr_iter=lgr_iter_tmp(1)+xi*lgr_iter_tmp(2)
         !
         H_Hf=HF_hamiltonian(x_iter,lgr_iter)
         H_Hf=H_Hf+Hk_toy
@@ -958,66 +897,7 @@ contains
     !
   end subroutine set_HF_get_obs
   !
-  !
-  !
-  function fix_lgr_params2(x) result(out_x)
-    implicit none
-    real(8),dimension(:),intent(in)   :: x
-    real(8),dimension(size(x)) :: out_x    
-    complex(8),dimension(:),allocatable :: x_hf
-    complex(8),dimension(:,:,:),allocatable :: Hhf_lgr,delta_hfr_lgr
-    complex(8),dimension(:,:),allocatable :: dHK
-    real(8) :: xmu_lgr
-    complex(8) :: phi_tmp(4),lgrx(2),phi_out(2)
-    integer :: ik,iorb,jorb
-    real(8) :: eout
-    
-    if(size(x).ne.4) stop "size(x).ne.4  fix_lgr_params2"
-    allocate(x_hf(size(x_iter))); x_hf=x_iter
-    if(.not.allocated(Hk_toy)) stop "fix_lgr: Hk_toy not allocated"        
-    allocate(Hhf_lgr(Nso,Nso,Lk)); Hhf_lgr=0.d0           
-    !
-    lgrx(1)=x(1)+xi*x(2)
-    lgrx(2)=x(3)+xi*x(4)
-    !
-    Hhf_lgr = HF_hamiltonian(x_iter,lgrx)
-    Hhf_lgr = Hhf_lgr + Hk_toy
-    !
-    call fix_mu(Hhf_lgr,delta_hf,mu_fix)
-    !
-    allocate(delta_hfr_lgr(Nso,Nso,nrpts)); delta_hfr_lgr=0d0
-    do i=1,3
-       ir=ixr(i)
-       delta_hfr_lgr(:,:,ir)=0.d0
-       do ik=1,Lk
-          delta_hfr_lgr(:,:,ir)=delta_hfr_lgr(:,:,ir) + &
-               delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
-       end do
-    end do
-    !
-    phi_tmp(1) = delta_hfr_lgr(1,3,ir0)+delta_hfr_lgr(1,3,irR)
-    phi_tmp(2) = delta_hfr_lgr(2,3,ir0)+delta_hfr_lgr(2,3,irR)
-    !
-    phi_tmp(3) = delta_hfr_lgr(4,6,ir0)+delta_hfr_lgr(4,6,irL)
-    phi_tmp(4) = delta_hfr_lgr(5,6,ir0)+delta_hfr_lgr(5,6,irL)
-    !
-    phi_out(1) = phi_tmp(1)
-    phi_out(2) = phi_tmp(2)
-    !
-    phi_out = phi_out - xphi_vec
-    if(master.and.lgr_fix_verbose>0) then
-       write(*,'(10F18.10)') phi_tmp
-       write(*,'(10F18.10)') phi_out,lgrx
-       write(*,'(10F18.10)')
-    end if
-    !
-    out_x(1) = dreal(phi_out(1))
-    out_x(2) = dimag(phi_out(1))
-    out_x(3) = dreal(phi_out(2))
-    out_x(4) = dimag(phi_out(2))
-    !    
-  end function fix_lgr_params2
-  
+  !  
   !
   function fix_lgr_params(x) result(out_x)
     implicit none
@@ -1071,59 +951,6 @@ contains
     !    
   end function fix_lgr_params
 
-
-  function fix_lgr_params_(x) result(out_x)
-    implicit none
-    real(8),dimension(:),intent(in)   :: x
-    real(8),dimension(size(x)) :: out_x    
-    complex(8),dimension(:),allocatable :: x_hf
-    complex(8),dimension(:,:,:),allocatable :: Hhf_lgr,delta_hfr_lgr
-    complex(8),dimension(:,:),allocatable :: dHK
-    real(8) :: xmu_lgr
-    complex(8) :: phi_tmp(4),lgrx(2),phi_out
-    integer :: ik,iorb,jorb
-    real(8) :: eout
-    
-    if(size(x).ne.1) stop "size(x).ne.1  fix lgr params_"
-    allocate(x_hf(size(x_iter))); x_hf=x_iter
-    if(.not.allocated(Hk_toy)) stop "fix_lgr: Hk_toy not allocated"        
-    allocate(Hhf_lgr(Nso,Nso,Lk)); Hhf_lgr=0.d0           
-    !
-    lgrx = x(1)*dreal(xphi)/abs(xphi)+xi*x(1)*dimag(xphi)/abs(xphi)
-    !
-    Hhf_lgr = HF_hamiltonian(x_iter,lgrx)
-    Hhf_lgr = Hhf_lgr + Hk_toy
-    !
-    call fix_mu(Hhf_lgr,delta_hf,mu_fix)
-    !
-    allocate(delta_hfr_lgr(Nso,Nso,nrpts)); delta_hfr_lgr=0d0
-    do i=1,3
-       ir=ixr(i)
-       delta_hfr_lgr(:,:,ir)=0.d0
-       do ik=1,Lk
-          delta_hfr_lgr(:,:,ir)=delta_hfr_lgr(:,:,ir) + &
-               delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
-       end do
-    end do
-    !
-    phi_tmp(1) = delta_hfr_lgr(1,3,ir0)+delta_hfr_lgr(1,3,irR)
-    phi_tmp(2) = delta_hfr_lgr(2,3,ir0)+delta_hfr_lgr(2,3,irR)
-    !
-    phi_tmp(3) = delta_hfr_lgr(4,6,ir0)+delta_hfr_lgr(4,6,irL)
-    phi_tmp(4) = delta_hfr_lgr(5,6,ir0)+delta_hfr_lgr(5,6,irL)
-    !
-    phi_out = phi_tmp(1)!dot_product(phi_sgn,phi_tmp)/4d0
-    phi_out = phi_out - xphi
-    if(master.and.lgr_fix_verbose>0) then
-       write(*,'(10F18.10)') phi_tmp
-       write(*,'(10F18.10)') phi_out,lgrx
-       write(*,'(10F18.10)')
-    end if
-    !
-    out_x(1) = dreal(phi_out)
-    !out_x(2) = dimag(phi_out)
-    !    
-  end function fix_lgr_params_
 
   subroutine delta2psi(delta,y)
     integer :: ik,iso,jso,isys
@@ -1249,16 +1076,19 @@ contains
           !
           iorb=1; iso=(ispin-1)*Norb+iorb          
           jorb=3; jso=(ispin-1)*Norb+jorb
-          Hhf(jso,iso,ik) = -Vcell*x_iter(4)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(6)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + conjg(lgr(1)*phi_sgn(1))*(1.d0+exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = -Vcell*x_iter(4)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(6)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
+          !
+          Hhf(jso,iso,ik) = -Vcell*(x_iter(4)+x_iter(6)*exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + dreal(lgr(1))*phi_sgn(1)*(1.d0+exp(-xi*dot_product(R1,kpt_latt(ik,:))))
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
           iorb=2; iso=(ispin-1)*Norb+iorb          
           jorb=3; jso=(ispin-1)*Norb+jorb
-          Hhf(jso,iso,ik) = -Vcell*x_iter(5)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(7)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + conjg(lgr(2)*phi_sgn(2))*(1.d0+exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = -Vcell*(x_iter(5)+x_iter(7)*exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = -Vcell*x_iter(5)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(7)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))          
+          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + dreal(lgr(1))*phi_sgn(2)*(1.d0+exp(-xi*dot_product(R1,kpt_latt(ik,:))))
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
           !
@@ -1276,16 +1106,18 @@ contains
           !
           iorb=4; iso=(ispin-1)*Norb+iorb          
           jorb=6; jso=(ispin-1)*Norb+jorb
-          Hhf(jso,iso,ik) = -Vcell*x_iter(11)*(1.d0-exp(xi*dot_product(R1,kpt_latt(ik,:))))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(13)*exp(xi*dot_product(R1,kpt_latt(ik,:)))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + conjg(lgr(2)*phi_sgn(3))*(1.d0+exp(xi*dot_product(R1,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = -Vcell*(x_iter(11)+x_iter(13)*exp(xi*dot_product(R1,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = -Vcell*x_iter(11)*(1.d0-exp(xi*dot_product(R1,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(13)*exp(xi*dot_product(R1,kpt_latt(ik,:)))
+          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + dreal(lgr(1))*phi_sgn(3)*(1.d0+exp(xi*dot_product(R1,kpt_latt(ik,:))))
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
           iorb=5; iso=(ispin-1)*Norb+iorb          
           jorb=6; jso=(ispin-1)*Norb+jorb
-          Hhf(jso,iso,ik) = -Vcell*x_iter(12)*(1.d0-exp(xi*dot_product(R1,kpt_latt(ik,:))))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(14)*exp(xi*dot_product(R1,kpt_latt(ik,:)))
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + conjg(lgr(1)*phi_sgn(4))*(1.d0+exp(xi*dot_product(R1,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = -Vcell*(x_iter(12)+x_iter(14)*exp(xi*dot_product(R1,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = -Vcell*x_iter(12)*(1.d0-exp(xi*dot_product(R1,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(14)*exp(xi*dot_product(R1,kpt_latt(ik,:)))
+          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + dreal(lgr(1))*phi_sgn(4)*(1.d0+exp(xi*dot_product(R1,kpt_latt(ik,:))))
           !
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !

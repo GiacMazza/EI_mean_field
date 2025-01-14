@@ -642,7 +642,7 @@ program officina
   x_iter(12) = delta_hfr(5,6,ir0)
   !
   x_iter(13) = delta_hfr(4,6,irL)!dreal(delta_hfr(4,6,ir0)+delta_hfr(4,6,irL))
-  x_iter(14) = delta_hfr(4,6,irL)!dreal(delta_hfr(5,6,ir0)+delta_hfr(5,6,irL))
+  x_iter(14) = delta_hfr(5,6,irL)!dreal(delta_hfr(5,6,ir0)+delta_hfr(5,6,irL))
   !
   write(*,*) "HF optimization: bare parameters"
   do iso=1,14
@@ -657,130 +657,9 @@ program officina
   open(unit=uio,file='bare_energy.out')
   write(uio, '(20F18.10)') dreal(x_iter(1:14)),Eout+mu_fix*ntot,Eout
   close(uio)
-  
-  
-  !stop
   !
   allocate(H_Hf(Nso,Nso,Lk))
   !
-
-  
-  ! if(fix_phi) then
-  !    !
-  !    x_iter(1) = 0.d0
-  !    x_iter(2) = 0.d0
-  !    x_iter(3) = 2.d0
-  !    !
-  !    x_iter(4) = 0.05d0
-  !    x_iter(5) = 0.02d0
-  !    !
-  !    x_iter(6) = 0.d0
-  !    !
-  !    x_iter(7) = 0.d0
-  !    x_iter(8) = 0.d0
-  !    x_iter(9) = 0.d0
-  !    !
-  !    x_iter(10) = 0.5d0
-  !    x_iter(11) = 0.5d0
-  !    !
-  !    !
-  !    write(*,*) "HF optimization @ fixed phi: initial paramteres"
-  !    write(*,*) x_iter(1)
-  !    write(*,*) x_iter(2)
-  !    write(*,*) x_iter(3)
-  !    write(*,*) x_iter(4)
-  !    write(*,*) x_iter(5)
-  !    write(*,*) x_iter(6)
-  !    write(*,*) x_iter(7)
-  !    write(*,*) x_iter(8)
-  !    write(*,*) x_iter(9)
-  !    write(*,*)
-  !    write(*,*)
-  !    !
-  !    !
-  !    uio=free_unit()
-  !    open(unit=uio,file='loop_fixed_order_parameter.out')
-  !    unit_in=free_unit()
-  !    open(unit=unit_in,file='bands_VS_order_parameter.out')
-
-  !    dphi = (phi_end-phi_start)/dble(Nphi)
-  !    xphi=phi_start-dphi
-  !    do ihf=1,Nphi
-  !       !
-  !       xphi=xphi+dphi
-  !       write(*,*) 'fixed phi loop',ihf,xphi
-  !       xpi(1) =  xphi
-  !       xpi(2) = -xphi
-  !       x_iter(10:11) = xpi
-  !       do jhf=1,Nhf_
-  !          x_iter_=x_iter
-  !          !
-  !          H_Hf=HF_hamiltonian(x_iter)
-  !          H_Hf=H_Hf+Hk_toy
-  !          !
-  !          call fix_mu(H_Hf,delta_hf,mu_fix)
-  !          !
-  !          do i=1,2
-  !             ir=ixr(i)
-  !             delta_hfr(:,:,ir)=0.d0
-  !             do ik=1,Lk
-  !                delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
-  !                     delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
-  !             end do
-  !          end do
-  !          !
-  !          x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
-  !          x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
-  !          x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
-  !          !
-  !          x_iter(4) = delta_hfr(1,3,ir0)
-  !          x_iter(5) = delta_hfr(2,3,ir0)
-  !          !
-  !          x_iter(6) = delta_hfr(1,2,ir0)
-  !          !
-  !          x_iter(7) = delta_hfr(1,1,irR)
-  !          x_iter(8) = delta_hfr(2,2,irR)
-  !          x_iter(9) = delta_hfr(3,3,irR)
-  !          !
-  !          x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_             
-  !          !
-  !       end do
-  !       xtmp=x_iter(1:9)  
-  !       do i=1,9
-  !          xr_tmp(i) = dreal(xtmp(i))
-  !          xr_tmp(i+9) = dimag(xtmp(i))
-  !       end do
-  !       call fsolve(root_find_inner_loop_symm,xr_tmp,tol=1.d-12)
-  !       do i=1,9
-  !          xtmp(i) = xr_tmp(i)+xi*xr_tmp(i+9)
-  !       end do
-  !       x_iter(1:9)=xtmp;x_iter(10:11)=xpi
-
-  !       H_Hf=HF_hamiltonian(x_iter)
-  !       H_Hf=H_Hf+Hk_toy
-  !       call fix_mu(H_Hf,delta_hf,mu_fix,eout)
-  !       !
-  !       !+- double counting term -+! 
-  !       Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
-  !       Eout=Eout-2*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
-  !       !
-  !       Eout=Eout + 2.d0*Vcell*(abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0)
-  !       Eout=Eout + 2.d0*Vcell*(abs(x_iter(8)-x_iter(4))**2.d0+abs(x_iter(9)-x_iter(5))**2.d0)
-  !       !
-  !       Eout=Eout - Wcell*dreal(x_iter(1))*dreal(x_iter(2))
-  !       Eout=Eout + 2.d0*Wcell*abs(x_iter(6))
-  !       !        
-  !       !        
-  !       write(uio, '(20F18.10)') dreal(xpi),dreal(x_iter(1:9)),Eout+mu_fix*(dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))),Eout, &
-  !            dreal(delta_hfr(1,3,ir0)+delta_hfr(1,3,irR)),dreal(delta_hfr(2,3,ir0)+delta_hfr(2,3,irR))
-  !       !
-  !    end do
-  !    close(uio)
-  !    close(unit_in)     
-  !    stop
-  ! end if
-  !
-
   write(*,*) "starting the symmetric HF-loop"
   inquire(file='hf_symm_final.out',exist=hf_in)  
   if(hf_in) then
@@ -861,7 +740,7 @@ program officina
      x_iter(12) = delta_hfr(5,6,ir0)
      !
      x_iter(13) = delta_hfr(4,6,irL)!dreal(delta_hfr(4,6,ir0)+delta_hfr(4,6,irL))
-     x_iter(14) = delta_hfr(4,6,irL)!dreal(delta_hfr(5,6,ir0)+delta_hfr(5,6,irL))
+     x_iter(14) = delta_hfr(5,6,irL)!dreal(delta_hfr(5,6,ir0)+delta_hfr(5,6,irL))
      !
      x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_             
      !     
@@ -1072,7 +951,7 @@ program officina
      x_iter(12) = delta_hfr(5,6,ir0)
      !
      x_iter(13) = delta_hfr(4,6,irL)!dreal(delta_hfr(4,6,ir0)+delta_hfr(4,6,irL))
-     x_iter(14) = delta_hfr(4,6,irL)!dreal(delta_hfr(5,6,ir0)+delta_hfr(5,6,irL))
+     x_iter(14) = delta_hfr(5,6,irL)!dreal(delta_hfr(5,6,ir0)+delta_hfr(5,6,irL))
      !
      x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_             
      !     
