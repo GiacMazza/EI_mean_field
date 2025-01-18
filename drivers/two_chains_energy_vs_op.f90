@@ -112,7 +112,8 @@ program officina
   real(8) :: Ucell,Vcell,Wcell
   real(8) :: Evalence,Econduction,tconduction,tvalence,tt_hyb,nn_hyb,tn_hyb
   real(8) :: w0gap
-  logical :: use_fsolve  !+-> HF calculation with fixed order parameter <-+!
+  logical :: use_fsolve  
+  real(8) :: fs_tol
   logical :: hf_symm  !+-> HF calculation w/ symmetric order parameter <-+!
   logical :: HF_solve !+-> HF calculation with a root-finder routine  <-+
   logical :: hf_in
@@ -185,6 +186,7 @@ program officina
   call parse_input_variable(w0gap,"w0gap","input.conf",default=0.0d0)
   call parse_input_variable(hybloc,"hybloc","input.conf",default=0.d0)
   call parse_input_variable(use_fsolve,"use_fsolve","input.conf",default=.true.)
+  call parse_input_variable(fs_tol,"fs_tol","input.conf",1.d-8)
   !
   call parse_input_variable(theta_phi,"theta_phi","input.conf",default=0d0)
   call parse_input_variable(Nop,"Nop","input.conf",default=1)
@@ -663,6 +665,11 @@ program officina
   open(unit=unit_io,file='ENE_VS_OP.out')
   close(unit_io)
   !
+  unit_io=free_unit()
+  open(unit=unit_io,file='XITER_VS_OP.out')
+  close(unit_io)
+
+  !
   do ihf=1,size(phi_list,1)
      !
      !+- HERE: set the target OP -+!
@@ -686,7 +693,7 @@ program officina
         lgr_iter_tmp(1)=dreal(lgr_iter(1))
         lgr_iter_tmp(2)=dimag(lgr_iter(1))
         if(use_fsolve) then
-           call fsolve(fix_lgr_params,lgr_iter_tmp,tol=1.d-8,check=.false.)
+           call fsolve(fix_lgr_params,lgr_iter_tmp,tol=fs_tol,check=.false.)
         else
            call broyden1(fix_lgr_params,lgr_iter_tmp,tol=1.d-8)
         end if
@@ -1145,7 +1152,7 @@ contains
           Hhf(jso,iso,ik) = -Vcell*(x_iter(12)+x_iter(14)*exp(xi*dot_product(R1,kpt_latt(ik,:))))   !+- the interaction term
           Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + dreal(lgr(1))*phi_sgn(4)*(1.d0+exp(xi*dot_product(R1,kpt_latt(ik,:)))) !+- the CDSB l.p.
           Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - xi*dimag(lgr(1))*phi_sgn(4) !+- the TRSB l.p.
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - xi*dimag(lgr(1))*phi_sgn(4)*exp(xi*dot_product(R1,kpt_latt(ik,:))) !+- the TRSB l.p.
+          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - xi*dimag(lgr(1))*phi_sgn(4)*exp(xi*dot_product(R1,kpt_latt(ik,:))) !+- the TRSB l.p. irL
           !
           Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
           !
