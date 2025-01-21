@@ -131,6 +131,7 @@ program officina
   real(8),dimension(1) :: lgr_iter_tmp_
 
   real(8),dimension(:),allocatable :: phi_list
+  real(8) :: NTNT_loop_area,hop_phase
   !
 
   !+- the dynamics
@@ -201,7 +202,8 @@ program officina
   call parse_input_variable(hf_conv,"hf_conv","input.conf",default=1.d-10)
   call parse_input_variable(lgr_fix_verbose,"lgr_fix_verbose","input.conf",default=0)
   call parse_input_variable(lgr_fix_phase,"lgr_fix_phase","input.conf",default=[0d0,0d0])
-
+  !
+  call parse_input_variable(hop_phase,"hop_phase","input.conf",default=1.d-3)
   
   !
   call get_global_vars
@@ -299,13 +301,7 @@ program officina
         !
      end do
   end do  
-  ixr(1)=ir0;ixr(2)=irR;ixr(3)=irL
-  
-  allocate(Hr_w90(Nso,Nso,nrpts))
-  do ir=1,nrpts
-     call FT_q2r(rpt_latt(ir,:),Hr_w90(:,:,ir),Hk_w90)
-  end do
-
+  ixr(1)=ir0;ixr(2)=irR;ixr(3)=irL  
   !
   if(allocated(itmp)) deallocate(itmp);allocate(itmp(nrpts,1))  
   allocate(stride1D_(nrpts))
@@ -322,8 +318,6 @@ program officina
   allocate(irvec1d(nr1d,1));   allocate(stride1D(nr1d)); 
   irvec1d(:,1)=itmp(1:nr1d,1)
   stride1D=stride1D_(1:nr1d)
-
-  
   !
   R2=0.d0
   Bk1=0.d0;Bk2=0.d0;Bk3=0.d0
@@ -368,16 +362,16 @@ program officina
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))) 
-        Hk_toy(jso,iso,ik) = hybloc*(1.d0-exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase)) 
+        Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))!hybloc*(1.d0-exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
         !
         iorb=2
         jorb=3
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))) 
-        Hk_toy(jso,iso,ik) = hybloc*(1.d0-exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase)) 
+        Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))!hybloc*(1.d0-exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
         !
         !+- lower chain -+!
         !
@@ -397,7 +391,7 @@ program officina
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=-R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0-exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         !
         iorb=5
@@ -405,7 +399,7 @@ program officina
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=-R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0-exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         !
         !
@@ -538,66 +532,11 @@ program officina
            obs(iso) = delta_hfr(i,j,stride1D(ir))
         end do
      end do
-     !
      write(unit_in,'(100F10.5)') Rlat(1),dreal(obs(:)),dreal(obs(:))
-     !
   end do
-  ! 
-  !+- plot bare bands -+!
-  allocate(kpt_path(400,3))
-  allocate(ek_out(Nso))
-  allocate(Hktmp(Nso,Nso))
   !
-  uio=free_unit()
-  open(unit=uio,file='tns_bare_bands.out')
-  unit_in=free_unit()
-  open(unit_in,file='tns_fat_bare.tns')
-  allocate(Ta_fat(Nso),Ni_fat(Nso))
+  !+- init the order parameter -+!
   !
-  modk=0.d0
-  do i=1,3
-     delta_kpath=kpath(i+1,:)-kpath(i,:)
-     do ik=1,100
-        j=(i-1)*100 + ik
-        kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
-        modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
-        !
-        Hktmp=0.d0
-        call FT_r2q(kpt_path(j,:),Hktmp,Hr_toy)
-        !
-        ek_out=0.0d0
-        call eigh(Hktmp,ek_out)
-        !
-        Ta_fat=0.d0
-        do ispin=1,2
-           do iorb=1,2
-              iso=(ispin-1)*Norb+iorb
-              Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
-           end do
-           do iorb=4,5
-              iso=(ispin-1)*Norb+iorb
-              Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
-           end do
-        end do
-        Ni_fat=0.d0
-        do ispin=1,2
-           iorb=3
-           iso=(ispin-1)*Norb+iorb
-           Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0
-           iorb=6
-           iso=(ispin-1)*Norb+iorb
-           Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0           
-        end do
-        !
-        write(uio,'(30F18.10)') modk,ek_out-mu_fix
-        write(unit_in,'(30F18.10)') modk,Ta_fat,Ni_fat        
-        !
-     end do
-     !
-  end do
-  close(uio)
-  close(unit_in)
-  !  
   x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
   x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
   x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
@@ -622,23 +561,16 @@ program officina
   do iso=1,14
      write(*,*) x_iter(iso)
   end do
-
-
+  !
   ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
   ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
-
+  !
   uio=free_unit()
   open(unit=uio,file='bare_energy.out')
   write(uio, '(20F18.10)') dreal(x_iter(1:14)),Eout+mu_fix*ntot,Eout
   close(uio)
   !
-  ! x_iter(6)=0.1d0
-  ! x_iter(7)=0.1d0
-  ! x_iter(13)=0.1d0
-  ! x_iter(14)=0.1d0
-  !
-  allocate(H_Hf(Nso,Nso,Lk))
-  
+  allocate(H_Hf(Nso,Nso,Lk))  
   !+- create the list of OP -+!  
   allocate(phi_list(Nop)); phi_list=phi_abs_start
   if(Nop>1) phi_list=linspace(phi_abs_start,phi_abs_stop,Nop)
@@ -722,9 +654,6 @@ program officina
         !
         x_iter_=x_iter
         !
-        !+- here I fix the lgr params
-        ! lgr_iter_tmp(1)=dreal(lgr_iter(1))
-        ! lgr_iter_tmp(2)=dimag(lgr_iter(1))
         lgr_iter_tmp=lgr_fix_phase
         if(use_fsolve) then
            call fsolve(fix_lgr_params,lgr_iter_tmp,tol=fs_tol,check=.false.)
@@ -732,7 +661,6 @@ program officina
            call broyden1(fix_lgr_params,lgr_iter_tmp,tol=1.d-8)
         end if
         write(*,*) 'fsolve - ihf,jhf',ihf,jhf
-        !call stops
         lgr_iter=lgr_iter_tmp(1)+xi*lgr_iter_tmp(2)
         !
         H_Hf=HF_hamiltonian(x_iter,lgr_iter)
@@ -755,13 +683,11 @@ program officina
         x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
         x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
         !
-        x_iter(4) = delta_hfr(1,3,ir0) !+- computed
-        x_iter(6) = delta_hfr(1,3,irR) !+- computed
-
+        x_iter(4) = delta_hfr(1,3,ir0)                   !+- computed
+        x_iter(6) = delta_hfr(1,3,irR)                   !+- computed
         !+- enforce symmetries -+!
         x_iter(5) = -dreal(x_iter(6))-xi*dimag(x_iter(4))! delta_hfr(2,3,ir0)
         x_iter(7) = -dreal(x_iter(4))-xi*dimag(x_iter(6))! delta_hfr(2,3,irR)
-        !
         !
         x_iter(8) = x_iter(1)   !delta_hfr(4,4,ir0)+delta_hfr(4+Norb,4+Norb,ir0)
         x_iter(9) = x_iter(2)   !delta_hfr(5,5,ir0)+delta_hfr(5+Norb,5+Norb,ir0)
@@ -777,13 +703,11 @@ program officina
         Eout=Eout-2d0*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
         Eout=Eout + 2.d0*Vcell*(abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0)
         Eout=Eout + 2.d0*Vcell*(abs(x_iter(6))**2.d0+abs(x_iter(7))**2.d0)
-        !Eout=Eout + 2.d0*Vcell*(abs(x_iter(6)-x_iter(4))**2.d0+abs(x_iter(7)-x_iter(5))**2.d0)
         !
         Eout=Eout-Ucell*0.25d0*(dreal(x_iter(8))**2.d0+dreal(x_iter(9))**2.d0+dreal(x_iter(10))**2.d0)
         Eout=Eout-2d0*Vcell*(dreal(x_iter(8))*dreal(x_iter(10))+dreal(x_iter(9))*dreal(x_iter(10)))
         Eout=Eout + 2.d0*Vcell*(abs(x_iter(11))**2.d0+abs(x_iter(12))**2.d0)
         Eout=Eout + 2.d0*Vcell*(abs(x_iter(13))**2.d0+abs(x_iter(14))**2.d0)
-        ! Eout=Eout + 2.d0*Vcell*(abs(x_iter(13)-x_iter(11))**2.d0+abs(x_iter(14)-x_iter(12))**2.d0)
         !
         !+- lagrange parameter term -+!
         EoutLgr = 0d0
@@ -836,7 +760,6 @@ program officina
   close(unit_in)     
   !
   stop
-  !if(fix_phi) stop
   
   !+- the dynamics -+!
 
@@ -1198,23 +1121,6 @@ contains
     !
   end function HF_hamiltonian
   !
-  subroutine get_Hk_w90(kpoint,Hk) 
-    implicit none
-    real(8),dimension(3) :: kpoint
-    complex(8),dimension(Nso,Nso) :: Hk
-    integer :: ir,nrpts
-    real(8),dimension(3) :: Rlat
-    real(8) :: dotRk
-    !
-    nrpts=size(irvec,1)    
-    Hk=0.d0
-    do ir=1,nrpts
-       Rlat=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3
-       dotRk=dot_product(Rlat,kpoint)
-       Hk=Hk+Hr_w90(:,:,ir)*exp(xi*dotRK)/dble(ndegen(ir))
-    end do
-    !
-  end subroutine get_Hk_w90
   !
   subroutine build_mp_grid_2d(Nx,Ny)
     implicit none

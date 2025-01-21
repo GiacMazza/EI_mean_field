@@ -880,26 +880,27 @@ program officina
      end if
      !
   else
-
+     !+- seeds -+!
      x_iter(1) = 0.1d0
      x_iter(2) = 0.1d0
      x_iter(3) = 1.8d0
      !
      x_iter(4) = 0.1d0+xi*0.1
-     x_iter(5) = 0.1d0-xi*0.1
-     !  
      x_iter(6) = -0.1d0+xi*0.1
-     x_iter(7) = -0.1d0-xi*0.1
+     !+- symmetry enforced -+!
+     x_iter(5) = -dreal(x_iter(6))-xi*dimag(x_iter(4))! delta_hfr(2,3,ir0)
+     x_iter(7) = -dreal(x_iter(4))-xi*dimag(x_iter(6))! delta_hfr(2,3,irR)
      !
-     x_iter(8) = 0.1d0
-     x_iter(9) = 0.1d0
-     x_iter(10) = 1.8d0
+     x_iter(8) = x_iter(1)   !delta_hfr(4,4,ir0)+delta_hfr(4+Norb,4+Norb,ir0)
+     x_iter(9) = x_iter(2)   !delta_hfr(5,5,ir0)+delta_hfr(5+Norb,5+Norb,ir0)
+     x_iter(10) = x_iter(3)  !delta_hfr(6,6,ir0)+delta_hfr(6+Norb,6+Norb,ir0)
      !
-     x_iter(11) = 0.1d0+xi*0.1
-     x_iter(12) = 0.1d0-xi*0.1
-     !  
-     x_iter(13) = -0.1d0+xi*0.1
-     x_iter(14) = -0.1d0-xi*0.1     
+     x_iter(11) = x_iter(5) !delta_hfr(4,6,ir0)
+     x_iter(12) = x_iter(4) !delta_hfr(5,6,ir0)
+     !
+     x_iter(13) = x_iter(7) !delta_hfr(4,6,irL)
+     x_iter(14) = x_iter(6)  !delta_hfr(5,6,irL)
+     !
   end if
   !
   !
