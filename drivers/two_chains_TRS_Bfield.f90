@@ -24,7 +24,7 @@ program officina
   logical :: plot_w90_bands
   !
   real(8),dimension(3) :: ktest
-  real(8),dimension(:),allocatable :: ek_out
+  real(8),dimension(:),allocatable :: ek_out,ek_out_up,ek_out_down
 
   complex(8),dimension(:,:),allocatable :: Hsb
 
@@ -118,7 +118,7 @@ program officina
   real(8) :: phi_start,phi_end,dphi,ntot,test,err
   integer :: Nphi
   integer :: ixr(3)
-  real(8) :: gfactor
+  real(8) :: gfactor,Bfield
   !
 
   !+- START MPI -+!
@@ -140,45 +140,37 @@ program officina
   call parse_input_variable(read_tns,"READ_TNS","input.conf", &
        default='/home/mazza/project_data/TNS_EI/MALTE_DATA/K_12x12x3_B_120/')
   call parse_input_variable(plot_w90_bands,"plot_w90","input.conf",default=.true.)
-  ! call parse_input_variable(Nint,"Nint","input.conf",default=1)
-  ! call parse_input_variable(hartree,"Hartree","input.conf",default=.true.)  
-
-  ! call parse_input_variable(Ucut_off,"U_CUT","input.conf",default=20.d0)
-  ! call parse_input_variable(H1d,"H1D","input.conf",default=.false.)
-  ! call parse_input_variable(alphaU,"alphaU","input.conf",default=1.d0)
-
+  !
   call parse_input_variable(Vcell,"V","input.conf",default=1.d0)
   call parse_input_variable(Ucell,"U","input.conf",default=1.d0)
   call parse_input_variable(Wcell,"W","input.conf",default=0.d0)
-
-
+  !
   call parse_input_variable(Econduction,"Econduction","input.conf",default=1.7d0)
   call parse_input_variable(Evalence,"Evalence","input.conf",default=-0.9d0)
   call parse_input_variable(tconduction,"tconduction","input.conf",default=-0.8d0)
   call parse_input_variable(tvalence,"tvalence","input.conf",default=0.4d0)
-
+  !
   call parse_input_variable(tt_hyb,"tt_hyb","input.conf",default=0.0d0)
   call parse_input_variable(nn_hyb,"nn_hyb","input.conf",default=0.0d0)
   call parse_input_variable(tn_hyb,"tn_hyb","input.conf",default=0.0d0)
-
-  
+  !
   call parse_input_variable(w0gap,"w0gap","input.conf",default=0.0d0)
   call parse_input_variable(hybloc,"hybloc","input.conf",default=0.d0)
   call parse_input_variable(fix_phi,"fix_phi","input.conf",default=.false.)
   call parse_input_variable(phi_start,"phi_start","input.conf",default=0.5d0)
   call parse_input_variable(phi_end,"phi_end","input.conf",default=0.d0)
   call parse_input_variable(Nphi,"Nphi","input.conf",default=50)
-
-
+  !
   call parse_input_variable(hf_symm,"hf_symm","input.conf",default=.false.)
   call parse_input_variable(hf_solve,"hf_solve","input.conf",default=.false.)
-
   call parse_input_variable(hf_conv,"hf_conv","input.conf",default=1.d-10)
+  !
+  call parse_input_variable(gfactor,"gfactor","input.conf",default=2.d0)
+  call parse_input_variable(Bfield,"Bfield","input.conf",default=1.d0,comment='B-field in Tesla')
 
-  
+  !
   !
   call get_global_vars
-
 
   Econduction = Econduction + w0gap*0.5d0
   Evalence = Evalence - w0gap*0.5d0
@@ -328,13 +320,17 @@ program officina
         iorb=1
         iso=(ispin-1)*Norb+iorb
         Hk_toy(iso,iso,ik) = Econduction  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))
+        Hk_toy(iso,iso,ik) = Hk_toy(iso,iso,ik) + (-1d0)**dble(ispin)*Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield  !+- Zeeman field
+        !
         iorb=2
         iso=(ispin-1)*Norb+iorb
         Hk_toy(iso,iso,ik) = Econduction  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))
+        Hk_toy(iso,iso,ik) = Hk_toy(iso,iso,ik) + (-1d0)**dble(ispin)*Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield  !+- Zeeman field
         !
         iorb=3
         iso=(ispin-1)*Norb+iorb
         Hk_toy(iso,iso,ik) = Evalence  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))
+        Hk_toy(iso,iso,ik) = Hk_toy(iso,iso,ik) + (-1d0)**dble(ispin)*Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield  !+- Zeeman field
         !
         iorb=1
         jorb=3
@@ -357,13 +353,16 @@ program officina
         iorb=4
         iso=(ispin-1)*Norb+iorb
         Hk_toy(iso,iso,ik) = Econduction  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))
+        Hk_toy(iso,iso,ik) = Hk_toy(iso,iso,ik) + (-1d0)**dble(ispin)*Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield  !+- Zeeman field
         iorb=5
         iso=(ispin-1)*Norb+iorb
         Hk_toy(iso,iso,ik) = Econduction  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))
+        Hk_toy(iso,iso,ik) = Hk_toy(iso,iso,ik) + (-1d0)**dble(ispin)*Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield  !+- Zeeman field
         !
         iorb=6
         iso=(ispin-1)*Norb+iorb
         Hk_toy(iso,iso,ik) = Evalence  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))
+        Hk_toy(iso,iso,ik) = Hk_toy(iso,iso,ik) + (-1d0)**dble(ispin)*Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield  !+- Zeeman field
         !
         iorb=4
         jorb=6
@@ -538,10 +537,10 @@ program officina
   ! 
   !+- plot bare bands -+!
   allocate(kpt_path(400,3))
-  allocate(ek_out(Nso))
+  allocate(ek_out_up(Norb))
+  allocate(ek_out_down(Norb))  
   allocate(Hktmp(Nso,Nso))
-
-
+  !
   uio=free_unit()
   open(unit=uio,file='tns_bare_bands.out')
   unit_in=free_unit()
@@ -559,39 +558,42 @@ program officina
         Hktmp=0.d0
         call FT_r2q(kpt_path(j,:),Hktmp,Hr_toy)
         !
-        ek_out=0.0d0
-        call eigh(Hktmp,ek_out)
+        ek_out_up=0.0d0
+        call eigh(Hktmp(1:Norb,1:Norb),ek_out_up)
         !
-        Ta_fat=0.d0
-        do ispin=1,2
-           do iorb=1,2
-              iso=(ispin-1)*Norb+iorb
-              Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
-           end do
-           do iorb=4,5
-              iso=(ispin-1)*Norb+iorb
-              Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
-           end do
-        end do
-        Ni_fat=0.d0
-        do ispin=1,2
-           iorb=3
-           iso=(ispin-1)*Norb+iorb
-           Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0
-           iorb=6
-           iso=(ispin-1)*Norb+iorb
-           Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0           
-        end do
+        ek_out_down=0.0d0
+        call eigh(Hktmp(Norb+1:2*Norb,Norb+1:2*Norb),ek_out_down)
+
+        ! Ta_fat=0.d0
+        ! do ispin=1,2
+        !    do iorb=1,2
+        !       iso=(ispin-1)*Norb+iorb
+        !       Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
+        !    end do
+        !    do iorb=4,5
+        !       iso=(ispin-1)*Norb+iorb
+        !       Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
+        !    end do
+        ! end do
+        ! Ni_fat=0.d0
+        ! do ispin=1,2
+        !    iorb=3
+        !    iso=(ispin-1)*Norb+iorb
+        !    Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0
+        !    iorb=6
+        !    iso=(ispin-1)*Norb+iorb
+        !    Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0           
+        ! end do
         !
-        write(uio,'(30F18.10)') modk,ek_out-mu_fix
-        write(unit_in,'(30F18.10)') modk,Ta_fat,Ni_fat        
+        write(uio,'(30F18.10)') modk,ek_out_up-mu_fix,ek_out_down-mu_fix
+        !write(unit_in,'(30F18.10)') modk,Ta_fat,Ni_fat        
         !
      end do
      !
   end do
   close(uio)
   close(unit_in)
-
+  stop
 
   if(plot_w90_bands) then
      !+- PLOT w90 bands for comparison

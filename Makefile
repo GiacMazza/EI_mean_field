@@ -15,6 +15,7 @@
 EXE=two_chains_tns
 EXE=two_chains_TRS
 EXE=magnetic_phonons_single_chain
+EXE=two_chains_TRS_zeeman
 #EXE=two_chains_energy_vs_op
 #EXE=two_chains_dynamics
 #EXE=two_chains_energy_fixed_phase
