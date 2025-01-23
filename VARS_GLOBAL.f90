@@ -52,7 +52,7 @@ MODULE VARS_GLOBAL
   integer :: ir0,irL,irR,irU,irD
   integer,dimension(:),allocatable :: ir_mirror
 
-  real(8) :: hbarc_ev_nm,hbar_ev_ps
+  real(8) :: hbarc_ev_nm,hbar_ev_ps,flux_quantum_TAng2
 
 contains
 
@@ -78,6 +78,7 @@ contains
     Ndens=Ndens*dble(Nspin)
     hbarc_ev_nm = Planck_constant_in_eV_s/2.d0/pi*speed_of_light_in_vacuum*1.d9
     hbar_ev_ps=Planck_constant_in_eV_s/2.d0/pi*1.d12
+    flux_quantum_TAng2=1.d20/elementary_charge_over_h
     write(*,*) 'beta-temp eV',temp,beta
     ! stop
     !
