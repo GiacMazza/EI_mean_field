@@ -46,8 +46,12 @@ program officina
 
   complex(8),dimension(:),allocatable :: obs,obs_loc
   real(8) :: wmix
-  real(8),dimension(:,:),allocatable :: Uloc_TNS
-  complex(8),dimension(:,:,:),allocatable :: Uq_TNS,Vq_TNS,Ur_TNS,Ur_tmp
+  complex(8),dimension(:,:,:),allocatable :: Ur_TNS,Vr_TNS
+  complex(8),dimension(:,:),allocatable :: Uss_vs_R,UsAs_vs_R
+  complex(8),dimension(:,:),allocatable :: Uss_vs_q,UsAs_vs_q
+  
+  real(8) :: Uloc,Vloc
+  complex(8),dimension(:,:,:),allocatable :: Uq_TNS,Vq_TNS,Uq_log,Vq_log
   complex(8),dimension(:,:),allocatable :: check_Uloc
 
   real(8),dimension(2) :: Uq_read,Vq_read
@@ -56,8 +60,10 @@ program officina
   character(len=200) :: file_name
 
   integer,allocatable :: Nkvect(:)
-
-
+  real(8),dimension(:),allocatable :: kpt_xchain
+  real(8),dimension(:),allocatable :: kpt_xchain_log
+  integer :: Nkint
+  
   real(8),dimension(:),allocatable :: kx,ky,kz
   !
 
@@ -97,6 +103,8 @@ program officina
   real(8) :: alphaU,deltar,hybloc
   real(8),dimension(:),allocatable :: tk
   complex(8),dimension(:,:,:),allocatable :: x_iter,x_iter_
+  complex(8),dimension(:,:,:),allocatable :: hfint
+
   complex(8),dimension(:),allocatable :: xtmp,xtmp_
   real(8) :: xphi(2)
   complex(8),dimension(2) :: xpi,xpi_
@@ -191,7 +199,10 @@ program officina
   call parse_input_variable(lgr_fix_verbose,"lgr_fix_verbose","input.conf",default=0)
   call parse_input_variable(lgr_fix_phase,"lgr_fix_phase","input.conf",default=[0d0,0d0])
   !
-  call parse_input_variable(hop_phase,"hop_phase","input.conf",default=1.d-3)  
+  call parse_input_variable(hop_phase,"hop_phase","input.conf",default=1.d-3)
+  call parse_input_variable(ucut_off,"ucut_off","input.conf",default=1d0)
+  call parse_input_variable(Nkint,"Nkint","input.conf",default=300)
+
   !
   call get_global_vars
   !
@@ -508,7 +519,7 @@ program officina
      end do
      close(uio)
   end do
-
+  
   !+- print the bare energy
   ntot = 0.0
   do iso=1,Nso
@@ -537,44 +548,151 @@ program officina
      write(unit_in,'(100F10.5)') Rlat(1),dreal(obs(:)),dreal(obs(:))
   end do
 
-  !+-   
-  stop
+  !allocate HF-hamiltonian
+  allocate(H_Hf(Nso,Nso,Lk))  
+  !+- create the list of OP -+!  
+  allocate(phi_list(Nop)); phi_list=phi_abs_start
+  if(Nop>1) phi_list=linspace(phi_abs_start,phi_abs_stop,Nop)
+  uio=free_unit()
+  open(unit=uio,file='list_phi.out')
+  do i=1,Nop
+     write(uio,'(5F18.10)') phi_list(i)*cos(theta_phi*pi),phi_list(i)*sin(theta_phi*pi)
+  end do
+  close(uio)
   !
+  !init output files
+  uio=free_unit()
+  open(unit=uio,file='loop_fixed_order_parameter.out')  !+- general output vs iloop
+  close(uio)
+  unit_err=free_unit()
+  open(unit=unit_err,file='err_symm.out')   !+- error file 
+  close(unit_err)
+  unit_io=free_unit()
+  open(unit=unit_io,file='ENE_VS_OP.out')   !+- energy vs OP at convergence 
+  close(unit_io)
+  unit_io=free_unit()
+  open(unit=unit_io,file='XITER_VS_OP.out') !+- general output VS OP at convergence
+  close(unit_io)
   !
-  ! allocate(H_Hf(Nso,Nso,Lk))  
-  ! !+- create the list of OP -+!  
-  ! allocate(phi_list(Nop)); phi_list=phi_abs_start
-  ! if(Nop>1) phi_list=linspace(phi_abs_start,phi_abs_stop,Nop)
-  ! !
-  ! !
-  ! uio=free_unit()
-  ! open(unit=uio,file='list_phi.out')
-  ! do i=1,Nop
-  !    write(uio,'(5F18.10)') phi_list(i)*cos(theta_phi*pi),phi_list(i)*sin(theta_phi*pi)
-  ! end do
-  ! close(uio)
-  ! !
-  ! !
-  ! uio=free_unit()
-  ! open(unit=uio,file='loop_fixed_order_parameter.out')
-  ! close(uio)
-  ! !
-  ! !
-  ! unit_err=free_unit()
-  ! open(unit=unit_err,file='err_symm.out')
-  ! close(unit_err)
-  ! !
-  ! unit_io=free_unit()
-  ! open(unit=unit_io,file='ENE_VS_OP.out')
-  ! close(unit_io)
-  ! !
-  ! unit_io=free_unit()
-  ! open(unit=unit_io,file='XITER_VS_OP.out')
-  ! close(unit_io)
 
+  !+- long-range interaction
+  unit_io=free_unit()
+  open(unit=unit_io,file='U_VS_rpt.out') !+-
+  allocate(Uss_Vs_R(Nhf_opt,nrpts),UsAs_Vs_R(Nhf_opt,nrpts))
+  Uss_VS_R =0d0  !+- same-spin interaction
+  UsAs_VS_R=0d0  !+- opposite-spin interaction
+  do ir=1,nrpts
+     !
+     Uss_VS_R(1,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     Uss_VS_R(2,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     Uss_VS_R(3,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     Uss_VS_R(4,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     Uss_VS_R(5,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     !
+     Uss_VS_R(6,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     Uss_VS_R(7,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     Uss_VS_R(8,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     Uss_VS_R(9,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     Uss_VS_R(10,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     !
+  end do
+  UsAs_VS_R = Uss_VS_R
+  !
+  UsAs_VS_R(1,ir0) = 0d0
+  UsAs_VS_R(2,ir0) = 0d0
+  UsAs_VS_R(3,ir0) = 0d0
+  !
+  UsAs_VS_R(6,ir0) = 0d0
+  UsAs_VS_R(7,ir0) = 0d0
+  UsAs_VS_R(8,ir0) = 0d0
+  !
+  do ir=1,nrpts
+     write(unit_io,'(20F18.10)') rpt_latt(ir,1),dreal(Uss_VS_R(1:5,ir)),dreal(UsAs_VS_R(1:5,ir))
+  end do
+  close(unit_io)
+  ! stop
+  ! !
+  ! allocate(Ur_TNS(Nspin,Nspin,nrpts),Vr_TNS(Nspin,Nspin,nrpts))  
+  ! Ur_TNS=0d0
+  ! Vr_TNS=0d0 
+  ! do ir=1,nrpts
+  !    Vr_TNS(:,:,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+  !    Ur_TNS(:,:,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+  !    if(ir.eq.ir0) then
+  !       Ur_TNS(1,1,ir) = 0d0 
+  !       Ur_TNS(2,2,ir) = 0d0
+  !    end if
+  !    write(unit_io,'(10F18.10)') rpt_latt(ir,1),dreal(Ur_TNS(1,1,ir)), &
+  !         dreal(Ur_TNS(1,2,ir)),dreal(Vr_TNS(1,1,ir)),dreal(Vr_TNS(1,2,ir))
+  ! end do
+  ! close(unit_io)
+  !
+  allocate(Uss_VS_q(Nhf_opt,Lk)); Uss_VS_q=0d0
+  allocate(UsAs_VS_q(Nhf_opt,Lk)); UsAs_VS_q=0d0
+  open(unit=unit_io,file='Vq_VS_rpt.out') !+- 
+  do ik=1,Lk
+     call FT_r2q(kpt_latt(ik,:),Uq_TNS(:,:,ik),Ur_TNS)
+     write(unit_io,'(10F18.10)') kpt_latt(ik,1),Uq_TNS(1,1,ik),Uq_TNS(1,2,ik)
+  end do
+  close(unit_io)
+  stop
+  !RIPRENDI DA QUI
+  
+
+  
+  ! do ik=1,Lk
+  !    call FT_r2q(kpt_latt(ik,:),Uq_TNS(:,:,ik),Ur_TNS)
+  !    write(unit_io,'(10F18.10)') kpt_latt(ik,1),Uq_TNS(1,1,ik),Uq_TNS(1,2,ik)
+  ! end do
+
+  
+  ! allocate(Uq_TNS(Nspin,Nspin,Lk),Vq_TNS(Nspin,Nspin,Lk))
+  ! Uq_TNS=0d0
+  ! Vq_TNS=0d0
+  
+  allocate(hfint(Nspin,Lk,Nhf_opt)); hfint=0d0
+
+  do ik=1,Lk     
+     do ihf=1,Nhf_opt
+
+        
+        
+     end do
+  end do
+     
+
+
+  
+
+  !+ TMP : logspace integration
+  ! allocate(kpt_xchain(Lk)); kpt_xchain=kpt_latt(:,1)
+  ! allocate(kpt_xchain_log(Nkint))  !
+  ! kpt_xchain_log=logspace(1d-6,kpt_xchain(Lk),Nkint,base=exp(1.d0))
+  ! allocate(Uq_log(Nspin,Nspin,Nkint))
+  ! open(unit=unit_io,file='Vq_log.out') !+-   
+  ! do ik=1,Nkint
+  !    call FT_r2q(kpt_xchain_log(ik),Uq_log(:,:,ik),Ur_TNS)
+  !    write(unit_io,'(10F18.10)') kpt_xchain_log(ik),Uq_log(1,1,ik),Uq_log(1,2,ik)
+  ! end do
+  ! close(unit_io)
+  
+  stop
+  
+
+  ! do ik=1,Lk
+  !    Uq_TNS=d0
+  !    delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
+  !         delta_hf_dyn(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
+  ! end do
+
+  
+  
+  !+-   
+  !stop
 
   ! inquire(file='hf_BLS_free_final.out',exist=hf_in)  
   ! if(hf_in) then
+  !    !allocate(x_iter(Nspin,Lk,Nhf_opt)); x_iter=0d0
   !    !
   !    flen=file_length('hf_BLS_free_final.out')
   !    if(flen.eq.14) then

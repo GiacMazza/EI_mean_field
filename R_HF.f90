@@ -318,12 +318,13 @@ contains
   subroutine FT_r2q(kpoint,Fk,Fr) 
     implicit none
     real(8),dimension(3) :: kpoint
-    complex(8),dimension(Nso,Nso) :: Fk
-    complex(8),dimension(Nso,Nso,nrpts) :: Fr
+    complex(8),dimension(:,:) :: Fk
+    complex(8),dimension(:,:,:) :: Fr
     integer :: ir
     real(8),dimension(3) :: Rlat
     real(8) :: dotRk
     !
+    if(size(Fr,3).ne.nrpts) stop "(size(Fr,3).ne.nrpts)" 
     Fk=0.d0
     do ir=1,nrpts
        Rlat=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3
