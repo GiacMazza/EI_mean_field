@@ -60,8 +60,8 @@ program officina
   character(len=200) :: file_name
 
   integer,allocatable :: Nkvect(:)
-  real(8),dimension(:),allocatable :: kpt_xchain
-  real(8),dimension(:),allocatable :: kpt_xchain_log
+  ! real(8),dimension(:),allocatable :: kpt_xchain
+  ! real(8),dimension(:),allocatable :: kpt_xchain_log
   integer :: Nkint
   
   real(8),dimension(:),allocatable :: kx,ky,kz
@@ -103,7 +103,7 @@ program officina
   real(8) :: alphaU,deltar,hybloc
   real(8),dimension(:),allocatable :: tk
   complex(8),dimension(:,:,:),allocatable :: x_iter,x_iter_
-  complex(8),dimension(:,:,:),allocatable :: hfint
+  complex(8),dimension(:,:,:),allocatable :: hf_self
 
   complex(8),dimension(:),allocatable :: xtmp,xtmp_
   real(8) :: xphi(2)
@@ -473,6 +473,7 @@ program officina
   end do
   !
   mu_fix=0.d0
+  !+- change this too
   call fix_mu(Hk_toy,delta_hf,mu_fix,eout)
   write(*,*) 'mu_fix',mu_fix
   !
@@ -510,7 +511,7 @@ program officina
   
   !+- allocate and print the bare order parameters
   Nhf_opt=10
-  allocate(x_iter(Nspin,Lk,Nhf_opt)); x_iter=0d0
+  allocate(x_iter(Lk,Nhf_opt,Ns)); x_iter=0d0
   call deltak_to_xiter(delta_hf,x_iter)
   do ispin=1,Nspin
      open(unit=uio,file="bare_x_iter_spin"//reg(txtfy(ispin))//".out")
@@ -577,7 +578,6 @@ program officina
 
   !+- long-range interaction
   unit_io=free_unit()
-  open(unit=unit_io,file='U_VS_rpt.out') !+-
   allocate(Uss_Vs_R(Nhf_opt,nrpts),UsAs_Vs_R(Nhf_opt,nrpts))
   Uss_VS_R =0d0  !+- same-spin interaction
   UsAs_VS_R=0d0  !+- opposite-spin interaction
@@ -598,43 +598,65 @@ program officina
   end do
   UsAs_VS_R = Uss_VS_R
   !
-  UsAs_VS_R(1,ir0) = 0d0
-  UsAs_VS_R(2,ir0) = 0d0
-  UsAs_VS_R(3,ir0) = 0d0
+  Uss_VS_R(1,ir0) = 0d0
+  Uss_VS_R(2,ir0) = 0d0
+  Uss_VS_R(3,ir0) = 0d0
   !
-  UsAs_VS_R(6,ir0) = 0d0
-  UsAs_VS_R(7,ir0) = 0d0
-  UsAs_VS_R(8,ir0) = 0d0
+  Uss_VS_R(6,ir0) = 0d0
+  Uss_VS_R(7,ir0) = 0d0
+  Uss_VS_R(8,ir0) = 0d0
   !
+  open(unit=unit_io,file='U_VS_rpt.out') !+-
   do ir=1,nrpts
      write(unit_io,'(20F18.10)') rpt_latt(ir,1),dreal(Uss_VS_R(1:5,ir)),dreal(UsAs_VS_R(1:5,ir))
   end do
   close(unit_io)
-  ! stop
-  ! !
-  ! allocate(Ur_TNS(Nspin,Nspin,nrpts),Vr_TNS(Nspin,Nspin,nrpts))  
-  ! Ur_TNS=0d0
-  ! Vr_TNS=0d0 
-  ! do ir=1,nrpts
-  !    Vr_TNS(:,:,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
-  !    Ur_TNS(:,:,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
-  !    if(ir.eq.ir0) then
-  !       Ur_TNS(1,1,ir) = 0d0 
-  !       Ur_TNS(2,2,ir) = 0d0
-  !    end if
-  !    write(unit_io,'(10F18.10)') rpt_latt(ir,1),dreal(Ur_TNS(1,1,ir)), &
-  !         dreal(Ur_TNS(1,2,ir)),dreal(Vr_TNS(1,1,ir)),dreal(Vr_TNS(1,2,ir))
-  ! end do
-  ! close(unit_io)
   !
   allocate(Uss_VS_q(Nhf_opt,Lk)); Uss_VS_q=0d0
   allocate(UsAs_VS_q(Nhf_opt,Lk)); UsAs_VS_q=0d0
-  open(unit=unit_io,file='Vq_VS_rpt.out') !+- 
+  open(unit=unit_io,file='U_VS_kpt.out') !+- 
   do ik=1,Lk
-     call FT_r2q(kpt_latt(ik,:),Uq_TNS(:,:,ik),Ur_TNS)
-     write(unit_io,'(10F18.10)') kpt_latt(ik,1),Uq_TNS(1,1,ik),Uq_TNS(1,2,ik)
+     do ihf=1,Nhf_opt
+        call FTr2q(kpt_latt(ik,:),Uss_Vs_q(ihf,ik),Uss_VS_R(ihf,:))
+        call FTr2q(kpt_latt(ik,:),UsAs_Vs_q(ihf,ik),UsAs_VS_R(ihf,:))
+     end do
+     write(unit_io,'(10F18.10)') kpt_latt(ik,1),dreal(Uss_VS_q(1:5,ik)),dreal(UsAs_VS_q(1:5,ik))
   end do
   close(unit_io)
+
+  !+- now write a routine that gives the HF self-consistent fields
+  !allocate(hf_self(Nspin,Lk,Nhf_opt)); hf_self=0d0
+
+  allocate(hf_self(Nspin,Nhf_opt,Lk)); hf_self=0d0
+  !
+  do ik=1,Lk        
+     do ihf=1,Nhf
+        do ispin=1,Nspin
+           !
+           hf_self(ispin,ihf,ik)=0d0
+           !
+           do jk=1,Lk
+              ktmp=kxgrid(ik)-kxgrid(jk)
+              do while(ktmp.lt.kxgrid(1))
+                 ktmp=ktmp+1.d0
+              end do
+              do while(ktmp.gt.kxgrid(Lk))
+                 ktmp=ktmp-1.d0
+              end do
+              iik=1+(Lk-1)/2*nint(1-ktmp/kxgrid(1))
+              !
+              if(iik.lt.1.or.iik.gt.Lk) stop "(iik.lt.1.or.iik.gt.Lk)"              
+              !hf_self(ik,ihf,ispin) = -Uss_VS_q(ihf,iik)*x_iter(ispin,jk,ihf)
+              hf_self(ik,ihf,ispin) = -Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)
+              !+- this should be the best way of arranging index - fix x_iter
+              !
+           end do
+           !
+        end do        
+     end do
+  end do
+  
+  
   stop
   !RIPRENDI DA QUI
   
@@ -650,15 +672,11 @@ program officina
   ! Uq_TNS=0d0
   ! Vq_TNS=0d0
   
-  allocate(hfint(Nspin,Lk,Nhf_opt)); hfint=0d0
-
-  do ik=1,Lk     
-     do ihf=1,Nhf_opt
-
-        
-        
-     end do
-  end do
+  ! allocate(hfint(Nspin,Lk,Nhf_opt)); hfint=0d0
+  ! do ik=1,Lk     
+  !    do ihf=1,Nhf_opt
+  !    end do
+  ! end do
      
 
 

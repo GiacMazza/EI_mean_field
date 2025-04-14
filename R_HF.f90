@@ -16,7 +16,7 @@ MODULE HF_real
   public :: check_conv_latt
   public :: init_var_params_latt
   !
-  public :: FT_r2q
+  public :: FT_r2q,FTr2q
   public :: FT_q2r
   !
   public :: fix_mu
@@ -334,6 +334,26 @@ contains
     !
   end subroutine FT_r2q
 
+
+  subroutine FTr2q(kpoint,Fk,Fr) 
+    implicit none
+    real(8),dimension(3) :: kpoint
+    complex(8) :: Fk
+    complex(8),dimension(:) :: Fr
+    integer :: ir
+    real(8),dimension(3) :: Rlat
+    real(8) :: dotRk
+    !
+    if(size(Fr).ne.nrpts) stop "(size(Fr,3).ne.nrpts)" 
+    Fk=0.d0
+    do ir=1,nrpts
+       Rlat=irvec(ir,1)*R1+irvec(ir,2)*R2+irvec(ir,3)*R3
+       dotRk=dot_product(Rlat,kpoint)
+       Fk = Fk + Fr(ir)*exp(xi*dotRK)/dble(ndegen(ir))
+    end do
+    !
+  end subroutine FTr2q
+
   !
 
 
@@ -483,7 +503,7 @@ contains
 
 
 
-  !+- TMP K-SPACE ROUTINES -+!
+  !+- K-SPACE ROUTINES -+!
   subroutine fix_mu(Hhf,delta_hf,mu,eout,iprint) 
     complex(8),dimension(Nso,Nso,Lk),intent(in) :: Hhf
     complex(8),dimension(Nso,Nso,Lk),intent(inout) :: delta_hf
@@ -555,7 +575,82 @@ contains
     deltaN=deltaN-Ndens
   end function deltaN_fix
     
-  
+
+
+
+
+
+  ! subroutine HF_solver(Hhf,delta_hf,mu,eout,iprint) 
+  !   complex(8),dimension(Nso,Nso,Lk),intent(in) :: Hhf
+  !   complex(8),dimension(Nso,Nso,Lk),intent(inout) :: delta_hf
+  !   complex(8),dimension(Nso,Nso,Lk) :: Hhf_k,delta_hf_k
+  !   complex(8),dimension(Nso,Nso,Lk) :: Htmp
+
+  !   real(8),intent(inout) :: mu    
+  !   real(8),dimension(1) :: mu_,Nout
+  !   integer :: iter,ik,ir,im
+  !   real(8) :: x1,x2
+  !   real(8) :: mu1,mu2
+  !   real(8) :: eout_
+  !   real(8),optional :: eout
+  !   logical,optional :: iprint
+  !   !
+  !   allocate(Hhf_tmp(Nso,Nso,Lk)); Hhf_tmp=Hhf
+  !   allocate(delta_hf_tmp(Nso,Nso,Lk)); delta_hf_tmp=delta_hf
+
+  !   tmp_print=.false.
+  !   if(present(iprint)) tmp_print=iprint
+
+  !   mu1=-10.d0
+  !   mu2= 10.d0
+  !   ! do im=1,100
+  !   !    mu1=mu1-0.1
+  !   !    mu2=mu2+0.1
+  !   !    x1=deltaN_fix(mu1)
+  !   !    x2=deltaN_fix(mu2)
+  !   !    if(x1*x2.lt.0.d0) exit
+  !   ! end do
+    
+  !   !write(*,*) x1,x2
+  !   mu=brentq(deltaN_fix,mu1,mu2)
+  !   Nout=deltaN_fix(mu)
+  !   write(530,*) Nout,Ndens,mu
+
+  !   !+- compute energy -+!
+  !   if(present(eout)) then
+  !      eout=0.d0
+  !      do ik=1,Lk
+  !         Htmp(:,:,ik)=Hhf_tmp(:,:,ik)-mu*zeye(Nso)
+  !         !          write(987,'(10F18.10)') mu
+  !      end do
+  !      call solve_HF_hamiltonian(Htmp,delta_hf_tmp,eout)
+  !   end if
+  !   !+------------------+!
+  !   delta_hf=delta_hf_tmp
+  !   deallocate(delta_hf_tmp)
+  !   deallocate(Hhf_tmp)
+  !   !
+  ! end subroutine HF_solver
+  ! ! 
+  ! function deltaN_fix(xmu) result(deltaN)
+  !   real(8),intent(in) :: xmu
+  !   real(8) :: deltaN
+  !   complex(8),dimension(Nso,Nso,Lk) :: Htmp
+  !   integer(8):: ik,iso
+  !   do ik=1,Lk
+  !      Htmp(:,:,ik)=Hhf_tmp(:,:,ik)-xmu*zeye(Nso)
+  !   end do
+  !   call solve_HF_hamiltonian(Htmp,delta_hf_tmp) 
+  !   deltaN=0.d0
+  !   do ik=1,Lk
+  !      do iso=1,Nso
+  !         deltaN = deltaN + dreal(delta_hf_tmp(iso,iso,ik)*wtk(ik))
+  !      end do
+  !   end do
+  !   if(tmp_print) write(531,'(10F18.10)') deltaN,Ndens,xmu
+  !   deltaN=deltaN-Ndens
+  ! end function deltaN_fix
+
 
 
 
