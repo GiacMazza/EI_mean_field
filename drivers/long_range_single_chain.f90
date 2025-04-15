@@ -38,6 +38,11 @@ program officina
   integer :: i,j,k,idim
   integer :: Nhf,Nhf_,ihf,unit_err,unit_obs,unit_in,uio,unit_io,Nobs,jhf
   integer :: Nhf_opt
+  integer,dimension(:),allocatable :: iorb_to_ihf
+  integer,dimension(:),allocatable :: ihf_to_iorb
+  integer,dimension(:,:),allocatable :: ijorb_to_ihf
+  complex(8),dimension(:,:),allocatable :: ni_orb
+  
   integer,dimension(:),allocatable :: units_loc_obs
   integer :: flen,iread
 
@@ -518,6 +523,9 @@ program officina
   !+- allocate and print the bare order parameters
   Nhf_opt=10
   allocate(x_iter(Lk,Nhf_opt,Nspin)); x_iter=0d0
+
+  
+  
   call deltak_to_xiter(delta_hf,x_iter)
   do ispin=1,Nspin
      do ihf=1,Nhf_opt
@@ -705,19 +713,62 @@ program officina
   !
   allocate(hf_self_hartree(Lk,Norb,Nspin)); hf_self_hartree=0d0
   ! compute the occupation numbers on each orbital
-  allocate(ni_orb(Norb,Nspin)); ni_orb=0d0
-  do iorb=1,Norb
-     do ispin=1,Nspin
-        do ik=1,Lk
-           !+- here stride from iorb to ihf (for the local orbitals)
-           ni_orb(ispin,iorb) = ni_orb(ispin,iorb) !
-        end do
-  end do
-  
-  
-  
-  !+- build the Hartree term properly (this is not working...)
+
+  allocate(iorb_to_ihf(Norb)); iorb_to_ihf=0
+  iorb_to_ihf(1) = 1
+  iorb_to_ihf(2) = 2
+  iorb_to_ihf(3) = 3
+  iorb_to_ihf(4) = 6
+  iorb_to_ihf(5) = 7
+  iorb_to_ihf(6) = 8
+  allocate(ihf_to_iorb(Nhf_opt)); ihf_to_iorb=0
+  ihf_to_iorb(1) = 1
+  ihf_to_iorb(2) = 2
+  ihf_to_iorb(3) = 3
+  ihf_to_iorb(6) = 4
+  ihf_to_iorb(7) = 5
+  ihf_to_iorb(8) = 6
+
+  allocate(ijorb_to_ihf(Norb,Norb)); ijorb_to_ihf=0
+  ijorb_to_ihf(1,1) = 1
+  ijorb_to_ihf(2,2) = 2
+  ijorb_to_ihf(3,3) = 3
+  ijorb_to_ihf(1,3) = 4
+  ijorb_to_ihf(2,3) = 5
+  ijorb_to_ihf(4,4) = 6
+  ijorb_to_ihf(5,5) = 7
+  ijorb_to_ihf(6,6) = 8
+  ijorb_to_ihf(4,6) = 9
+  ijorb_to_ihf(5,6) = 10  
   !
+  call get_ni_loc(x_iter,ni_orb)
+  !
+  do ispin=1,Nspin
+     do iorb=1,Norb
+        uio=free_unit()
+        open(unit=uio,file="hf_self_hartree_spin"//reg(txtfy(ispin))//"_iorb"//reg(txtfy(iorb))//".out")        
+        do ik=1,Lk
+           do jspin=1,Nspin
+              do jorb=1,Norb
+                 ihf=ijorb_to_ihf(iorb,jorb)
+                 if(ihf.gt.0) then
+                    if(ispin.eq.jspin) then
+                       hf_self_hartree(ik,iorb,ispin) = hf_self_hartree(ik,iorb,ispin) + &
+                            Uss_VS_q(ihf,ik0)*ni_orb(jspin,jorb)
+                    else
+                       hf_self_hartree(ik,iorb,ispin) = hf_self_hartree(ik,iorb,ispin) + &
+                            UsAs_VS_q(ihf,ik0)*ni_orb(jspin,jorb)
+                    end if
+                 end if
+              end do
+           end do
+           write(uio, '(40F18.10)') kpt_latt(ik,1),dreal(hf_self_hartree(ik,iorb,ispin)),dimag(hf_self_hartree(ik,iorb,ispin))              
+        end do
+        close(uio)
+     end do
+  end do
+  !+- allocate(ni_orb(Nspin,Norb)); ni_orb=0d0
+  !+- build the Hartree term properly (this is not working...)
   ! do ispin=1,Nspin
   !    iorb=1
   !    uio=free_unit() 
@@ -1019,6 +1070,26 @@ program officina
   !
 contains
   !
+  subroutine get_ni_loc(x_iter_in,ni_out)
+    complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter_in
+    complex(8),dimension(:,:),allocatable,intent(out) :: ni_out
+    integer :: iorb,ispin,ihf
+    if(allocated(ni_out)) deallocate(ni_out)
+    allocate(ni_out(Nspin,Norb)); ni_out=0d0
+    !
+    do iorb=1,Norb
+       do ispin=1,Nspin
+          do ik=1,Lk
+             ihf=iorb_to_ihf(iorb)
+             ni_out(ispin,iorb) = ni_out(ispin,iorb) + x_iter_in(ik,ihf,ispin)*wtk(ik) !
+          end do
+          write(*,*) ni_out(ispin,iorb) 
+       end do
+    end do
+    !
+  end subroutine get_ni_loc
+
+  
   subroutine deltak_to_xiter(deltak_in,x_iter_out)
     complex(8),dimension(Nso,Nso,Lk),intent(in) :: deltak_in
     complex(8),dimension(Lk,Nhf_opt,Nspin),intent(out) :: x_iter_out
