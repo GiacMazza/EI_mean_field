@@ -14,7 +14,7 @@ program officina
   complex(8),dimension(:,:,:),allocatable :: Hr_w90,Hr_w90_tmp,Hr_toy  
   real(8) :: mu_fix
   real(8) :: Uintra,Uinter,Delta_CF
-  real(8) :: Uq,thop,err_hf,hf_conv
+  real(8) :: Uq,thop,err_hf,hf_conv,ktmp
   logical :: plot_w90_bands
   !
   real(8),dimension(3) :: ktest
@@ -34,7 +34,7 @@ program officina
 
   integer :: nr2d,nr1d
 
-  integer :: iso,jso,ispin,jspin,iorb,jorb,ik,isys
+  integer :: iso,jso,ispin,jspin,iorb,jorb,ik,isys,jk,iik
   integer :: i,j,k,idim
   integer :: Nhf,Nhf_,ihf,unit_err,unit_obs,unit_in,uio,unit_io,Nobs,jhf
   integer :: Nhf_opt
@@ -103,7 +103,8 @@ program officina
   real(8) :: alphaU,deltar,hybloc
   real(8),dimension(:),allocatable :: tk
   complex(8),dimension(:,:,:),allocatable :: x_iter,x_iter_
-  complex(8),dimension(:,:,:),allocatable :: hf_self
+  complex(8),dimension(:,:,:),allocatable :: hf_self_fock
+  complex(8),dimension(:,:,:),allocatable :: hf_self_hartree
 
   complex(8),dimension(:),allocatable :: xtmp,xtmp_
   real(8) :: xphi(2)
@@ -112,7 +113,7 @@ program officina
   real(8),dimension(14) :: xr_iter
   real(8),dimension(28) :: xr_tmp
 
-  real(8) :: Ucell,Vcell,Wcell
+  real(8) :: Ucell,Vcell,Wcell,xi_int
   real(8) :: Evalence,Econduction,tconduction,tvalence,tt_hyb,nn_hyb,tn_hyb
   real(8) :: w0gap
   logical :: use_fsolve  
@@ -144,6 +145,7 @@ program officina
 
   integer,dimension(:,:),allocatable :: ivec2idelta
   integer,dimension(:,:,:),allocatable :: idelta2ivec
+  logical ::tns_toy
   
   
   !+- START MPI -+!
@@ -201,7 +203,8 @@ program officina
   !
   call parse_input_variable(hop_phase,"hop_phase","input.conf",default=1.d-3)
   call parse_input_variable(ucut_off,"ucut_off","input.conf",default=1d0)
-  call parse_input_variable(Nkint,"Nkint","input.conf",default=300)
+  call parse_input_variable(xi_int,"xi_int","input.conf",default=0.5d0)
+  call parse_input_variable(tns_toy,"tns_toy","input.conf",default=.false.)
 
   !
   call get_global_vars
@@ -256,6 +259,9 @@ program officina
            do idim=1,3
               kpt_latt(ik,idim) = kpt_latt(ik,idim) + kxgrid(i)*Bk1(idim)+kygrid(j)*Bk3(idim)
            end do
+           modk=sqrt(kpt_latt(ik,1)**2.d0+kpt_latt(ik,2)**2.d0+kpt_latt(ik,3)**2.d0)
+           if(modk.lt.1.d-12) ik0=ik
+
            write(300,*) kpt_latt(ik,:)
         end do
      end do
@@ -511,14 +517,16 @@ program officina
   
   !+- allocate and print the bare order parameters
   Nhf_opt=10
-  allocate(x_iter(Lk,Nhf_opt,Ns)); x_iter=0d0
+  allocate(x_iter(Lk,Nhf_opt,Nspin)); x_iter=0d0
   call deltak_to_xiter(delta_hf,x_iter)
   do ispin=1,Nspin
-     open(unit=uio,file="bare_x_iter_spin"//reg(txtfy(ispin))//".out")
-     do ik=1,Lk
-        write(uio, '(20F18.10)') kpt_latt(ik,1),dreal(x_iter(ispin,ik,:)),dimag(x_iter(ispin,ik,:))
+     do ihf=1,Nhf_opt
+        open(unit=uio,file="bare_x_iter_spin"//reg(txtfy(ispin))//"_ihf"//reg(txtfy(ihf))//".out")
+        do ik=1,Lk
+           write(uio, '(20F18.10)') kpt_latt(ik,1),dreal(x_iter(ik,ihf,ispin)),dimag(x_iter(ik,ihf,ispin))
+        end do
+        close(uio)
      end do
-     close(uio)
   end do
   
   !+- print the bare energy
@@ -581,26 +589,54 @@ program officina
   allocate(Uss_Vs_R(Nhf_opt,nrpts),UsAs_Vs_R(Nhf_opt,nrpts))
   Uss_VS_R =0d0  !+- same-spin interaction
   UsAs_VS_R=0d0  !+- opposite-spin interaction
+  xi_int=xi_int*R1(1)
   do ir=1,nrpts
      !
-     Uss_VS_R(1,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
-     Uss_VS_R(2,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
-     Uss_VS_R(3,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
-     Uss_VS_R(4,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
-     Uss_VS_R(5,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     Uss_VS_R(1,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
+     Uss_VS_R(2,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
+     Uss_VS_R(3,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
+     Uss_VS_R(4,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
+     Uss_VS_R(5,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
+     ! Uss_VS_R(4,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     ! Uss_VS_R(5,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
      !
-     Uss_VS_R(6,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
-     Uss_VS_R(7,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
-     Uss_VS_R(8,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
-     Uss_VS_R(9,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
-     Uss_VS_R(10,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     Uss_VS_R(6,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
+     Uss_VS_R(7,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
+     Uss_VS_R(8,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
+     Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
+     Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
+     ! Uss_VS_R(9,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     ! Uss_VS_R(10,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
      !
   end do
+
+  if(tns_toy) then
+     Uss_VS_R=0d0
+     !+- 
+     Uss_VS_R(1,ir0) = Ucell
+     Uss_VS_R(2,ir0) = Ucell
+     Uss_VS_R(3,ir0) = Ucell
+     !+- 
+     Uss_VS_R(4,ir0) = Vcell
+     Uss_VS_R(5,ir0) = Vcell
+     Uss_VS_R(4,irR) = Vcell
+     Uss_VS_R(5,irR) = Vcell
+     !+-
+     Uss_VS_R(6,ir0) = Ucell
+     Uss_VS_R(7,ir0) = Ucell
+     Uss_VS_R(8,ir0) = Ucell
+     !+- 
+     Uss_VS_R(9,ir0) = Vcell
+     Uss_VS_R(10,ir0) = Vcell
+     Uss_VS_R(9,irR) = Vcell
+     Uss_VS_R(10,irR) = Vcell
+     !
+  end if
   UsAs_VS_R = Uss_VS_R
   !
   Uss_VS_R(1,ir0) = 0d0
   Uss_VS_R(2,ir0) = 0d0
-  Uss_VS_R(3,ir0) = 0d0
+  Uss_VS_R(3,ir0) = 0d0  
   !
   Uss_VS_R(6,ir0) = 0d0
   Uss_VS_R(7,ir0) = 0d0
@@ -620,20 +656,29 @@ program officina
         call FTr2q(kpt_latt(ik,:),Uss_Vs_q(ihf,ik),Uss_VS_R(ihf,:))
         call FTr2q(kpt_latt(ik,:),UsAs_Vs_q(ihf,ik),UsAs_VS_R(ihf,:))
      end do
-     write(unit_io,'(10F18.10)') kpt_latt(ik,1),dreal(Uss_VS_q(1:5,ik)),dreal(UsAs_VS_q(1:5,ik))
+     write(unit_io,'(30F18.10)') kpt_latt(ik,1),dreal(Uss_VS_q(1:5,ik)),dreal(UsAs_VS_q(1:5,ik)), &
+          dimag(Uss_VS_q(1:5,ik)),dimag(UsAs_VS_q(1:5,ik))
   end do
   close(unit_io)
-
+  
   !+- now write a routine that gives the HF self-consistent fields
-  !allocate(hf_self(Nspin,Lk,Nhf_opt)); hf_self=0d0
+  ! do ispin=1,Nspin
+  !    open(unit=uio,file="bare_x_iter_spin"//reg(txtfy(ispin))//".out")
+  !    do ik=1,Lk
+  !       write(uio, '(20F18.10)') kpt_latt(ik,1),dreal(x_iter(ik,:,ispin)),dimag(x_iter(ik,:,ispin))
+  !    end do
+  !    close(uio)
+  ! end do
 
-  allocate(hf_self(Nspin,Nhf_opt,Lk)); hf_self=0d0
+  allocate(hf_self_fock(Lk,Nhf_opt,Nspin)); hf_self_fock=0d0
   !
-  do ik=1,Lk        
-     do ihf=1,Nhf
-        do ispin=1,Nspin
+  do ispin=1,Nspin
+     do ihf=1,Nhf_opt
+        uio=free_unit() 
+        open(unit=uio,file="hf_self_fock_spin"//reg(txtfy(ispin))//"_ihf"//reg(txtfy(ihf))//".out")
+        do ik=1,Lk        
            !
-           hf_self(ispin,ihf,ik)=0d0
+           hf_self_fock(ik,ihf,ispin)=0d0
            !
            do jk=1,Lk
               ktmp=kxgrid(ik)-kxgrid(jk)
@@ -644,17 +689,90 @@ program officina
                  ktmp=ktmp-1.d0
               end do
               iik=1+(Lk-1)/2*nint(1-ktmp/kxgrid(1))
+              if(iik.lt.1.or.iik.gt.Lk) stop "(iik.lt.1.or.iik.gt.Lk)"
               !
-              if(iik.lt.1.or.iik.gt.Lk) stop "(iik.lt.1.or.iik.gt.Lk)"              
-              !hf_self(ik,ihf,ispin) = -Uss_VS_q(ihf,iik)*x_iter(ispin,jk,ihf)
-              hf_self(ik,ihf,ispin) = -Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)
-              !+- this should be the best way of arranging index - fix x_iter
+              hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &
+                   Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)
+              !+- this should be the best way of arranging the index - fix x_iter
               !
            end do
            !
-        end do        
+           write(uio, '(40F18.10)') kpt_latt(ik,1),dreal(hf_self_fock(ik,ihf,ispin)),dimag(hf_self_fock(ik,ihf,ispin))
+        end do
+        close(uio)
      end do
   end do
+  !
+  allocate(hf_self_hartree(Lk,Norb,Nspin)); hf_self_hartree=0d0
+  ! compute the occupation numbers on each orbital
+  allocate(ni_orb(Norb,Nspin)); ni_orb=0d0
+  do iorb=1,Norb
+     do ispin=1,Nspin
+        do ik=1,Lk
+           !+- here stride from iorb to ihf (for the local orbitals)
+           ni_orb(ispin,iorb) = ni_orb(ispin,iorb) !
+        end do
+  end do
+  
+  
+  
+  !+- build the Hartree term properly (this is not working...)
+  !
+  ! do ispin=1,Nspin
+  !    iorb=1
+  !    uio=free_unit() 
+  !    open(unit=uio,file="hf_self_hartree_spin"//reg(txtfy(ispin))//"_iorb"//reg(txtfy(ihf))//".out")
+  !    do ik=1,Lk        
+  !       !
+  !       do jspin=1,Nspin
+  !          if(ispin.eq.jspin) then              
+  !             do jk=1,Lk
+  !                hf_self_hartree(ik,iorb,ispin)=hf_self_hartree(ik,iorb,ispin) + &
+  !                     Uss_VS_q(1,ik0)*x_iter(jk,1,jspin)*wtk(jk)
+  !                hf_self_hartree(ik,iorb,ispin)=hf_self_hartree(ik,iorb,ispin) + &
+  !                     Uss_VS_q(4,ik0)*x_iter(jk,4,jspin)*wtk(jk)                 
+  !             end do
+  !          else
+                 
+  !          end if
+  !          !
+  !       end do
+  !    end do
+  !          !
+  !          !+- need to build the hatree term properly
+  !          ! if(iorb.le.3) then
+  !          !    do jspin=1,Nspin
+  !          !       hf_self_hartree(ik,iorb,ispin)=hf_self_hartree(ik,iorb,ispin)+Uss_VS_q(iorb,ik0)*n
+  !          !    end do              
+  !          ! end if
+           
+           
+           
+  !          do jk=1,Lk
+  !             ktmp=kxgrid(ik)-kxgrid(jk)
+  !             do while(ktmp.lt.kxgrid(1))
+  !                ktmp=ktmp+1.d0
+  !             end do
+  !             do while(ktmp.gt.kxgrid(Lk))
+  !                ktmp=ktmp-1.d0
+  !             end do
+  !             iik=1+(Lk-1)/2*nint(1-ktmp/kxgrid(1))
+  !             if(iik.lt.1.or.iik.gt.Lk) stop "(iik.lt.1.or.iik.gt.Lk)"
+  !             !
+  !             hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &
+  !                  Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)
+  !             !+- this should be the best way of arranging the index - fix x_iter
+  !             !
+  !          end do
+  !          !
+  !          write(uio, '(40F18.10)') kpt_latt(ik,1),dreal(hf_self_fock(ik,ihf,ispin)),dimag(hf_self_fock(ik,ihf,ispin))
+  !       end do
+  !    do iorb=1,Norb
+  !       close(uio)
+  !    end do
+  ! end do
+
+
   
   
   stop
@@ -903,40 +1021,41 @@ contains
   !
   subroutine deltak_to_xiter(deltak_in,x_iter_out)
     complex(8),dimension(Nso,Nso,Lk),intent(in) :: deltak_in
-    complex(8),dimension(Nspin,Lk,Nhf_opt),intent(out) :: x_iter_out
+    complex(8),dimension(Lk,Nhf_opt,Nspin),intent(out) :: x_iter_out
     integer :: i,j,ih,ik
     !
+    !x_iter(jk,ihf,ispin)
     x_iter_out = 0d0
     !
-    x_iter_out(1,:,1) = deltak_in(1,1,:)
-    x_iter_out(2,:,1) = deltak_in(1+Norb,1+Norb,:)
+    x_iter_out(:,1,1) = deltak_in(1,1,:)
+    x_iter_out(:,1,2) = deltak_in(1+Norb,1+Norb,:)
     !
-    x_iter_out(1,:,2) = deltak_in(2,2,:)
-    x_iter_out(2,:,2) = deltak_in(2+Norb,2+Norb,:)
+    x_iter_out(:,2,1) = deltak_in(2,2,:)
+    x_iter_out(:,2,2) = deltak_in(2+Norb,2+Norb,:)
     !
-    x_iter_out(1,:,3) = deltak_in(3,3,:)
-    x_iter_out(2,:,3) = deltak_in(3+Norb,3+Norb,:)
+    x_iter_out(:,3,1) = deltak_in(3,3,:)
+    x_iter_out(:,3,2) = deltak_in(3+Norb,3+Norb,:)
     !
-    x_iter_out(1,:,4) = deltak_in(1,3,:)
-    x_iter_out(2,:,4) = deltak_in(1+Norb,3+Norb,:)
+    x_iter_out(:,4,1) = deltak_in(1,3,:)
+    x_iter_out(:,4,2) = deltak_in(1+Norb,3+Norb,:)
     !
-    x_iter_out(1,:,5) = deltak_in(2,3,:)
-    x_iter_out(2,:,5) = deltak_in(2+Norb,3+Norb,:)
+    x_iter_out(:,5,1) = deltak_in(2,3,:)
+    x_iter_out(:,5,1) = deltak_in(2+Norb,3+Norb,:)
     !
-    x_iter_out(1,:,6) = deltak_in(4,4,:)
-    x_iter_out(2,:,6) = deltak_in(4+Norb,4+Norb,:)
+    x_iter_out(:,6,1) = deltak_in(4,4,:)
+    x_iter_out(:,6,2) = deltak_in(4+Norb,4+Norb,:)
     !
-    x_iter_out(1,:,7) = deltak_in(5,5,:)
-    x_iter_out(2,:,7) = deltak_in(5+Norb,5+Norb,:)
+    x_iter_out(:,7,1) = deltak_in(5,5,:)
+    x_iter_out(:,7,2) = deltak_in(5+Norb,5+Norb,:)
     !
-    x_iter_out(1,:,8) = deltak_in(6,6,:)
-    x_iter_out(2,:,8) = deltak_in(6+Norb,6+Norb,:)
+    x_iter_out(:,8,1) = deltak_in(6,6,:)
+    x_iter_out(:,8,2) = deltak_in(6+Norb,6+Norb,:)
     !
-    x_iter_out(1,:,9) = deltak_in(4,6,:)
-    x_iter_out(2,:,9) = deltak_in(4+Norb,6+Norb,:)
+    x_iter_out(:,9,1) = deltak_in(4,6,:)
+    x_iter_out(:,9,2) = deltak_in(4+Norb,6+Norb,:)
     !
-    x_iter_out(1,:,10) = deltak_in(5,6,:)
-    x_iter_out(2,:,10) = deltak_in(5+Norb,6+Norb,:)
+    x_iter_out(:,10,1) = deltak_in(5,6,:)
+    x_iter_out(:,10,2) = deltak_in(5+Norb,6+Norb,:)
   end subroutine deltak_to_xiter
 
 

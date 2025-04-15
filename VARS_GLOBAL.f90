@@ -49,7 +49,7 @@ MODULE VARS_GLOBAL
   logical :: whartree,only_LOC,wfock
 
 
-  integer :: ir0,irL,irR,irU,irD
+  integer :: ir0,irL,irR,irU,irD,ik0
   integer,dimension(:),allocatable :: ir_mirror
 
   real(8) :: hbarc_ev_nm,hbar_ev_ps,flux_quantum_TAng2
