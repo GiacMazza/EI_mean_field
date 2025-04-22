@@ -14,8 +14,8 @@
 #EXE=tns_symmetry_breaking
 EXE=two_chains_tns
 EXE=two_chains_TRS
-EXE=magnetic_phonons_single_chain
-EXE=long_range_single_chain
+#EXE=magnetic_phonons_single_chain
+#EXE=long_range_single_chain
 #EXE=single_chain_TRS_Bfield
 #EXE=two_chains_energy_vs_op
 #EXE=two_chains_dynamics

@@ -689,18 +689,21 @@ program officina
            hf_self_fock(ik,ihf,ispin)=0d0
            !
            do jk=1,Lk
-              ktmp=kxgrid(ik)-kxgrid(jk)
-              do while(ktmp.lt.kxgrid(1))
-                 ktmp=ktmp+1.d0
-              end do
-              do while(ktmp.gt.kxgrid(Lk))
-                 ktmp=ktmp-1.d0
-              end do
-              iik=1+(Lk-1)/2*nint(1-ktmp/kxgrid(1))
-              if(iik.lt.1.or.iik.gt.Lk) stop "(iik.lt.1.or.iik.gt.Lk)"
-              !
-              hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &
-                   Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)
+
+              if(ik.ne.jk) then
+                 ktmp=kxgrid(ik)-kxgrid(jk)
+                 do while(ktmp.lt.kxgrid(1))
+                    ktmp=ktmp+1.d0
+                 end do
+                 do while(ktmp.gt.kxgrid(Lk))
+                    ktmp=ktmp-1.d0
+                 end do
+                 iik=1+(Lk-1)/2*nint(1-ktmp/kxgrid(1))
+                 if(iik.lt.1.or.iik.gt.Lk) stop "(iik.lt.1.or.iik.gt.Lk)"
+                 !
+                 hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &
+                      Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)
+              end if
               !+- this should be the best way of arranging the index - fix x_iter
               !
            end do
@@ -734,12 +737,18 @@ program officina
   ijorb_to_ihf(2,2) = 2
   ijorb_to_ihf(3,3) = 3
   ijorb_to_ihf(1,3) = 4
+  ijorb_to_ihf(3,1) = 4
   ijorb_to_ihf(2,3) = 5
+  ijorb_to_ihf(3,2) = 5
+  !
   ijorb_to_ihf(4,4) = 6
   ijorb_to_ihf(5,5) = 7
-  ijorb_to_ihf(6,6) = 8
+  ijorb_to_ihf(6,6) = 8  
   ijorb_to_ihf(4,6) = 9
-  ijorb_to_ihf(5,6) = 10  
+  ijorb_to_ihf(5,6) = 10
+  ijorb_to_ihf(6,4) = 9
+  ijorb_to_ihf(6,5) = 10  
+
   !
   call get_ni_loc(x_iter,ni_orb)
   !

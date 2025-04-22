@@ -113,7 +113,7 @@ program officina
   logical :: fix_phi  !+-> HF calculation with fixed order parameter <-+!
   logical :: hf_symm  !+-> HF calculation w/ symmetric order parameter <-+!
   logical :: HF_solve !+-> HF calculation with a root-finder routine  <-+
-  logical :: hf_in
+  logical :: hf_in,hf_hartree
 
   real(8) :: phi_start,phi_end,dphi,ntot,test,err
   integer :: Nphi
@@ -172,6 +172,7 @@ program officina
 
   call parse_input_variable(hf_symm,"hf_symm","input.conf",default=.false.)
   call parse_input_variable(hf_solve,"hf_solve","input.conf",default=.false.)
+  call parse_input_variable(hf_hartree,"hf_hartree","input.conf",default=.true.)
 
   call parse_input_variable(hf_conv,"hf_conv","input.conf",default=1.d-10)
 
@@ -958,14 +959,17 @@ program officina
      call fix_mu(H_Hf,delta_hf,mu_fix,eout)
      
      !+- double counting term -+!
-     Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
-     Eout=Eout-2*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
+     if(hf_hartree) then
+        Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
+        Eout=Eout-2*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
+        !
+        Eout=Eout-Ucell*0.25d0*(dreal(x_iter(8))**2.d0+dreal(x_iter(9))**2.d0+dreal(x_iter(10))**2.d0)
+        Eout=Eout-2*Vcell*(dreal(x_iter(8))*dreal(x_iter(10))+dreal(x_iter(9))*dreal(x_iter(10)))
+        !
+     end if
      !
      Eout=Eout + 2.d0*Vcell*(abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0)
      Eout=Eout + 2.d0*Vcell*(abs(x_iter(6))**2.d0+abs(x_iter(7))**2.d0)
-     !
-     Eout=Eout-Ucell*0.25d0*(dreal(x_iter(8))**2.d0+dreal(x_iter(9))**2.d0+dreal(x_iter(10))**2.d0)
-     Eout=Eout-2*Vcell*(dreal(x_iter(8))*dreal(x_iter(10))+dreal(x_iter(9))*dreal(x_iter(10)))
      !
      Eout=Eout + 2.d0*Vcell*(abs(x_iter(11))**2.d0+abs(x_iter(12))**2.d0)
      Eout=Eout + 2.d0*Vcell*(abs(x_iter(13))**2.d0+abs(x_iter(14))**2.d0)
@@ -1479,15 +1483,15 @@ contains
           !
           iorb=1
           iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(1)+2.d0*Vcell*x_iter(3)
+          if(hf_hartree) Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(1)+2.d0*Vcell*x_iter(3)
           !
           iorb=2
           iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(2)+2.d0*Vcell*x_iter(3)          
+          if(hf_hartree) Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(2)+2.d0*Vcell*x_iter(3)          
           !
           iorb=3
           iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(3)+2.d0*Vcell*(x_iter(2)+x_iter(1))
+          if(hf_hartree) Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(3)+2.d0*Vcell*(x_iter(2)+x_iter(1))
           !
           iorb=1; iso=(ispin-1)*Norb+iorb          
           jorb=3; jso=(ispin-1)*Norb+jorb
@@ -1506,15 +1510,15 @@ contains
           !
           iorb=4
           iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(8)+2.d0*Vcell*x_iter(10)
+          if(hf_hartree) Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(8)+2.d0*Vcell*x_iter(10)
           !
           iorb=5
           iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(9)+2.d0*Vcell*x_iter(10)          
+          if(hf_hartree) Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(9)+2.d0*Vcell*x_iter(10)          
           !
           iorb=6
           iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(10)+2.d0*Vcell*(x_iter(9)+x_iter(8))
+          if(hf_hartree) Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(10)+2.d0*Vcell*(x_iter(9)+x_iter(8))
           !
           iorb=4; iso=(ispin-1)*Norb+iorb          
           jorb=6; jso=(ispin-1)*Norb+jorb
