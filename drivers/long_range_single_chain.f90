@@ -688,17 +688,72 @@ program officina
            !
            hf_self_fock(ik,ihf,ispin)=0d0
            !
+           ! do jk=1,ik-1
+              
+           !    ktmp=kxgrid(ik)-kxgrid(jk)
+           !    do while(ktmp.lt.-0.5d0)
+           !       ktmp=ktmp+1.d0
+           !    end do
+           !    do while(ktmp.gt.0.50)
+           !       ktmp=ktmp-1.d0
+           !    end do
+           !    !iik=1+(Lk-1)/2*nint(1-ktmp/kxgrid(1))
+           !    iik = 1 + nint((ktmp-kxgrid(1))/(kxgrid(2)-kxgrid(1)))
+              
+           !    if(iik.lt.1.or.iik.gt.Lk) then
+           !       write(*,*) iik,Lk,(ktmp-kxgrid(1)),(kxgrid(2)-kxgrid(1)),ktmp,kxgrid(1)
+           !       stop "(iik.lt.1.or.iik.gt.Lk)"
+           !    end if
+           !    !
+           !    if(iik.eq.1.or.iik.eq.ik-1) then
+           !       hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &
+           !            Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)*0.5d0
+           !    else
+           !       hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &
+           !            Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)                 
+           !    end if
+           ! end do
+
+           ! do jk=ik+1,Lk
+                            
+           !    ktmp=kxgrid(ik)-kxgrid(jk)
+           !    do while(ktmp.lt.-0.5d0)
+           !       ktmp=ktmp+1.d0
+           !    end do
+           !    do while(ktmp.gt.0.5d0)
+           !       ktmp=ktmp-1.d0
+           !    end do
+           !    !iik=1+(Lk-1)/2*nint(1-ktmp/kxgrid(1))
+           !    !
+           !    iik = 1+nint((ktmp-kxgrid(1))/(kxgrid(2)-kxgrid(1)))
+
+           !    if(iik.lt.1.or.iik.gt.Lk) then
+           !       write(*,*) iik,Lk,(ktmp-kxgrid(1)),(kxgrid(2)-kxgrid(1)),ktmp,kxgrid(1)
+           !       stop "(iik.lt.1.or.iik.gt.Lk)"
+           !    end if
+           !    !
+           !    if(iik.eq.ik+1.or.iik.eq.Lk) then
+           !       hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &
+           !            Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)*0.5d0
+           !    else
+           !       hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &
+           !            Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)                 
+           !    end if
+              
+           ! end do
+           
            do jk=1,Lk
 
               if(ik.ne.jk) then
                  ktmp=kxgrid(ik)-kxgrid(jk)
-                 do while(ktmp.lt.kxgrid(1))
+                 do while(ktmp.lt.-0.5d0)
                     ktmp=ktmp+1.d0
                  end do
-                 do while(ktmp.gt.kxgrid(Lk))
+                 do while(ktmp.gt.0.5d0)
                     ktmp=ktmp-1.d0
                  end do
-                 iik=1+(Lk-1)/2*nint(1-ktmp/kxgrid(1))
+                 iik = 1+nint((ktmp-kxgrid(1))/(kxgrid(2)-kxgrid(1)))
+                 !iik=1+(Lk-1)/2*nint(1-ktmp/kxgrid(1))
                  if(iik.lt.1.or.iik.gt.Lk) stop "(iik.lt.1.or.iik.gt.Lk)"
                  !
                  hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &

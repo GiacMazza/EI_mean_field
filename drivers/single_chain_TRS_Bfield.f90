@@ -119,7 +119,7 @@ program officina
   integer :: Nphi
   integer :: ixr(3)
   real(8) :: gfactor,Bfield,hop_phase,TNTN_flux,spin_seed
-  logical :: enforce_spin
+  logical :: enforce_spin,hf_hartree
   !
 
   !+- START MPI -+!
@@ -170,6 +170,7 @@ program officina
   call parse_input_variable(Bfield,"Bfield","input.conf",default=1.d0,comment='B-field in Tesla')
   call parse_input_variable(spin_seed,"spin_seed","input.conf",default=0.d-2)
   call parse_input_variable(enforce_spin,"enforce_spin","input.conf",default=.true.)
+  call parse_input_variable(hf_hartree,"hf_hartree","input.conf",default=.true.)
 
 
   !
@@ -1026,20 +1027,24 @@ contains
     integer :: ispin,iorb
     if(.not.allocated(xin)) stop "get_ntot"
     if(size(xin).ne.14*Nspin)stop "get_ntot"
-    E_dc=0d0    
-    do i=1,3
-       E_dc=E_dc-Ucell*dreal(xin(i))*dreal(xin(i+14))
-    end do
-    E_dc = E_dc - 2*Vcell*( dreal(xin(1))+dreal(xin(15)) )*( dreal(xin(3))+dreal(xin(17)) )
-    E_dc = E_dc - 2*Vcell*( dreal(xin(2))+dreal(xin(16)) )*( dreal(xin(3))+dreal(xin(17)) )
+    E_dc=0d0
+    if(hf_hartree) then
+       do i=1,3
+          E_dc=E_dc-Ucell*dreal(xin(i))*dreal(xin(i+14))
+       end do
+       E_dc = E_dc - 2*Vcell*( dreal(xin(1))+dreal(xin(15)) )*( dreal(xin(3))+dreal(xin(17)) )
+       E_dc = E_dc - 2*Vcell*( dreal(xin(2))+dreal(xin(16)) )*( dreal(xin(3))+dreal(xin(17)) )
+    end if
     E_dc = E_dc + Vcell*(abs(xin(4))**2.d0+abs(xin(5))**2.d0)+Vcell*(abs(xin(18))**2.d0+abs(xin(19))**2.d0)
     E_dc = E_dc + Vcell*(abs(xin(6))**2.d0+abs(xin(7))**2.d0)+Vcell*(abs(xin(20))**2.d0+abs(xin(21))**2.d0)
     !
-    do i=8,10
-       E_dc=E_dc-Ucell*dreal(xin(i))*dreal(xin(i+14))
-    end do
-    E_dc = E_dc - 2*Vcell*( dreal(xin(8))+dreal(xin(22)) )*( dreal(xin(10))+dreal(xin(24)) )
-    E_dc = E_dc - 2*Vcell*( dreal(xin(9))+dreal(xin(23)) )*( dreal(xin(10))+dreal(xin(24)) )
+    if(hf_hartree) then
+       do i=8,10
+          E_dc=E_dc-Ucell*dreal(xin(i))*dreal(xin(i+14))
+       end do
+       E_dc = E_dc - 2*Vcell*( dreal(xin(8))+dreal(xin(22)) )*( dreal(xin(10))+dreal(xin(24)) )
+       E_dc = E_dc - 2*Vcell*( dreal(xin(9))+dreal(xin(23)) )*( dreal(xin(10))+dreal(xin(24)) )
+    end if
     !
     E_dc=E_dc + Vcell*(abs(xin(11))**2.d0+abs(xin(12))**2.d0)+Vcell*(abs(xin(25))**2.d0+abs(xin(26))**2.d0)
     E_dc=E_dc + Vcell*(abs(xin(13))**2.d0+abs(xin(14))**2.d0)+Vcell*(abs(xin(27))**2.d0+abs(xin(28))**2.d0)
@@ -1154,18 +1159,24 @@ contains
           !
           iorb=1
           iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = Ucell*x_iter(1+(3-ispin-1)*14)
-          Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Vcell*(x_iter(3)+x_iter(17)) !+2.d0*Vcell*x_iter(3)
+          if(hf_hartree) then
+             Hhf(iso,iso,ik) = Ucell*x_iter(1+(3-ispin-1)*14)
+             Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Vcell*(x_iter(3)+x_iter(17)) !+2.d0*Vcell*x_iter(3)
+          end if
           !
           iorb=2
           iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = Ucell*x_iter(2+(3-ispin-1)*14)
-          Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Vcell*(x_iter(3)+x_iter(17)) !+2.d0*Vcell*x_iter(3)          
+          if(hf_hartree) then
+             Hhf(iso,iso,ik) = Ucell*x_iter(2+(3-ispin-1)*14)
+             Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Vcell*(x_iter(3)+x_iter(17)) !+2.d0*Vcell*x_iter(3)
+          end if
           !
           iorb=3
           iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = Ucell*x_iter(3+(3-ispin-1)*14)
-          Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Vcell*(x_iter(1)+x_iter(2)+x_iter(15)+x_iter(16))!+2.d0*Vcell*(x_iter(2)+x_iter(1))
+          if(hf_hartree) then
+             Hhf(iso,iso,ik) = Ucell*x_iter(3+(3-ispin-1)*14)
+             Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Vcell*(x_iter(1)+x_iter(2)+x_iter(15)+x_iter(16))!+2.d0*Vcell*(x_iter(2)+x_iter(1))
+          end if
           !
           iorb=1; iso=(ispin-1)*Norb+iorb          
           jorb=3; jso=(ispin-1)*Norb+jorb
@@ -1182,18 +1193,24 @@ contains
           !
           iorb=4
           iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = Ucell*x_iter(8+(3-ispin-1)*14)
-          Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Vcell*(x_iter(10)+x_iter(24)) !+2.d0*Vcell*x_iter(10)
+          if(hf_hartree) then
+             Hhf(iso,iso,ik) = Ucell*x_iter(8+(3-ispin-1)*14)
+             Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Vcell*(x_iter(10)+x_iter(24)) !+2.d0*Vcell*x_iter(10)
+          end if
           !
           iorb=5
           iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = Ucell*x_iter(9+(3-ispin-1)*14)
-          Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Vcell*(x_iter(10)+x_iter(24)) !+ 2.d0*Vcell*x_iter(10)
+          if(hf_hartree) then
+             Hhf(iso,iso,ik) = Ucell*x_iter(9+(3-ispin-1)*14)
+             Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Vcell*(x_iter(10)+x_iter(24)) !+ 2.d0*Vcell*x_iter(10)
+          end if
           !
           iorb=6
           iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = Ucell*x_iter(10+(3-ispin-1)*14) 
-          Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Vcell*(x_iter(8)+x_iter(9)+x_iter(22)+x_iter(23)) !+ 2.d0*Vcell*(x_iter(9)+x_iter(8))
+          if(hf_hartree) then
+             Hhf(iso,iso,ik) = Ucell*x_iter(10+(3-ispin-1)*14) 
+             Hhf(iso,iso,ik) = Hhf(iso,iso,ik) + 2.d0*Vcell*(x_iter(8)+x_iter(9)+x_iter(22)+x_iter(23)) !+ 2.d0*Vcell*(x_iter(9)+x_iter(8))
+          end if
           !
           iorb=4; iso=(ispin-1)*Norb+iorb          
           jorb=6; jso=(ispin-1)*Norb+jorb
