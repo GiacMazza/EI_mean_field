@@ -42,7 +42,7 @@ MODULE VARS_GLOBAL
   integer :: Nk_x,Nk_y,Nk_z
   integer,allocatable :: ik_stride(:,:),ik_stride_aux(:,:)  
   
-  integer :: comm,rank,ierr,mpiERR
+  integer :: comm,rank,ierr,mpiERR,mpiID,mpiSize
   logical :: master
   character(len=100) :: init_HF,init_Hsb
 
