@@ -8,7 +8,7 @@ program officina
   USE MPI
   !
   implicit none
-  integer :: Nint
+  !integer :: Nint
   real(8) :: KKx,KKy
   complex(8),dimension(:,:,:),allocatable :: delta_hf,H_hf,delta_hf_,Hhf_grid,delta_hfr,delta_hfr_,H_hf_dyn
   complex(8),dimension(:,:,:),allocatable :: Hr_w90,Hr_w90_tmp,Hr_toy  
@@ -114,7 +114,7 @@ program officina
   complex(8),dimension(:),allocatable :: xtmp,xtmp_
   real(8) :: xphi(2)
   complex(8),dimension(2) :: xpi,xpi_
-  complex(8),dimension(4) :: op_TNS
+  complex(8),dimension(4) :: op_seed_TNS
   real(8),dimension(14) :: xr_iter
   real(8),dimension(28) :: xr_tmp
 
@@ -132,7 +132,7 @@ program officina
   real(8) :: phi_phase,dphi,ntot,test,err
   real(8) :: phi_abs_start,phi_abs_stop,theta_phi
   real(8),dimension(:),allocatable :: mod_phi,varphi
-  integer :: ixr(3),Nop
+xo  integer :: ixr(3),Nop
   !
   real(8),dimension(4) :: phi_sgn
   complex(8) :: lgr_iter(2)
@@ -668,7 +668,7 @@ program officina
           dimag(Uss_VS_q(1:5,ik)),dimag(UsAs_VS_q(1:5,ik))
   end do
   close(unit_io)
-  
+  !
   !+- now write a routine that gives the HF self-consistent fields
   ! do ispin=1,Nspin
   !    open(unit=uio,file="bare_x_iter_spin"//reg(txtfy(ispin))//".out")
@@ -677,160 +677,31 @@ program officina
   !    end do
   !    close(uio)
   ! end do
-
-  allocate(hf_self_fock(Lk,Nhf_opt,Nspin)); hf_self_fock=0d0
   !
-  do ispin=1,Nspin
-     do ihf=1,Nhf_opt
-        uio=free_unit() 
-        open(unit=uio,file="hf_self_fock_spin"//reg(txtfy(ispin))//"_ihf"//reg(txtfy(ihf))//".out")
-        do ik=1,Lk        
-           !
-           hf_self_fock(ik,ihf,ispin)=0d0
-           !
-           ! do jk=1,ik-1
-              
-           !    ktmp=kxgrid(ik)-kxgrid(jk)
-           !    do while(ktmp.lt.-0.5d0)
-           !       ktmp=ktmp+1.d0
-           !    end do
-           !    do while(ktmp.gt.0.50)
-           !       ktmp=ktmp-1.d0
-           !    end do
-           !    !iik=1+(Lk-1)/2*nint(1-ktmp/kxgrid(1))
-           !    iik = 1 + nint((ktmp-kxgrid(1))/(kxgrid(2)-kxgrid(1)))
-              
-           !    if(iik.lt.1.or.iik.gt.Lk) then
-           !       write(*,*) iik,Lk,(ktmp-kxgrid(1)),(kxgrid(2)-kxgrid(1)),ktmp,kxgrid(1)
-           !       stop "(iik.lt.1.or.iik.gt.Lk)"
-           !    end if
-           !    !
-           !    if(iik.eq.1.or.iik.eq.ik-1) then
-           !       hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &
-           !            Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)*0.5d0
-           !    else
-           !       hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &
-           !            Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)                 
-           !    end if
-           ! end do
+  call init_ihfopt_strides
+  call get_hf_self_fock(x_iter,hf_self_fock,iprint=.true.)
+  call get_hf_self_hartree(x_iter,hf_self_hartree,iprint=.true.)
+  !
+  !
+  !+- LOOP with fixing seed 
+  op_seed_TNS(1) =  xi*0.1
+  op_seed_TNS(2) = -xi*0.1
 
-           ! do jk=ik+1,Lk
-                            
-           !    ktmp=kxgrid(ik)-kxgrid(jk)
-           !    do while(ktmp.lt.-0.5d0)
-           !       ktmp=ktmp+1.d0
-           !    end do
-           !    do while(ktmp.gt.0.5d0)
-           !       ktmp=ktmp-1.d0
-           !    end do
-           !    !iik=1+(Lk-1)/2*nint(1-ktmp/kxgrid(1))
-           !    !
-           !    iik = 1+nint((ktmp-kxgrid(1))/(kxgrid(2)-kxgrid(1)))
 
-           !    if(iik.lt.1.or.iik.gt.Lk) then
-           !       write(*,*) iik,Lk,(ktmp-kxgrid(1)),(kxgrid(2)-kxgrid(1)),ktmp,kxgrid(1)
-           !       stop "(iik.lt.1.or.iik.gt.Lk)"
-           !    end if
-           !    !
-           !    if(iik.eq.ik+1.or.iik.eq.Lk) then
-           !       hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &
-           !            Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)*0.5d0
-           !    else
-           !       hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &
-           !            Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)                 
-           !    end if
-              
-           ! end do
-           
-           do jk=1,Lk
+  
+  
 
-              if(ik.ne.jk) then
-                 ktmp=kxgrid(ik)-kxgrid(jk)
-                 do while(ktmp.lt.-0.5d0)
-                    ktmp=ktmp+1.d0
-                 end do
-                 do while(ktmp.gt.0.5d0)
-                    ktmp=ktmp-1.d0
-                 end do
-                 iik = 1+nint((ktmp-kxgrid(1))/(kxgrid(2)-kxgrid(1)))
-                 !iik=1+(Lk-1)/2*nint(1-ktmp/kxgrid(1))
-                 if(iik.lt.1.or.iik.gt.Lk) stop "(iik.lt.1.or.iik.gt.Lk)"
-                 !
-                 hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &
-                      Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)
-              end if
-              !+- this should be the best way of arranging the index - fix x_iter
-              !
-           end do
-           !
-           write(uio, '(40F18.10)') kpt_latt(ik,1),dreal(hf_self_fock(ik,ihf,ispin)),dimag(hf_self_fock(ik,ihf,ispin))
-        end do
-        close(uio)
-     end do
-  end do
+
+  
+  
+  stop
+  
+  !
   !
   allocate(hf_self_hartree(Lk,Norb,Nspin)); hf_self_hartree=0d0
   ! compute the occupation numbers on each orbital
 
-  allocate(iorb_to_ihf(Norb)); iorb_to_ihf=0
-  iorb_to_ihf(1) = 1
-  iorb_to_ihf(2) = 2
-  iorb_to_ihf(3) = 3
-  iorb_to_ihf(4) = 6
-  iorb_to_ihf(5) = 7
-  iorb_to_ihf(6) = 8
-  allocate(ihf_to_iorb(Nhf_opt)); ihf_to_iorb=0
-  ihf_to_iorb(1) = 1
-  ihf_to_iorb(2) = 2
-  ihf_to_iorb(3) = 3
-  ihf_to_iorb(6) = 4
-  ihf_to_iorb(7) = 5
-  ihf_to_iorb(8) = 6
-
-  allocate(ijorb_to_ihf(Norb,Norb)); ijorb_to_ihf=0
-  ijorb_to_ihf(1,1) = 1
-  ijorb_to_ihf(2,2) = 2
-  ijorb_to_ihf(3,3) = 3
-  ijorb_to_ihf(1,3) = 4
-  ijorb_to_ihf(3,1) = 4
-  ijorb_to_ihf(2,3) = 5
-  ijorb_to_ihf(3,2) = 5
-  !
-  ijorb_to_ihf(4,4) = 6
-  ijorb_to_ihf(5,5) = 7
-  ijorb_to_ihf(6,6) = 8  
-  ijorb_to_ihf(4,6) = 9
-  ijorb_to_ihf(5,6) = 10
-  ijorb_to_ihf(6,4) = 9
-  ijorb_to_ihf(6,5) = 10  
-
-  !
-  call get_ni_loc(x_iter,ni_orb)
-  !
-  do ispin=1,Nspin
-     do iorb=1,Norb
-        uio=free_unit()
-        open(unit=uio,file="hf_self_hartree_spin"//reg(txtfy(ispin))//"_iorb"//reg(txtfy(iorb))//".out")        
-        do ik=1,Lk
-           do jspin=1,Nspin
-              do jorb=1,Norb
-                 ihf=ijorb_to_ihf(iorb,jorb)
-                 if(ihf.gt.0) then
-                    if(ispin.eq.jspin) then
-                       hf_self_hartree(ik,iorb,ispin) = hf_self_hartree(ik,iorb,ispin) + &
-                            Uss_VS_q(ihf,ik0)*ni_orb(jspin,jorb)
-                    else
-                       hf_self_hartree(ik,iorb,ispin) = hf_self_hartree(ik,iorb,ispin) + &
-                            UsAs_VS_q(ihf,ik0)*ni_orb(jspin,jorb)
-                    end if
-                 end if
-              end do
-           end do
-           write(uio, '(40F18.10)') kpt_latt(ik,1),dreal(hf_self_hartree(ik,iorb,ispin)),dimag(hf_self_hartree(ik,iorb,ispin))              
-        end do
-        close(uio)
-     end do
-  end do
+  
   !+- allocate(ni_orb(Nspin,Norb)); ni_orb=0d0
   !+- build the Hartree term properly (this is not working...)
   ! do ispin=1,Nspin
@@ -1133,6 +1004,134 @@ program officina
   ! end do
   !
 contains
+
+
+
+  subroutine init_ihfopt_strides
+    !
+    allocate(iorb_to_ihf(Norb)); iorb_to_ihf=0
+    iorb_to_ihf(1) = 1
+    iorb_to_ihf(2) = 2
+    iorb_to_ihf(3) = 3
+    iorb_to_ihf(4) = 6
+    iorb_to_ihf(5) = 7
+    iorb_to_ihf(6) = 8
+    !
+    allocate(ihf_to_iorb(Nhf_opt)); ihf_to_iorb=0
+    ihf_to_iorb(1) = 1
+    ihf_to_iorb(2) = 2
+    ihf_to_iorb(3) = 3
+    ihf_to_iorb(6) = 4
+    ihf_to_iorb(7) = 5
+    ihf_to_iorb(8) = 6
+    !
+    allocate(ijorb_to_ihf(Norb,Norb)); ijorb_to_ihf=0
+    ijorb_to_ihf(1,1) = 1
+    ijorb_to_ihf(2,2) = 2
+    ijorb_to_ihf(3,3) = 3
+    ijorb_to_ihf(1,3) = 4
+    ijorb_to_ihf(3,1) = 4
+    ijorb_to_ihf(2,3) = 5
+    ijorb_to_ihf(3,2) = 5
+    !
+    ijorb_to_ihf(4,4) = 6
+    ijorb_to_ihf(5,5) = 7
+    ijorb_to_ihf(6,6) = 8  
+    ijorb_to_ihf(4,6) = 9
+    ijorb_to_ihf(5,6) = 10
+    ijorb_to_ihf(6,4) = 9
+    ijorb_to_ihf(6,5) = 10
+    !
+  end subroutine init_ihfopt_strides
+
+
+  subroutine get_hf_self_hartree(x_iter_in,hf_self_hartree_out,iprint)
+    implicit none
+    complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter_in
+    complex(8),dimension(:,:,:),allocatable,intent(out) :: hf_self_hartree_out
+    logical,optional :: iprint
+    logical :: iprint_        
+    complex(8),dimension(:,:),allocatable :: ni_orb_tmp
+    integer :: ispin,ihf,ik,iik,jk
+    real(8) :: ktmp
+    !
+    iprint_=.false.
+    if(present(iprint)) iprint_=iprint
+    if(allocated(hf_self_hartree_out)) deallocate(hf_self_hartree_out)
+    allocate(hf_self_hartree_out(Lk,Nhf_opt,Nspin)); hf_self_hartree_out=0d0
+    call get_ni_loc(x_iter,ni_orb_tmp)
+    !
+    do ispin=1,Nspin
+       do iorb=1,Norb
+          uio=free_unit()
+          if(iprint_) open(unit=uio,file="hf_self_hartree_spin"//reg(txtfy(ispin))//"_iorb"//reg(txtfy(iorb))//".out")        
+          do ik=1,Lk
+             do jspin=1,Nspin
+                do jorb=1,Norb
+                   ihf=ijorb_to_ihf(iorb,jorb)
+                   if(ihf.gt.0) then
+                      if(ispin.eq.jspin) then
+                         hf_self_hartree_out(ik,iorb,ispin) = hf_self_hartree_out(ik,iorb,ispin) + &
+                              Uss_VS_q(ihf,ik0)*ni_orb_tmp(jspin,jorb)
+                      else
+                         hf_self_hartree_out(ik,iorb,ispin) = hf_self_hartree_out(ik,iorb,ispin) + &
+                              UsAs_VS_q(ihf,ik0)*ni_orb_tmp(jspin,jorb)
+                      end if
+                   end if
+                end do
+             end do
+             if(iprint_) write(uio, '(40F18.10)') kpt_latt(ik,1),dreal(hf_self_hartree_out(ik,iorb,ispin)),dimag(hf_self_hartree_out(ik,iorb,ispin))              
+          end do
+          if(iprint_) close(uio)
+       end do
+    end do
+  end subroutine get_hf_self_hartree
+  !
+  subroutine get_hf_self_fock(x_iter_in,hf_self_fock_out,iprint)
+    implicit none
+    complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter_in
+    complex(8),dimension(:,:,:),allocatable,intent(out) :: hf_self_fock_out
+    logical,optional :: iprint
+    logical :: iprint_
+    integer :: ispint,ihf,ik,iik,jk
+    real(8) :: ktmp
+    !
+    iprint_=.false.
+    if(present(iprint)) iprint_=iprint
+    if(allocated(hf_self_fock_out)) deallocate(hf_self_fock_out)
+    allocate(hf_self_fock_out(Lk,Nhf_opt,Nspin)); hf_self_fock_out=0d0
+    
+    do ispin=1,Nspin
+       do ihf=1,Nhf_opt          
+          uio=free_unit() 
+          if(iprint_) open(unit=uio,file="hf_self_fock_spin"//reg(txtfy(ispin))//"_ihf"//reg(txtfy(ihf))//".out")
+          do ik=1,Lk        
+             !
+             hf_self_fock_out(ik,ihf,ispin)=0d0
+             !           
+             do jk=1,Lk              
+                if(ik.ne.jk) then
+                   ktmp=kxgrid(ik)-kxgrid(jk)
+                   do while(ktmp.lt.-0.5d0)
+                      ktmp=ktmp+1.d0
+                   end do
+                   do while(ktmp.gt.0.5d0)
+                      ktmp=ktmp-1.d0
+                   end do
+                   iik = 1+nint((ktmp-kxgrid(1))/(kxgrid(2)-kxgrid(1)))
+                   if(iik.lt.1.or.iik.gt.Lk) stop "(iik.lt.1.or.iik.gt.Lk)"
+                   !
+                   hf_self_fock_out(ik,ihf,ispin) = hf_self_fock_out(ik,ihf,ispin) - &
+                        Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)
+                end if
+             end do
+             if(iprint_) write(uio, '(40F18.10)') kpt_latt(ik,1),dreal(hf_self_fock_out(ik,ihf,ispin)),dimag(hf_self_fock_out(ik,ihf,ispin))
+          end do
+          if(iprint_) close(uio)
+       end do
+    end do    
+    !
+  end subroutine get_hf_self_fock
   !
   subroutine get_ni_loc(x_iter_in,ni_out)
     complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter_in
