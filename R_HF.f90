@@ -17,7 +17,7 @@ MODULE HF_real
   public :: init_var_params_latt
   !
   public :: FT_r2q,FTr2q
-  public :: FT_q2r
+  public :: FT_q2r,FTq2r
   !
   public :: fix_mu
 
@@ -334,6 +334,26 @@ contains
     !
   end subroutine FT_r2q
 
+
+  subroutine FTq2r(Rlat,Fr,Fk) 
+    implicit none
+    real(8),dimension(3) :: kpoint
+    complex(8) :: Fr
+    complex(8),dimension(Lk) :: Fk
+    integer :: ik
+    real(8),dimension(3) :: Rlat
+    real(8) :: dotRk
+    !
+    if(size(Fk).ne.Lk) stop "(size(Fr,3).ne.nrpts)" 
+    Fr=0.d0
+    do ik=1,Lk
+       kpoint=kpt_latt(ik,:)
+       dotRk=dot_product(Rlat,kpoint)
+       Fr=Fr+exp(-xi*dotRk)*Fk(ik)*wtk(ik)
+    end do
+  end subroutine FTq2r
+
+  
 
   subroutine FTr2q(kpoint,Fk,Fr) 
     implicit none

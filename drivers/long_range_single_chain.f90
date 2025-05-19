@@ -132,7 +132,7 @@ program officina
   real(8) :: phi_phase,dphi,ntot,test,err
   real(8) :: phi_abs_start,phi_abs_stop,theta_phi
   real(8),dimension(:),allocatable :: mod_phi,varphi
-xo  integer :: ixr(3),Nop
+  integer :: ixr(3),Nop
   !
   real(8),dimension(4) :: phi_sgn
   complex(8) :: lgr_iter(2)
@@ -507,7 +507,6 @@ xo  integer :: ixr(3),Nop
         write(uio,*) i,j,iso+1
      end do
   end do
-  !
   close(uio)
   !+-  this changeds big times, cause the x_iter to be optimized self-consistently
   !    now becomes (~huge) of the order of Nkx (k-space)
@@ -518,14 +517,10 @@ xo  integer :: ixr(3),Nop
   !    \Delta3(k) = <C*_{N}C_{N}>
   !    \Delta4(k) = <C*_{N}C_{T1}>
   !    \Delta5(k) = <C*_{N}C_{T2}>
-  !
-  
+  !  
   !+- allocate and print the bare order parameters
   Nhf_opt=10
-  allocate(x_iter(Lk,Nhf_opt,Nspin)); x_iter=0d0
-
-  
-  
+  allocate(x_iter(Lk,Nhf_opt,Nspin)); x_iter=0d0  
   call deltak_to_xiter(delta_hf,x_iter)
   do ispin=1,Nspin
      do ihf=1,Nhf_opt
@@ -536,6 +531,11 @@ xo  integer :: ixr(3),Nop
         close(uio)
      end do
   end do
+
+  call init_ihfopt_strides
+  call print_hyb(x_iter,filename='bare_TNShyb')
+
+  stop
   
   !+- print the bare energy
   ntot = 0.0
@@ -548,23 +548,6 @@ xo  integer :: ixr(3),Nop
   write(uio, '(20F18.10)') Eout+mu_fix*ntot,Eout
   close(uio)
   
-  !+- write down the bare hybridizations
-  uio=free_unit()
-  open(unit=uio,file='hyb_bareR.out')
-  allocate(obs(Norb*Norb))
-  modk=0.d0
-  do ir=1,nr1d
-     Rlat=irvec1d(ir,1)*R1
-     iso=0
-     do i=1,Norb
-        do j=1,Norb
-           iso=iso+1
-           obs(iso) = delta_hfr(i,j,stride1D(ir))
-        end do
-     end do
-     write(unit_in,'(100F10.5)') Rlat(1),dreal(obs(:)),dreal(obs(:))
-  end do
-
   !allocate HF-hamiltonian
   allocate(H_Hf(Nso,Nso,Lk))  
   !+- create the list of OP -+!  
@@ -678,7 +661,6 @@ xo  integer :: ixr(3),Nop
   !    close(uio)
   ! end do
   !
-  call init_ihfopt_strides
   call get_hf_self_fock(x_iter,hf_self_fock,iprint=.true.)
   call get_hf_self_hartree(x_iter,hf_self_hartree,iprint=.true.)
   !
@@ -686,9 +668,9 @@ xo  integer :: ixr(3),Nop
   !+- LOOP with fixing seed 
   op_seed_TNS(1) =  xi*0.1
   op_seed_TNS(2) = -xi*0.1
-
-
-  
+  !
+  !
+  !
   
 
 
@@ -1005,8 +987,6 @@ xo  integer :: ixr(3),Nop
   !
 contains
 
-
-
   subroutine init_ihfopt_strides
     !
     allocate(iorb_to_ihf(Norb)); iorb_to_ihf=0
@@ -1045,6 +1025,114 @@ contains
   end subroutine init_ihfopt_strides
 
 
+
+  subroutine enforce_inv_hf(x_iter_in,op_symm)
+    complex(8),dimension(Lk,Nhf_opt,Nspin),intent(inout) :: x_iter_in
+    logical,optional :: op_symm
+    logical :: op_symm_
+    
+    complex(8),dimension(:,:,:),allocatable :: x_iter_out
+    integer :: ispin,ihf,ik
+    !
+    allocate(x_iter_out(Lk,Nhf_opt,Nspin)); 
+    x_iter_out=x_iter_in
+    !
+    op_symm_=.false.
+    if(present(op_symm)) op_symm_=op_symm
+    
+    if(op_symm_) then
+    end if
+
+    
+    do ik=1,Lk
+       do ispin=1,Nspin
+          !+- diagonal terms
+          !+- ihf=6 !<Ta2+Ta2+>          
+          !+- ihf=7 !<Ta2-Ta2->          
+          !+- ihf=8 !<Ni2Ni2>
+          do ihf=6,8
+             x_iter_out(ik,ihf,ispin) = x_iter_out(Lk+1-ik,ihf-5,ispin)
+          end do
+          !+- off-diagonal terms
+          !+- ihf=9 !<Ta2+Ni2>
+          ihf=9
+          x_iter_out(ik,ihf,ispin) = x_iter_out(Lk+1-ik,5,ispin)
+          !+- ihf=10 !<Ta2-Ni2>
+          ihf=10
+          x_iter_out(ik,ihf,ispin) = x_iter_out(Lk+1-ik,4,ispin)          
+       end do
+    end do
+
+
+    
+    
+    if(.not.allocated(xin))   stop "enforce_inv_hf"
+    if(size(xin).ne.14*Nspin) stop "enforce_inv_hf"
+    !+- diagonal terms
+    do ispin=1,Nspin
+       do iorb=8,10
+          xin(iorb+(ispin-1)*14) = xin(iorb-7+(ispin-1)*14)
+       end do
+    end do
+    !+- hybridization
+    do ispin=1,Nspin
+       xin(5+(ispin-1)*14) = -dreal(xin(6+(ispin-1)*14))-xi*dimag(xin(4+(ispin-1)*14))
+       xin(7+(ispin-1)*14) = -dreal(xin(4+(ispin-1)*14))-xi*dimag(xin(6+(ispin-1)*14))       
+       xin(11+(ispin-1)*14) = xin(5+(ispin-1)*14)
+       xin(12+(ispin-1)*14) = xin(4+(ispin-1)*14)
+       xin(13+(ispin-1)*14) = xin(7+(ispin-1)*14)
+       xin(14+(ispin-1)*14) = xin(6+(ispin-1)*14)
+    end do
+    if(enforce_spin) xin(15:28)=xin(1:14)
+  end subroutine enforce_inv_hf
+
+  
+
+  !+- write down the bare hybridizations
+  subroutine print_hyb(x_iter_in,filename)
+    implicit none
+    complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter_in
+    complex(8),dimension(:,:,:),allocatable :: x_iter_ir
+    character(len=*),optional :: filename
+    character(len=100) :: filename_
+    character(len=100) :: filehyb
+    integer :: uio,ihf,ispin,ir
+
+    allocate(x_iter_ir(nrpts,Nhf_opt,Nspin)); x_iter_ir=0d0
+    
+    filename_="TNShyb"
+    if(present(filename)) filename_=filename
+
+    write(*,*) size(x_iter_in,1),Lk,nrpts
+    write(*,*) size(x_iter_in,2),Nhf_opt
+    write(*,*) size(x_iter_in,3),Nspin
+    
+    write(*,*) size(x_iter_ir,1),Lk,nrpts
+    write(*,*) size(x_iter_ir,2),Nhf_opt
+    write(*,*) size(x_iter_ir,3),Nspin
+
+    write(*,*) size(rpt_latt)
+
+    do ihf=1,Nhf_opt
+       do ispin=1,Nspin
+          uio=free_unit()
+          filehyb=reg(filename_)//"_vs_ir_ihf"//reg(txtfy(ihf))//"_ispin"//reg(txtfy(ispin))//".out"          
+          open(unit=uio,file=filehyb)
+          do ir=1,nrpts
+             !call FT_q2r(rpt_latt(ir,:),Hr_toy(:,:,ir),Hk_toy)
+             !x_iter(ik,ihf,ispin))
+             call FTq2r(rpt_latt(ir,:),x_iter_ir(ir,ihf,ispin),x_iter_in(:,ihf,ispin))             
+             Rlat=irvec1d(ir,1)*R1
+             write(uio,'(10F18.10)') Rlat(1),x_iter_ir(ir,ihf,ispin)
+          end do
+          close(uio)
+       end do
+    end do
+
+  end subroutine print_hyb
+
+  
+
   subroutine get_hf_self_hartree(x_iter_in,hf_self_hartree_out,iprint)
     implicit none
     complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter_in
@@ -1058,7 +1146,7 @@ contains
     iprint_=.false.
     if(present(iprint)) iprint_=iprint
     if(allocated(hf_self_hartree_out)) deallocate(hf_self_hartree_out)
-    allocate(hf_self_hartree_out(Lk,Nhf_opt,Nspin)); hf_self_hartree_out=0d0
+    allocate(hf_self_hartree_out(Lk,Norb,Nspin)); hf_self_hartree_out=0d0
     call get_ni_loc(x_iter,ni_orb_tmp)
     !
     do ispin=1,Nspin
@@ -1066,6 +1154,7 @@ contains
           uio=free_unit()
           if(iprint_) open(unit=uio,file="hf_self_hartree_spin"//reg(txtfy(ispin))//"_iorb"//reg(txtfy(iorb))//".out")        
           do ik=1,Lk
+             hf_self_hartree_out(ik,iorb,ispin)=0d0
              do jspin=1,Nspin
                 do jorb=1,Norb
                    ihf=ijorb_to_ihf(iorb,jorb)

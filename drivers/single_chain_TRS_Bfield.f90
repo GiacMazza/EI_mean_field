@@ -1080,8 +1080,8 @@ contains
   subroutine enforce_inv_hf(xin)
     complex(8),dimension(:),allocatable,intent(inout) :: xin
     integer :: ispin,iorb
-    if(.not.allocated(xin)) stop "enforce_inv_hf"
-    if(size(xin).ne.14*Nspin)stop "enforce_inv_hf"
+    if(.not.allocated(xin))   stop "enforce_inv_hf"
+    if(size(xin).ne.14*Nspin) stop "enforce_inv_hf"
     !+- diagonal terms
     do ispin=1,Nspin
        do iorb=8,10
