@@ -535,7 +535,7 @@ program officina
   call init_ihfopt_strides
   call print_hyb(x_iter,filename='bare_TNShyb')
 
-  stop
+
   
   !+- print the bare energy
   ntot = 0.0
@@ -665,9 +665,18 @@ program officina
   call get_hf_self_hartree(x_iter,hf_self_hartree,iprint=.true.)
   !
   !
-  !+- LOOP with fixing seed 
-  op_seed_TNS(1) =  xi*0.1
-  op_seed_TNS(2) = -xi*0.1
+  !+- LOOP with fixing seed
+  !+- breaking seeds
+  x_iter(:,4,1) = x_iter(:,4,1) + xi*0.1
+  call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
+  call print_hyb(x_iter,filename='seed_TNShyb')
+
+  
+
+
+  stop
+  ! op_seed_TNS(1) =  xi*0.1
+  ! op_seed_TNS(2) = -xi*0.1
   !
   !
   !
@@ -1026,11 +1035,11 @@ contains
 
 
 
-  subroutine enforce_inv_hf(x_iter_in,op_symm)
+  subroutine enforce_inv_hf(x_iter_in,op_symm,spin_symm)
     complex(8),dimension(Lk,Nhf_opt,Nspin),intent(inout) :: x_iter_in
-    logical,optional :: op_symm
-    logical :: op_symm_
-    
+    logical,optional :: op_symm,spin_symm
+    logical :: op_symm_,spin_symm_
+    real(8) :: tmpkphase
     complex(8),dimension(:,:,:),allocatable :: x_iter_out
     integer :: ispin,ihf,ik
     !
@@ -1039,11 +1048,21 @@ contains
     !
     op_symm_=.false.
     if(present(op_symm)) op_symm_=op_symm
-    
+    spin_symm_=.false.
+    if(present(spin_symm)) spin_symm_=spin_symm
+    !
     if(op_symm_) then
+       !+- enforce the order parameter symmetry of the upper chains
+       do ik=1,Lk
+          do ispin=1,Nspin
+             ihf=2
+             x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,1,ispin)
+             tmpkphase=R1(1)*kpt_latt(ik,1)
+             x_iter_out(ik,5,ispin) = -1.d0*exp(-xi*tmpkphase)*x_iter_in(Lk+1-ik,4,ispin)
+          end do
+       end do
     end if
-
-    
+    !+- enforce the inversion symmetry of the double chains
     do ik=1,Lk
        do ispin=1,Nspin
           !+- diagonal terms
@@ -1051,39 +1070,20 @@ contains
           !+- ihf=7 !<Ta2-Ta2->          
           !+- ihf=8 !<Ni2Ni2>
           do ihf=6,8
-             x_iter_out(ik,ihf,ispin) = x_iter_out(Lk+1-ik,ihf-5,ispin)
+             x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,ihf-5,ispin)
           end do
           !+- off-diagonal terms
           !+- ihf=9 !<Ta2+Ni2>
           ihf=9
-          x_iter_out(ik,ihf,ispin) = x_iter_out(Lk+1-ik,5,ispin)
+          x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,5,ispin)
           !+- ihf=10 !<Ta2-Ni2>
           ihf=10
-          x_iter_out(ik,ihf,ispin) = x_iter_out(Lk+1-ik,4,ispin)          
+          x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,4,ispin)          
        end do
     end do
-
-
-    
-    
-    if(.not.allocated(xin))   stop "enforce_inv_hf"
-    if(size(xin).ne.14*Nspin) stop "enforce_inv_hf"
-    !+- diagonal terms
-    do ispin=1,Nspin
-       do iorb=8,10
-          xin(iorb+(ispin-1)*14) = xin(iorb-7+(ispin-1)*14)
-       end do
-    end do
-    !+- hybridization
-    do ispin=1,Nspin
-       xin(5+(ispin-1)*14) = -dreal(xin(6+(ispin-1)*14))-xi*dimag(xin(4+(ispin-1)*14))
-       xin(7+(ispin-1)*14) = -dreal(xin(4+(ispin-1)*14))-xi*dimag(xin(6+(ispin-1)*14))       
-       xin(11+(ispin-1)*14) = xin(5+(ispin-1)*14)
-       xin(12+(ispin-1)*14) = xin(4+(ispin-1)*14)
-       xin(13+(ispin-1)*14) = xin(7+(ispin-1)*14)
-       xin(14+(ispin-1)*14) = xin(6+(ispin-1)*14)
-    end do
-    if(enforce_spin) xin(15:28)=xin(1:14)
+    !
+    if(spin_symm_) x_iter_out(:,:,2)=x_iter_in(:,:,1)
+    x_iter_in = x_iter_out
   end subroutine enforce_inv_hf
 
   
