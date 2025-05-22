@@ -107,14 +107,14 @@ program officina
   logical :: H1d
   real(8) :: alphaU,deltar,hybloc
   real(8),dimension(:),allocatable :: tk
-  complex(8),dimension(:,:,:),allocatable :: x_iter,x_iter_,x_iter_ir
+  complex(8),dimension(:,:,:),allocatable :: x_iter,x_iter_,x_iter_ir,x_iter_bare
   complex(8),dimension(:,:,:),allocatable :: hf_self_fock
   complex(8),dimension(:,:,:),allocatable :: hf_self_hartree
 
   complex(8),dimension(:),allocatable :: xtmp,xtmp_
   real(8) :: xphi(2)
   complex(8),dimension(2) :: xpi,xpi_
-  complex(8),dimension(4) :: op_seed_TNS
+  real(8) :: CDSBseed,TRSBseed
   real(8),dimension(14) :: xr_iter
   real(8),dimension(28) :: xr_tmp
 
@@ -520,7 +520,8 @@ program officina
   !  
   !+- allocate and print the bare order parameters
   Nhf_opt=10
-  allocate(x_iter(Lk,Nhf_opt,Nspin)); x_iter=0d0  
+  allocate(x_iter(Lk,Nhf_opt,Nspin)); x_iter=0d0
+  allocate(x_iter_bare(Lk,Nhf_opt,Nspin)); x_iter_bare=0d0
   call deltak_to_xiter(delta_hf,x_iter)
   do ispin=1,Nspin
      do ihf=1,Nhf_opt
@@ -531,7 +532,7 @@ program officina
         close(uio)
      end do
   end do
-
+  x_iter_bare=x_iter
   call init_ihfopt_strides
   call print_hyb(x_iter,filename='bare_TNShyb')
 
@@ -665,24 +666,36 @@ program officina
   call get_hf_self_hartree(x_iter,hf_self_hartree,iprint=.true.)
   !
   !
-  !+- LOOP with fixing seed
-  !+- breaking seeds
 
-  call print_hyb(x_iter,filename='init_TNShyb')
-
+  !+- the unit cell is
+  !+  |        Ta|
+  !   |-N+       |
+  !   |        Ta|
+  !   |   (*)    |  <---(*) the inversion point
+  !   |Ta        |
+  !   !      +Ni-|
+  !   |Ta        |
+  !+- TRSB seeds 
   call xiter_ik2ir(x_iter,x_iter_ir)
-  x_iter_ir(ir0,4,1) = x_iter_ir(ir0,4,1) + xi*0.1
-  x_iter_ir(irL,4,1) = x_iter_ir(irL,4,1) + xi*0.1
-
+  TRSBseed=0.1d0
+  CDSBseed=0d0
+  x_iter_ir(ir0,4,1) =  x_iter_ir(ir0,4,1) + xi*TRSBseed
+  x_iter_ir(irL,4,1) = -dreal(x_iter_ir(ir0,4,1)) + CDSBseed + xi*TRSBseed
   call xiter_ir2ik(x_iter_ir,x_iter)
-  x_iter(:,2,:)=0d0
-  x_iter(:,5,:)=0d0
-  x_iter(:,6:10,:)=0d0
-  
+  !call print_hyb(x_iter,filename='init_TNShyb')  
   call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
-  call print_hyb(x_iter,filename='einv_TNShyb')
+  call print_hyb(x_iter,filename='TRSBseed_TNShyb')
+  !+- CDSB seeds
+  x_iter=x_iter_bare
+  call xiter_ik2ir(x_iter,x_iter_ir)
+  TRSBseed=0.d0
+  CDSBseed=0.1d0
+  x_iter_ir(ir0,4,1) =  x_iter_ir(ir0,4,1) + xi*TRSBseed
+  x_iter_ir(irL,4,1) = -dreal(x_iter_ir(ir0,4,1)) + CDSBseed + xi*TRSBseed
+  call xiter_ir2ik(x_iter_ir,x_iter)
+  call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
+  call print_hyb(x_iter,filename='CDSBseed_TNShyb')
 
-  
 
 
   stop
@@ -1154,6 +1167,7 @@ contains
     filename_="TNShyb"
     if(present(filename)) filename_=filename
 
+    allocate(x_iter_ir(nrpts,Nhf_opt,Nspin)); x_iter_ir=0d0
     ! write(*,*) size(x_iter_in,1),Lk,nrpts
     ! write(*,*) size(x_iter_in,2),Nhf_opt
     ! write(*,*) size(x_iter_in,3),Nspin    
