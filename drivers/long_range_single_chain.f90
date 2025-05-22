@@ -107,7 +107,7 @@ program officina
   logical :: H1d
   real(8) :: alphaU,deltar,hybloc
   real(8),dimension(:),allocatable :: tk
-  complex(8),dimension(:,:,:),allocatable :: x_iter,x_iter_
+  complex(8),dimension(:,:,:),allocatable :: x_iter,x_iter_,x_iter_ir
   complex(8),dimension(:,:,:),allocatable :: hf_self_fock
   complex(8),dimension(:,:,:),allocatable :: hf_self_hartree
 
@@ -667,9 +667,20 @@ program officina
   !
   !+- LOOP with fixing seed
   !+- breaking seeds
-  x_iter(:,4,1) = x_iter(:,4,1) + xi*0.1
+
+  call print_hyb(x_iter,filename='init_TNShyb')
+
+  call xiter_ik2ir(x_iter,x_iter_ir)
+  x_iter_ir(ir0,4,1) = x_iter_ir(ir0,4,1) + xi*0.1
+  x_iter_ir(irL,4,1) = x_iter_ir(irL,4,1) + xi*0.1
+
+  call xiter_ir2ik(x_iter_ir,x_iter)
+  x_iter(:,2,:)=0d0
+  x_iter(:,5,:)=0d0
+  x_iter(:,6:10,:)=0d0
+  
   call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
-  call print_hyb(x_iter,filename='seed_TNShyb')
+  call print_hyb(x_iter,filename='einv_TNShyb')
 
   
 
@@ -1070,12 +1081,20 @@ contains
           !+- ihf=7 !<Ta2-Ta2->          
           !+- ihf=8 !<Ni2Ni2>
           do ihf=6,8
-             x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,ihf-5,ispin)
+             if(op_symm_) then
+                x_iter_out(ik,ihf,ispin) = x_iter_out(Lk+1-ik,ihf-5,ispin)
+             else
+                x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,ihf-5,ispin)
+             end if
           end do
           !+- off-diagonal terms
           !+- ihf=9 !<Ta2+Ni2>
           ihf=9
-          x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,5,ispin)
+          if(op_symm_) then
+             x_iter_out(ik,ihf,ispin) = x_iter_out(Lk+1-ik,5,ispin)
+          else
+             x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,5,ispin)             
+          end if
           !+- ihf=10 !<Ta2-Ni2>
           ihf=10
           x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,4,ispin)          
@@ -1087,7 +1106,40 @@ contains
   end subroutine enforce_inv_hf
 
   
+  subroutine xiter_ik2ir(x_iter_ik,x_iter_ir)
+    implicit none
+    complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter_ik
+    complex(8),dimension(:,:,:),allocatable,intent(out) :: x_iter_ir
+    integer :: uio,ihf,ispin,ir    
+    if(allocated(x_iter_ir)) deallocate(x_iter_ir) 
+    allocate(x_iter_ir(nrpts,Nhf_opt,Nspin)); x_iter_ir=0d0    
+    do ihf=1,Nhf_opt
+       do ispin=1,Nspin
+          do ir=1,nrpts
+             call FTq2r(rpt_latt(ir,:),x_iter_ir(ir,ihf,ispin),x_iter_ik(:,ihf,ispin))             
+          end do
+       end do
+    end do
+  end subroutine xiter_ik2ir
+  subroutine xiter_ir2ik(x_iter_ir,x_iter_ik)
+    implicit none
+    complex(8),dimension(nrpts,Nhf_opt,Nspin),intent(in) :: x_iter_ir
+    complex(8),dimension(:,:,:),allocatable,intent(out) :: x_iter_ik
+    integer :: uio,ihf,ispin,ir,ik    
+    if(allocated(x_iter_ik)) deallocate(x_iter_ik) 
+    allocate(x_iter_ik(Lk,Nhf_opt,Nspin)); x_iter_ik=0d0    
+    do ihf=1,Nhf_opt
+       do ispin=1,Nspin
+          do ik=1,Lk
+             call FTr2q(kpt_latt(ik,:),x_iter_ik(ik,ihf,ispin),x_iter_ir(:,ihf,ispin))             
+          end do
+       end do
+    end do
+  end subroutine xiter_ir2ik
 
+
+  
+  
   !+- write down the bare hybridizations
   subroutine print_hyb(x_iter_in,filename)
     implicit none
@@ -1098,20 +1150,17 @@ contains
     character(len=100) :: filehyb
     integer :: uio,ihf,ispin,ir
 
-    allocate(x_iter_ir(nrpts,Nhf_opt,Nspin)); x_iter_ir=0d0
     
     filename_="TNShyb"
     if(present(filename)) filename_=filename
 
-    write(*,*) size(x_iter_in,1),Lk,nrpts
-    write(*,*) size(x_iter_in,2),Nhf_opt
-    write(*,*) size(x_iter_in,3),Nspin
-    
-    write(*,*) size(x_iter_ir,1),Lk,nrpts
-    write(*,*) size(x_iter_ir,2),Nhf_opt
-    write(*,*) size(x_iter_ir,3),Nspin
-
-    write(*,*) size(rpt_latt)
+    ! write(*,*) size(x_iter_in,1),Lk,nrpts
+    ! write(*,*) size(x_iter_in,2),Nhf_opt
+    ! write(*,*) size(x_iter_in,3),Nspin    
+    ! write(*,*) size(x_iter_ir,1),Lk,nrpts
+    ! write(*,*) size(x_iter_ir,2),Nhf_opt
+    ! write(*,*) size(x_iter_ir,3),Nspin
+    ! write(*,*) size(rpt_latt)
 
     do ihf=1,Nhf_opt
        do ispin=1,Nspin
