@@ -4,8 +4,6 @@ program officina
   USE DMFT_TOOLS
   !
   USE VARS_GLOBAL
-  !USE DMFT_VECTORS
-  !USE HF
   USE HF_real
   !
   !

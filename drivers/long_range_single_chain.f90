@@ -25,6 +25,9 @@ program officina
   complex(8),dimension(:,:,:),allocatable :: Hk_w90,Hk_w90_tmp,Hk_toy
   complex(8),dimension(:,:,:,:,:),allocatable :: Hk_w90_reshape,Hk_hf_reshape
   real(8),dimension(:,:),allocatable :: kpts,kpt_path
+
+  real(8),dimension(3) :: tmpread
+
   integer,dimension(:,:),allocatable :: irvec2d,itmp
   integer,dimension(:),allocatable :: stride2D,stride2D_
 
@@ -207,8 +210,11 @@ program officina
   call parse_input_variable(lgr_fix_phase,"lgr_fix_phase","input.conf",default=[0d0,0d0])
   !
   call parse_input_variable(hop_phase,"hop_phase","input.conf",default=1.d-3)
+
+  call parse_input_variable(TRSBseed,"TRSBseed","input.conf",default=0.d0)
+  call parse_input_variable(CDSBseed,"CDSBseed","input.conf",default=0.d0)
+
   call parse_input_variable(ucut_off,"ucut_off","input.conf",default=1d0)
-  call parse_input_variable(xi_int,"xi_int","input.conf",default=0.5d0)
   call parse_input_variable(tns_toy,"tns_toy","input.conf",default=.false.)
 
   !
@@ -523,15 +529,9 @@ program officina
   allocate(x_iter(Lk,Nhf_opt,Nspin)); x_iter=0d0
   allocate(x_iter_bare(Lk,Nhf_opt,Nspin)); x_iter_bare=0d0
   call deltak_to_xiter(delta_hf,x_iter)
-  do ispin=1,Nspin
-     do ihf=1,Nhf_opt
-        open(unit=uio,file="bare_x_iter_spin"//reg(txtfy(ispin))//"_ihf"//reg(txtfy(ihf))//".out")
-        do ik=1,Lk
-           write(uio, '(20F18.10)') kpt_latt(ik,1),dreal(x_iter(ik,ihf,ispin)),dimag(x_iter(ik,ihf,ispin))
-        end do
-        close(uio)
-     end do
-  end do
+
+  call print_xiter(x_iter,filename='print_xiter')
+    
   x_iter_bare=x_iter
   call init_ihfopt_strides
   call print_hyb(x_iter,filename='bare_TNShyb')
@@ -653,20 +653,12 @@ program officina
   end do
   close(unit_io)
   !
-  !+- now write a routine that gives the HF self-consistent fields
-  ! do ispin=1,Nspin
-  !    open(unit=uio,file="bare_x_iter_spin"//reg(txtfy(ispin))//".out")
-  !    do ik=1,Lk
-  !       write(uio, '(20F18.10)') kpt_latt(ik,1),dreal(x_iter(ik,:,ispin)),dimag(x_iter(ik,:,ispin))
-  !    end do
-  !    close(uio)
-  ! end do
+  !+- routines that give back the HF self-consistent fields
   !
   call get_hf_self_fock(x_iter,hf_self_fock,iprint=.true.)
   call get_hf_self_hartree(x_iter,hf_self_hartree,iprint=.true.)
   !
   !
-
   !+- the unit cell is
   !+  |        Ta|
   !   |-N+       |
@@ -676,158 +668,159 @@ program officina
   !   !      +Ni-|
   !   |Ta        |
   !+- TRSB seeds 
-  call xiter_ik2ir(x_iter,x_iter_ir)
-  TRSBseed=0.1d0
-  CDSBseed=0d0
-  x_iter_ir(ir0,4,1) =  x_iter_ir(ir0,4,1) + xi*TRSBseed
-  x_iter_ir(irL,4,1) = -dreal(x_iter_ir(ir0,4,1)) + CDSBseed + xi*TRSBseed
-  call xiter_ir2ik(x_iter_ir,x_iter)
-  !call print_hyb(x_iter,filename='init_TNShyb')  
-  call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
-  call print_hyb(x_iter,filename='TRSBseed_TNShyb')
-  !+- CDSB seeds
+  ! call xiter_ik2ir(x_iter,x_iter_ir)
+  ! TRSBseed=0.1d0
+  ! CDSBseed=0d0
+  ! x_iter_ir(ir0,4,1) =  x_iter_ir(ir0,4,1) + xi*TRSBseed
+  ! x_iter_ir(irL,4,1) = -dreal(x_iter_ir(ir0,4,1)) + CDSBseed + xi*TRSBseed
+  ! call xiter_ir2ik(x_iter_ir,x_iter)
+  ! !call print_hyb(x_iter,filename='init_TNShyb')  
+  ! call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
+  ! call print_hyb(x_iter,filename='TRSBseed_TNShyb')
+
+  !+- initialize X-iter with some symmetry breaking seed
   x_iter=x_iter_bare
   call xiter_ik2ir(x_iter,x_iter_ir)
-  TRSBseed=0.d0
-  CDSBseed=0.1d0
+  ! TRSBseed=0.d0 -> parsed from input
+  ! CDSBseed=0.1d0
   x_iter_ir(ir0,4,1) =  x_iter_ir(ir0,4,1) + xi*TRSBseed
   x_iter_ir(irL,4,1) = -dreal(x_iter_ir(ir0,4,1)) + CDSBseed + xi*TRSBseed
   call xiter_ir2ik(x_iter_ir,x_iter)
   call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
-  call print_hyb(x_iter,filename='CDSBseed_TNShyb')
-
-
-
-  stop
-  ! op_seed_TNS(1) =  xi*0.1
-  ! op_seed_TNS(2) = -xi*0.1
+  call print_hyb(x_iter,filename='seed_TNShyb')
+  call print_xiter(x_iter,filename='x_iter_BLS')
+  x_iter=0d0
   !
-  !
-  !
-  
+  !+- if present read some previous solution
+  do ihf=1,Nhf_opt
+     do ispin=1,Nspin
+        file_name="x_iter_BLS_spin"//reg(txtfy(ispin))//"_ihf"//reg(txtfy(ihf))//".out"
+        inquire(file=file_name,exist=hf_in)
+        flen=file_length(file_name)
+        if(hf_in.and.flen.eq.Lk) then
+           !read it
+           uio=free_unit()
+           open (unit=uio,file=file_name)
+           do ik=1,Lk
+              read (uio,*) tmpread(1),tmpread(2),tmpread(3)
+              x_iter(ik,ihf,ispin) = tmpread(2)+xi*tmpread(3)
+           end do
+           close(uio)
+        end if
+     end do
+  end do
+  call print_xiter(x_iter,filename='read_x_iter')
 
 
-  
-  
-  stop
-  
-  !
-  !
-  allocate(hf_self_hartree(Lk,Norb,Nspin)); hf_self_hartree=0d0
-  ! compute the occupation numbers on each orbital
 
+  !+- HF-loop
+  unit_err=free_unit()
+  open(unit=unit_err,file='err_symm.out')
+  close(unit_err)
   
-  !+- allocate(ni_orb(Nspin,Norb)); ni_orb=0d0
-  !+- build the Hartree term properly (this is not working...)
-  ! do ispin=1,Nspin
-  !    iorb=1
-  !    uio=free_unit() 
-  !    open(unit=uio,file="hf_self_hartree_spin"//reg(txtfy(ispin))//"_iorb"//reg(txtfy(ihf))//".out")
-  !    do ik=1,Lk        
-  !       !
-  !       do jspin=1,Nspin
-  !          if(ispin.eq.jspin) then              
-  !             do jk=1,Lk
-  !                hf_self_hartree(ik,iorb,ispin)=hf_self_hartree(ik,iorb,ispin) + &
-  !                     Uss_VS_q(1,ik0)*x_iter(jk,1,jspin)*wtk(jk)
-  !                hf_self_hartree(ik,iorb,ispin)=hf_self_hartree(ik,iorb,ispin) + &
-  !                     Uss_VS_q(4,ik0)*x_iter(jk,4,jspin)*wtk(jk)                 
-  !             end do
-  !          else
-                 
-  !          end if
-  !          !
-  !       end do
-  !    end do
-  !          !
-  !          !+- need to build the hatree term properly
-  !          ! if(iorb.le.3) then
-  !          !    do jspin=1,Nspin
-  !          !       hf_self_hartree(ik,iorb,ispin)=hf_self_hartree(ik,iorb,ispin)+Uss_VS_q(iorb,ik0)*n
-  !          !    end do              
-  !          ! end if
-           
-           
-           
-  !          do jk=1,Lk
-  !             ktmp=kxgrid(ik)-kxgrid(jk)
-  !             do while(ktmp.lt.kxgrid(1))
-  !                ktmp=ktmp+1.d0
-  !             end do
-  !             do while(ktmp.gt.kxgrid(Lk))
-  !                ktmp=ktmp-1.d0
-  !             end do
-  !             iik=1+(Lk-1)/2*nint(1-ktmp/kxgrid(1))
-  !             if(iik.lt.1.or.iik.gt.Lk) stop "(iik.lt.1.or.iik.gt.Lk)"
-  !             !
-  !             hf_self_fock(ik,ihf,ispin) = hf_self_fock(ik,ihf,ispin) - &
-  !                  Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)
-  !             !+- this should be the best way of arranging the index - fix x_iter
-  !             !
-  !          end do
-  !          !
-  !          write(uio, '(40F18.10)') kpt_latt(ik,1),dreal(hf_self_fock(ik,ihf,ispin)),dimag(hf_self_fock(ik,ihf,ispin))
-  !       end do
-  !    do iorb=1,Norb
-  !       close(uio)
-  !    end do
-  ! end do
+  err_hf=1.d0
+  do jhf=1,Nhf
+     !
+     unit_err=free_unit()
+     open(unit=unit_err,file='err_symm.out',status='old',position='append')
+     write(unit_err,*) err_hf           
+     close(unit_err)
+     !
+     x_iter_=x_iter
+     !+- here I should compute the HF hamiltonian -+! 
 
-
-  
-  
-  stop
-  !RIPRENDI DA QUI
-  
-
-  
-  ! do ik=1,Lk
-  !    call FT_r2q(kpt_latt(ik,:),Uq_TNS(:,:,ik),Ur_TNS)
-  !    write(unit_io,'(10F18.10)') kpt_latt(ik,1),Uq_TNS(1,1,ik),Uq_TNS(1,2,ik)
-  ! end do
-
-  
-  ! allocate(Uq_TNS(Nspin,Nspin,Lk),Vq_TNS(Nspin,Nspin,Lk))
-  ! Uq_TNS=0d0
-  ! Vq_TNS=0d0
-  
-  ! allocate(hfint(Nspin,Lk,Nhf_opt)); hfint=0d0
-  ! do ik=1,Lk     
-  !    do ihf=1,Nhf_opt
-  !    end do
-  ! end do
      
+     !
+     ! lgr_iter_tmp=lgr_fix_phase
+     ! if(use_fsolve) then
+     !    call fsolve(fix_lgr_params,lgr_iter_tmp,tol=fs_tol,check=.false.)
+     ! else
+     !    call broyden1(fix_lgr_params,lgr_iter_tmp,tol=1.d-8)
+     ! end if
+     ! write(*,*) 'fsolve - ihf,jhf',ihf,jhf
+     ! lgr_iter=lgr_iter_tmp(1)+xi*lgr_iter_tmp(2)
+     !
+     H_Hf=HF_hamiltonian(x_iter,lgr_iter)
+     H_Hf=H_Hf+Hk_toy
+     !
+     call fix_mu(H_Hf,delta_hf,mu_fix,eout)
+     eoutHF=eout
+     !
+     do i=1,3
+        ir=ixr(i)
+        delta_hfr(:,:,ir)=0.d0
+        do ik=1,Lk
+           delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
+                delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
+        end do
+     end do
+     !
+     !+ -enforce the symmetry
+        x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
+        x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
+        x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
+        !
+        x_iter(4) = delta_hfr(1,3,ir0)                   !+- computed
+        x_iter(6) = delta_hfr(1,3,irR)                   !+- computed
+        !+- enforce symmetries -+!
+        x_iter(5) = -dreal(x_iter(6))-xi*dimag(x_iter(4))! delta_hfr(2,3,ir0)
+        x_iter(7) = -dreal(x_iter(4))-xi*dimag(x_iter(6))! delta_hfr(2,3,irR)
+        !
+        x_iter(8) = x_iter(1)   !delta_hfr(4,4,ir0)+delta_hfr(4+Norb,4+Norb,ir0)
+        x_iter(9) = x_iter(2)   !delta_hfr(5,5,ir0)+delta_hfr(5+Norb,5+Norb,ir0)
+        x_iter(10) = x_iter(3)  !delta_hfr(6,6,ir0)+delta_hfr(6+Norb,6+Norb,ir0)
+        !
+        x_iter(11) = x_iter(5) !delta_hfr(4,6,ir0)
+        x_iter(12) = x_iter(4) !delta_hfr(5,6,ir0)
+        !
+        x_iter(13) = x_iter(7) !delta_hfr(4,6,irL)
+        x_iter(14) = x_iter(6)  !delta_hfr(5,6,irL)
+        !           
+        Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
+        Eout=Eout-2d0*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
+        Eout=Eout + 2.d0*Vcell*(abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0)
+        Eout=Eout + 2.d0*Vcell*(abs(x_iter(6))**2.d0+abs(x_iter(7))**2.d0)
+        !
+        Eout=Eout-Ucell*0.25d0*(dreal(x_iter(8))**2.d0+dreal(x_iter(9))**2.d0+dreal(x_iter(10))**2.d0)
+        Eout=Eout-2d0*Vcell*(dreal(x_iter(8))*dreal(x_iter(10))+dreal(x_iter(9))*dreal(x_iter(10)))
+        Eout=Eout + 2.d0*Vcell*(abs(x_iter(11))**2.d0+abs(x_iter(12))**2.d0)
+        Eout=Eout + 2.d0*Vcell*(abs(x_iter(13))**2.d0+abs(x_iter(14))**2.d0)
+        !
+        !+- lagrange parameter term -+!
+        EoutLgr = 0d0
+        EoutLgr = EoutLgr-4d0*dreal(lgr_iter(1))*phi_sgn(1)*dreal(x_iter(4)+x_iter(6))
+        EoutLgr = EoutLgr-4d0*dreal(lgr_iter(1))*phi_sgn(2)*dreal(x_iter(5)+x_iter(7)) 
+        EoutLgr = EoutLgr-4d0*dreal(lgr_iter(1))*phi_sgn(3)*dreal(x_iter(11)+x_iter(13))
+        EoutLgr = EoutLgr-4d0*dreal(lgr_iter(1))*phi_sgn(4)*dreal(x_iter(12)+x_iter(14))
+        !
+        EoutLgr = EoutLgr+4d0*dimag(lgr_iter(1))*phi_sgn(1)*dimag(x_iter(4)+x_iter(6))
+        EoutLgr = EoutLgr+4d0*dimag(lgr_iter(1))*phi_sgn(2)*dimag(x_iter(5)+x_iter(7)) 
+        EoutLgr = EoutLgr+4d0*dimag(lgr_iter(1))*phi_sgn(3)*dimag(x_iter(11)+x_iter(13))
+        EoutLgr = EoutLgr+4d0*dimag(lgr_iter(1))*phi_sgn(4)*dimag(x_iter(12)+x_iter(14)) 
+        !
+        Eout=Eout+EoutLgr
+        !
+        ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
+        ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
+        !
+        uio=free_unit()
+        open(unit=uio,file='loop_fixed_order_parameter.out',status='old',position='append')
+        write(uio, '(50F18.10)') dreal(x_iter(1:14)),dimag(x_iter(1:14)),Eout+mu_fix*ntot,EoutHF+mu_fix*ntot,EoutLgr,dreal(lgr_iter(1)),dimag(lgr_iter(2))
+        close(uio)        
+        !
+        x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_
+        err_hf=0.d0
+        do i=1,14
+           err_hf=err_hf+abs(x_iter(i)-x_iter_(i))**2.d0
+        end do
+        if(err_hf.lt.hf_conv) exit
+     end do
 
 
   
 
-  !+ TMP : logspace integration
-  ! allocate(kpt_xchain(Lk)); kpt_xchain=kpt_latt(:,1)
-  ! allocate(kpt_xchain_log(Nkint))  !
-  ! kpt_xchain_log=logspace(1d-6,kpt_xchain(Lk),Nkint,base=exp(1.d0))
-  ! allocate(Uq_log(Nspin,Nspin,Nkint))
-  ! open(unit=unit_io,file='Vq_log.out') !+-   
-  ! do ik=1,Nkint
-  !    call FT_r2q(kpt_xchain_log(ik),Uq_log(:,:,ik),Ur_TNS)
-  !    write(unit_io,'(10F18.10)') kpt_xchain_log(ik),Uq_log(1,1,ik),Uq_log(1,2,ik)
-  ! end do
-  ! close(unit_io)
-  
-  stop
   
 
-  ! do ik=1,Lk
-  !    Uq_TNS=d0
-  !    delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
-  !         delta_hf_dyn(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
-  ! end do
-
-  
-  
-  !+-   
-  !stop
-
-  ! inquire(file='hf_BLS_free_final.out',exist=hf_in)  
   ! if(hf_in) then
   !    !allocate(x_iter(Nspin,Lk,Nhf_opt)); x_iter=0d0
   !    !
@@ -860,6 +853,19 @@ program officina
   ! !
   ! !
   ! call save_array('hf_BLS_free.init',x_iter)
+
+  
+  stop
+  !
+  !+- HF loop with unconstrained order parameter -+!
+  
+  
+
+  
+  
+  !+-   
+  !stop
+
   ! !
   ! do ihf=1,size(phi_list,1)
   !    !
@@ -1151,7 +1157,26 @@ contains
   end subroutine xiter_ir2ik
 
 
-  
+  !+- print the X-iter
+  subroutine print_xiter(x_iter_in,filename)
+    complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter_in
+    integer :: ispin,ihf,ik,uio
+    character(len=*),optional :: filename
+    character(len=100) :: filename_    
+    filename_="x_iter"
+    if(present(filename)) filename_=filename    
+    do ispin=1,Nspin
+       do ihf=1,Nhf_opt
+          uio=free_unit()
+          open(unit=uio,file=reg(filename_)//"_spin"//reg(txtfy(ispin))//"_ihf"//reg(txtfy(ihf))//".out")
+          do ik=1,Lk
+             write(uio, '(20F18.10)') kpt_latt(ik,1),dreal(x_iter(ik,ihf,ispin)),dimag(x_iter(ik,ihf,ispin))
+          end do
+          close(uio)
+       end do
+    end do
+  end subroutine print_xiter
+
   
   !+- write down the bare hybridizations
   subroutine print_hyb(x_iter_in,filename)
@@ -1579,12 +1604,16 @@ contains
     yout=-xi*yout!/(hbar_ev_ps*1d3) !+- here the time is measured in fs 
     !
   end function HF_eqs_of_motion
-
   
   !
+  !call get_hf_self_fock(x_iter,hf_self_fock,iprint=.true.)
+  !subroutine get_hf_self_fock(x_iter_in,hf_self_fock_out,iprint)
+
   function HF_hamiltonian(x_iter,lgr_) result(Hhf)
     implicit none
-    complex(8) :: x_iter(14)
+    complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter
+    complex(8),dimension(:,:,:),allocatable :: hf_self_fock
+    !
     complex(8),dimension(Nso,Nso,Lk) :: Hhf
     complex(8),optional :: lgr_(2)
     complex(8)          :: lgr(2)
@@ -1592,6 +1621,22 @@ contains
     !
     lgr=0d0
     if(present(lgr_)) lgr=lgr_
+
+    call get_hf_self_fock(x_iter,hf_self_fock)
+    do ik=1,Lk
+       do ispin=1,Nspin
+          do iorb=1,Norb
+             do jorb=1,Norb
+                iso=(ispin-1)*Norb+iorb
+                jso=(ispin-1)*Norb+jorb
+
+                !+- get ihf_opt from iorb,jorb and write the Hamiltonian matrix element. to be continued
+                
+             end do
+          end do
+       end do
+    end do
+
     
     Hhf=0.d0
     do ik=1,Lk
