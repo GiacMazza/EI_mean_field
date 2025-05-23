@@ -18,7 +18,9 @@ program officina
   logical :: plot_w90_bands
   !
   real(8),dimension(3) :: ktest
-  real(8),dimension(:),allocatable :: ek_out
+  !real(8),dimension(:),allocatable :: ek_out
+  real(8),dimension(:),allocatable :: ek_out,ek_out_up,ek_out_dw
+
   !
   complex(8),dimension(:),allocatable :: Uft
   complex(8),dimension(:,:),allocatable :: Hloc,Hktmp
@@ -92,7 +94,7 @@ program officina
   real(8) :: Ncell
   complex(8),dimension(:,:),allocatable :: ccij
   logical :: hartree
-  real(8),allocatable,dimension(:) :: Ta_fat,Ni_fat
+  real(8),allocatable,dimension(:,:) :: Ta_fat,Ni_fat
   integer :: ihyb_,jhyb_
 
   integer :: ix,iy,iz
@@ -121,7 +123,7 @@ program officina
   real(8),dimension(14) :: xr_iter
   real(8),dimension(28) :: xr_tmp
 
-  real(8) :: Ucell,Vcell,Wcell,xi_int
+  real(8) :: Ucell,Vcell,Wcell,xi_int,UTa,UNi
   real(8) :: Evalence,Econduction,tconduction,tvalence,tt_hyb,nn_hyb,tn_hyb
   real(8) :: w0gap
   logical :: use_fsolve  
@@ -177,7 +179,9 @@ program officina
   call parse_input_variable(plot_w90_bands,"plot_w90","input.conf",default=.true.)
   !
   call parse_input_variable(Vcell,"V","input.conf",default=1.d0)
-  call parse_input_variable(Ucell,"U","input.conf",default=1.d0)
+  call parse_input_variable(UNi,"UNi","input.conf",default=1.d0)
+  call parse_input_variable(UTa,"UTa","input.conf",default=1.d0)
+
   call parse_input_variable(Wcell,"W","input.conf",default=0.d0)
   !
   call parse_input_variable(Econduction,"Econduction","input.conf",default=1.7d0)
@@ -495,6 +499,68 @@ program officina
   !+- change this too
   call fix_mu(Hk_toy,delta_hf,mu_fix,eout)
   write(*,*) 'mu_fix',mu_fix
+
+
+  allocate(kpt_path(400,3))
+  allocate(ek_out_up(Norb))
+  allocate(ek_out_dw(Norb))  
+  allocate(Hktmp(Nso,Nso))
+
+  uio=free_unit()
+  open(unit=uio,file='tns_bare_bands.out')
+  unit_in=free_unit()
+  open(unit_in,file='tns_fat_bare.tns')
+  allocate(Ta_fat(Norb,Nspin),Ni_fat(Norb,Nspin))
+  !
+  modk=0.d0
+  do i=1,3
+     delta_kpath=kpath(i+1,:)-kpath(i,:)
+     do ik=1,100
+        j=(i-1)*100 + ik
+        kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
+        modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
+        !
+        Hktmp=0.d0
+        call FT_r2q(kpt_path(j,:),Hktmp,Hr_toy)
+        !
+        ek_out_up=0.0d0
+        call eigh(Hktmp(1:Norb,1:Norb),ek_out_up)
+        !
+        ek_out_dw=0.0d0
+        call eigh(Hktmp(Norb+1:2*Norb,Norb+1:2*Norb),ek_out_dw)
+        !
+        Ta_fat=0.d0
+        do ispin=1,2
+           do iorb=1,2
+              iso=(ispin-1)*Norb+iorb
+              Ta_fat(:,ispin)=Ta_fat(:,ispin)+abs(Hktmp(iso,(ispin-1)*Norb+1:(ispin-1)*Norb+Norb))**2.d0
+           end do
+           do iorb=4,5
+              iso=(ispin-1)*Norb+iorb
+              Ta_fat(:,ispin)=Ta_fat(:,ispin)+abs(Hktmp(iso,(ispin-1)*Norb+1:(ispin-1)*Norb+Norb))**2.d0
+           end do
+        end do
+        Ni_fat=0.d0
+        do ispin=1,2
+           iorb=3
+           iso=(ispin-1)*Norb+iorb
+           Ni_fat(:,ispin)=Ni_fat(:,ispin)+abs(Hktmp(iso,(ispin-1)*Norb+1:(ispin-1)*Norb+Norb))**2.d0
+           iorb=6
+           iso=(ispin-1)*Norb+iorb
+           Ni_fat(:,ispin)=Ni_fat(:,ispin)+abs(Hktmp(iso,(ispin-1)*Norb+1:(ispin-1)*Norb+Norb))**2.d0
+        end do
+        !
+        write(uio,'(30F18.10)') modk,ek_out_up-mu_fix,ek_out_dw-mu_fix
+        write(unit_in,'(30F18.10)') modk,Ta_fat(:,1),Ta_fat(:,2),Ni_fat(:,1),Ni_fat(:,2)        
+        !
+     end do
+     !
+  end do
+  close(uio)
+  close(unit_in)
+
+
+  
   !
   allocate(delta_hfr(Nso,Nso,nrpts))
   do ir=1,nrpts
@@ -587,17 +653,17 @@ program officina
   xi_int=xi_int*R1(1)
   do ir=1,nrpts
      !
-     Uss_VS_R(1,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
-     Uss_VS_R(2,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
-     Uss_VS_R(3,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
+     Uss_VS_R(1,ir) = UTa*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
+     Uss_VS_R(2,ir) = UTa*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
+     Uss_VS_R(3,ir) = UNi*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(4,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
      Uss_VS_R(5,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
      ! Uss_VS_R(4,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
      ! Uss_VS_R(5,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
      !
-     Uss_VS_R(6,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
-     Uss_VS_R(7,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
-     Uss_VS_R(8,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
+     Uss_VS_R(6,ir) = UTa*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
+     Uss_VS_R(7,ir) = UTa*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
+     Uss_VS_R(8,ir) = UNi*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
      Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
      ! Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
@@ -608,9 +674,9 @@ program officina
   if(tns_toy) then
      Uss_VS_R=0d0
      !+- 
-     Uss_VS_R(1,ir0) = Ucell
-     Uss_VS_R(2,ir0) = Ucell
-     Uss_VS_R(3,ir0) = Ucell
+     Uss_VS_R(1,ir0) = UTa
+     Uss_VS_R(2,ir0) = UTa
+     Uss_VS_R(3,ir0) = UNi
      !+- 
      Uss_VS_R(4,ir0) = Vcell
      Uss_VS_R(5,ir0) = Vcell
@@ -619,9 +685,9 @@ program officina
      ! Uss_VS_R(4,irR) = Vcell
      ! Uss_VS_R(5,irR) = Vcell
      !+-
-     Uss_VS_R(6,ir0) = Ucell
-     Uss_VS_R(7,ir0) = Ucell
-     Uss_VS_R(8,ir0) = Ucell
+     Uss_VS_R(6,ir0) = UTa
+     Uss_VS_R(7,ir0) = UTa
+     Uss_VS_R(8,ir0) = UNi
      !+- 
      Uss_VS_R(9,ir0) = Vcell
      Uss_VS_R(10,ir0) = Vcell
@@ -795,6 +861,75 @@ program officina
      if(err_hf.lt.hf_conv) exit
   end do
 
+
+  call print_hyb(x_iter,filename='final_hyb')
+
+
+
+  H_Hf=HF_hamiltonian(x_iter)
+  H_Hf=H_Hf+Hk_toy
+  call fix_mu(H_Hf,delta_hf,mu_fix,eout)
+  
+
+  !+- print bands
+  unit_in=free_unit()
+  open(unit=unit_in,file='TNS_bands_BLS.out')
+  uio=free_unit()
+  open(uio,file='TNS_fat_BLS.out')  
+  do ir=1,nrpts
+     call FT_q2r(rpt_latt(ir,:),Hr_toy(:,:,ir),H_hf)
+  end do
+  modk=0.d0
+  do i=1,3
+     delta_kpath=kpath(i+1,:)-kpath(i,:)
+     do ik=1,100
+        j=(i-1)*100 + ik
+        kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
+        modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
+        !
+        call FT_r2q(kpt_path(j,:),Hktmp,Hr_toy)
+        !
+        ek_out_up=0.0d0
+        call eigh(Hktmp(1:Norb,1:Norb),ek_out_up)
+        !
+        ek_out_dw=0.0d0
+        call eigh(Hktmp(Norb+1:2*Norb,Norb+1:2*Norb),ek_out_dw)
+        !
+        Ta_fat=0.d0
+        do ispin=1,2
+           do iorb=1,2
+              iso=(ispin-1)*Norb+iorb
+              Ta_fat(:,ispin)=Ta_fat(:,ispin)+abs(Hktmp(iso,(ispin-1)*Norb+1:(ispin-1)*Norb+Norb))**2.d0
+              !Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
+           end do
+           do iorb=4,5
+              iso=(ispin-1)*Norb+iorb
+              Ta_fat(:,ispin)=Ta_fat(:,ispin)+abs(Hktmp(iso,(ispin-1)*Norb+1:(ispin-1)*Norb+Norb))**2.d0
+              !Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
+           end do
+        end do
+        Ni_fat=0.d0
+        do ispin=1,2
+           iorb=3
+           iso=(ispin-1)*Norb+iorb
+           Ni_fat(:,ispin)=Ni_fat(:,ispin)+abs(Hktmp(iso,(ispin-1)*Norb+1:(ispin-1)*Norb+Norb))**2.d0
+           ! Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0
+           iorb=6
+           iso=(ispin-1)*Norb+iorb
+           Ni_fat(:,ispin)=Ni_fat(:,ispin)+abs(Hktmp(iso,(ispin-1)*Norb+1:(ispin-1)*Norb+Norb))**2.d0
+           ! Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0           
+        end do
+        !
+        write(unit_in,'(30F18.10)') modk,ek_out_up-mu_fix,ek_out_dw-mu_fix
+        write(uio,'(30F18.10)') modk,Ta_fat(:,1),Ta_fat(:,2),Ni_fat(:,1),Ni_fat(:,2)        
+        !
+     end do
+     !
+  end do
+  close(unit_in)
+  close(uio)
+
+  
   stop
 
   
