@@ -215,6 +215,8 @@ program officina
   call parse_input_variable(CDSBseed,"CDSBseed","input.conf",default=0.d0)
 
   call parse_input_variable(ucut_off,"ucut_off","input.conf",default=1d0)
+  call parse_input_variable(xi_int,"xi_int","input.conf",default=10000d0)
+
   call parse_input_variable(tns_toy,"tns_toy","input.conf",default=.false.)
 
   !
@@ -527,10 +529,11 @@ program officina
   !+- allocate and print the bare order parameters
   Nhf_opt=10
   allocate(x_iter(Lk,Nhf_opt,Nspin)); x_iter=0d0
+  allocate(x_iter_(Lk,Nhf_opt,Nspin)); x_iter_=0d0
+
   allocate(x_iter_bare(Lk,Nhf_opt,Nspin)); x_iter_bare=0d0
   call deltak_to_xiter(delta_hf,x_iter)
-
-  call print_xiter(x_iter,filename='print_xiter')
+  call print_xiter(x_iter,filename='bare_xiter')
     
   x_iter_bare=x_iter
   call init_ihfopt_strides
@@ -562,19 +565,19 @@ program officina
   close(uio)
   !
   !init output files
-  uio=free_unit()
-  open(unit=uio,file='loop_fixed_order_parameter.out')  !+- general output vs iloop
-  close(uio)
-  unit_err=free_unit()
-  open(unit=unit_err,file='err_symm.out')   !+- error file 
-  close(unit_err)
-  unit_io=free_unit()
-  open(unit=unit_io,file='ENE_VS_OP.out')   !+- energy vs OP at convergence 
-  close(unit_io)
-  unit_io=free_unit()
-  open(unit=unit_io,file='XITER_VS_OP.out') !+- general output VS OP at convergence
-  close(unit_io)
-  !
+  ! uio=free_unit()
+  ! open(unit=uio,file='loop_fixed_order_parameter.out')  !+- general output vs iloop
+  ! close(uio)
+  ! unit_err=free_unit()
+  ! open(unit=unit_err,file='err_symm.out')   !+- error file 
+  ! close(unit_err)
+  ! unit_io=free_unit()
+  ! open(unit=unit_io,file='ENE_VS_OP.out')   !+- energy vs OP at convergence 
+  ! close(unit_io)
+  ! unit_io=free_unit()
+  ! open(unit=unit_io,file='XITER_VS_OP.out') !+- general output VS OP at convergence
+  ! close(unit_io)
+  ! !
 
   !+- long-range interaction
   unit_io=free_unit()
@@ -587,18 +590,18 @@ program officina
      Uss_VS_R(1,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(2,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(3,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
-     Uss_VS_R(4,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
-     Uss_VS_R(5,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
-     ! Uss_VS_R(4,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
-     ! Uss_VS_R(5,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     Uss_VS_R(4,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
+     Uss_VS_R(5,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
+     ! Uss_VS_R(4,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
+     ! Uss_VS_R(5,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
      !
      Uss_VS_R(6,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(7,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(8,ir) = Ucell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
-     Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
-     Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
-     ! Uss_VS_R(9,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
-     ! Uss_VS_R(10,ir) = Vcell*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))
+     Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
+     Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
+     ! Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
+     ! Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
      !
   end do
 
@@ -611,8 +614,10 @@ program officina
      !+- 
      Uss_VS_R(4,ir0) = Vcell
      Uss_VS_R(5,ir0) = Vcell
-     Uss_VS_R(4,irR) = Vcell
-     Uss_VS_R(5,irR) = Vcell
+     Uss_VS_R(4,irL) = Vcell
+     Uss_VS_R(5,irL) = Vcell
+     ! Uss_VS_R(4,irR) = Vcell
+     ! Uss_VS_R(5,irR) = Vcell
      !+-
      Uss_VS_R(6,ir0) = Ucell
      Uss_VS_R(7,ir0) = Ucell
@@ -620,8 +625,10 @@ program officina
      !+- 
      Uss_VS_R(9,ir0) = Vcell
      Uss_VS_R(10,ir0) = Vcell
-     Uss_VS_R(9,irR) = Vcell
-     Uss_VS_R(10,irR) = Vcell
+     Uss_VS_R(9,irL) = Vcell
+     Uss_VS_R(10,irL) = Vcell
+     ! Uss_VS_R(9,irR) = Vcell
+     ! Uss_VS_R(10,irR) = Vcell
      !
   end if
   UsAs_VS_R = Uss_VS_R
@@ -655,8 +662,8 @@ program officina
   !
   !+- routines that give back the HF self-consistent fields
   !
-  call get_hf_self_fock(x_iter,hf_self_fock,iprint=.true.)
-  call get_hf_self_hartree(x_iter,hf_self_hartree,iprint=.true.)
+  ! call get_hf_self_fock(x_iter,hf_self_fock,iprint=.true.)
+  ! call get_hf_self_hartree(x_iter,hf_self_hartree,iprint=.true.)
   !
   !
   !+- the unit cell is
@@ -688,8 +695,6 @@ program officina
   call xiter_ir2ik(x_iter_ir,x_iter)
   call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
   call print_hyb(x_iter,filename='seed_TNShyb')
-  call print_xiter(x_iter,filename='x_iter_BLS')
-  x_iter=0d0
   !
   !+- if present read some previous solution
   do ihf=1,Nhf_opt
@@ -709,115 +714,88 @@ program officina
         end if
      end do
   end do
-  call print_xiter(x_iter,filename='read_x_iter')
-
-
+  call print_xiter(x_iter,filename='x_iter_BLS')
 
   !+- HF-loop
+  uio=free_unit()
+  open(unit=uio,file='hf_loop_BLS_hybs_chain1_ns1.out')
+  close(uio)
+  open(unit=uio,file='hf_loop_BLS_hybs_chain1_ns2.out')
+  close(uio)
+  open(unit=uio,file='hf_loop_BLS_hybs_chain2_ns1.out')
+  close(uio)
+  open(unit=uio,file='hf_loop_BLS_hybs_chain2_ns2.out')
+  close(uio)
+  open(unit=uio,file='hf_loop_BLS_energy.out')
+  close(uio)
+
+  open(unit=uio,file='hf_loop_order_parameter.out')
+  close(uio)
+
   unit_err=free_unit()
-  open(unit=unit_err,file='err_symm.out')
+  open(unit=unit_err,file='err_BLS.out')
   close(unit_err)
-  
+  !
   err_hf=1.d0
   do jhf=1,Nhf
      !
      unit_err=free_unit()
-     open(unit=unit_err,file='err_symm.out',status='old',position='append')
+     open(unit=unit_err,file='err_BLS.out',status='old',position='append')
      write(unit_err,*) err_hf           
      close(unit_err)
      !
      x_iter_=x_iter
      !+- here I should compute the HF hamiltonian -+! 
-
-     
-     !
-     ! lgr_iter_tmp=lgr_fix_phase
-     ! if(use_fsolve) then
-     !    call fsolve(fix_lgr_params,lgr_iter_tmp,tol=fs_tol,check=.false.)
-     ! else
-     !    call broyden1(fix_lgr_params,lgr_iter_tmp,tol=1.d-8)
-     ! end if
-     ! write(*,*) 'fsolve - ihf,jhf',ihf,jhf
-     ! lgr_iter=lgr_iter_tmp(1)+xi*lgr_iter_tmp(2)
-     !
-     H_Hf=HF_hamiltonian(x_iter,lgr_iter)
+     H_Hf=HF_hamiltonian(x_iter)
      H_Hf=H_Hf+Hk_toy
      !
      call fix_mu(H_Hf,delta_hf,mu_fix,eout)
      eoutHF=eout
      !
-     do i=1,3
-        ir=ixr(i)
-        delta_hfr(:,:,ir)=0.d0
-        do ik=1,Lk
-           delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
-                delta_hf(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
-        end do
-     end do
+     call deltak_to_xiter(delta_hf,x_iter)
+     call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
+     call xiter_ik2ir(x_iter,x_iter_ir)
+
+     ! call print_xiter(x_iter,filename='loop_xiter')
+     ! call print_hyb(x_iter,filename='loop_hyb')
+
+     
+     !+- compute the double counting energy (to be done) -+!
+
+     
+     uio=free_unit()
+     open(unit=uio,file='hf_loop_BLS_hybs_chain1_ns1.out',status='old',position='append')
+     write(uio,'(30F18.10)') x_iter_ir(ir0,1:5,1),x_iter_ir(irL,1:5,1)
+     close(uio)
+     open(unit=uio,file='hf_loop_BLS_hybs_chain1_ns2.out',status='old',position='append')
+     write(uio,'(30F18.10)') x_iter_ir(ir0,1:5,2),x_iter_ir(irL,1:5,2)
+     close(uio)
+     open(unit=uio,file='hf_loop_BLS_hybs_chain2_ns1.out',status='old',position='append')
+     write(uio,'(30F18.10)') x_iter_ir(ir0,6:10,2),x_iter_ir(irL,6:10,2)
+     close(uio)
+     open(unit=uio,file='hf_loop_BLS_hybs_chain2_ns2.out',status='old',position='append')
+     write(uio,'(30F18.10)') x_iter_ir(ir0,6:10,2),x_iter_ir(irL,6:10,2)
+     close(uio)
+     open(unit=uio,file='hf_loop_order_parameter.out',status='old',position='append')
+     write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,4,1)+x_iter_ir(irL,4,1)),dimag(x_iter_ir(ir0,4,1)),dimag(x_iter_ir(irL,4,1))
+     close(uio)
+
+     !+- here I should print the energy -+!
      !
-     !+ -enforce the symmetry
-        x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
-        x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
-        x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
-        !
-        x_iter(4) = delta_hfr(1,3,ir0)                   !+- computed
-        x_iter(6) = delta_hfr(1,3,irR)                   !+- computed
-        !+- enforce symmetries -+!
-        x_iter(5) = -dreal(x_iter(6))-xi*dimag(x_iter(4))! delta_hfr(2,3,ir0)
-        x_iter(7) = -dreal(x_iter(4))-xi*dimag(x_iter(6))! delta_hfr(2,3,irR)
-        !
-        x_iter(8) = x_iter(1)   !delta_hfr(4,4,ir0)+delta_hfr(4+Norb,4+Norb,ir0)
-        x_iter(9) = x_iter(2)   !delta_hfr(5,5,ir0)+delta_hfr(5+Norb,5+Norb,ir0)
-        x_iter(10) = x_iter(3)  !delta_hfr(6,6,ir0)+delta_hfr(6+Norb,6+Norb,ir0)
-        !
-        x_iter(11) = x_iter(5) !delta_hfr(4,6,ir0)
-        x_iter(12) = x_iter(4) !delta_hfr(5,6,ir0)
-        !
-        x_iter(13) = x_iter(7) !delta_hfr(4,6,irL)
-        x_iter(14) = x_iter(6)  !delta_hfr(5,6,irL)
-        !           
-        Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
-        Eout=Eout-2d0*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
-        Eout=Eout + 2.d0*Vcell*(abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0)
-        Eout=Eout + 2.d0*Vcell*(abs(x_iter(6))**2.d0+abs(x_iter(7))**2.d0)
-        !
-        Eout=Eout-Ucell*0.25d0*(dreal(x_iter(8))**2.d0+dreal(x_iter(9))**2.d0+dreal(x_iter(10))**2.d0)
-        Eout=Eout-2d0*Vcell*(dreal(x_iter(8))*dreal(x_iter(10))+dreal(x_iter(9))*dreal(x_iter(10)))
-        Eout=Eout + 2.d0*Vcell*(abs(x_iter(11))**2.d0+abs(x_iter(12))**2.d0)
-        Eout=Eout + 2.d0*Vcell*(abs(x_iter(13))**2.d0+abs(x_iter(14))**2.d0)
-        !
-        !+- lagrange parameter term -+!
-        EoutLgr = 0d0
-        EoutLgr = EoutLgr-4d0*dreal(lgr_iter(1))*phi_sgn(1)*dreal(x_iter(4)+x_iter(6))
-        EoutLgr = EoutLgr-4d0*dreal(lgr_iter(1))*phi_sgn(2)*dreal(x_iter(5)+x_iter(7)) 
-        EoutLgr = EoutLgr-4d0*dreal(lgr_iter(1))*phi_sgn(3)*dreal(x_iter(11)+x_iter(13))
-        EoutLgr = EoutLgr-4d0*dreal(lgr_iter(1))*phi_sgn(4)*dreal(x_iter(12)+x_iter(14))
-        !
-        EoutLgr = EoutLgr+4d0*dimag(lgr_iter(1))*phi_sgn(1)*dimag(x_iter(4)+x_iter(6))
-        EoutLgr = EoutLgr+4d0*dimag(lgr_iter(1))*phi_sgn(2)*dimag(x_iter(5)+x_iter(7)) 
-        EoutLgr = EoutLgr+4d0*dimag(lgr_iter(1))*phi_sgn(3)*dimag(x_iter(11)+x_iter(13))
-        EoutLgr = EoutLgr+4d0*dimag(lgr_iter(1))*phi_sgn(4)*dimag(x_iter(12)+x_iter(14)) 
-        !
-        Eout=Eout+EoutLgr
-        !
-        ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
-        ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
-        !
-        uio=free_unit()
-        open(unit=uio,file='loop_fixed_order_parameter.out',status='old',position='append')
-        write(uio, '(50F18.10)') dreal(x_iter(1:14)),dimag(x_iter(1:14)),Eout+mu_fix*ntot,EoutHF+mu_fix*ntot,EoutLgr,dreal(lgr_iter(1)),dimag(lgr_iter(2))
-        close(uio)        
-        !
-        x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_
-        err_hf=0.d0
-        do i=1,14
-           err_hf=err_hf+abs(x_iter(i)-x_iter_(i))**2.d0
-        end do
-        if(err_hf.lt.hf_conv) exit
-     end do
+     ! ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
+     ! ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
+     ! !
+     ! uio=free_unit()
+     ! open(unit=uio,file='loop_fixed_order_parameter.out',status='old',position='append')
+     ! write(uio, '(50F18.10)') dreal(x_iter(1:14)),dimag(x_iter(1:14)),Eout+mu_fix*ntot,EoutHF+mu_fix*ntot,EoutLgr,dreal(lgr_iter(1)),dimag(lgr_iter(2))
+     ! close(uio)        
+     !
+     x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_          
+     err_hf=get_hf_err(x_iter,x_iter_)
+     if(err_hf.lt.hf_conv) exit
+  end do
 
-
-  
+  stop
 
   
 
@@ -1026,6 +1004,23 @@ program officina
   !
 contains
 
+  function get_hf_err(x_iter_in,x_iter_inn) result(err)
+    complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) ::  x_iter_in
+    complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) ::  x_iter_inn
+    real(8) :: err
+    integer :: ik,ihf,ispin,i
+    err=0d0
+    do ik=1,Lk
+       do ihf=1,Nhf_opt
+          do ispin=1,Nspin
+             err = err + abs(x_iter_in(ik,ihf,ispin)-x_iter_inn(ik,ihf,ispin))**2d0
+          end do
+       end do
+    end do
+    err=err/dble(Lk*Nspin*Nhf_opt)
+  end function get_hf_err
+
+  
   subroutine init_ihfopt_strides
     !
     allocate(iorb_to_ihf(Norb)); iorb_to_ihf=0
@@ -1620,98 +1615,24 @@ contains
     integer :: iso,jso,iorb,jorb
     !
     lgr=0d0
-    if(present(lgr_)) lgr=lgr_
-
-    call get_hf_self_fock(x_iter,hf_self_fock)
+    if(present(lgr_)) lgr=lgr_    
+    call get_hf_self_fock(x_iter,hf_self_fock,iprint=.true.)
+    Hhf=0d0
     do ik=1,Lk
        do ispin=1,Nspin
           do iorb=1,Norb
-             do jorb=1,Norb
+             do jorb=iorb,Norb
                 iso=(ispin-1)*Norb+iorb
                 jso=(ispin-1)*Norb+jorb
-
-                !+- get ihf_opt from iorb,jorb and write the Hamiltonian matrix element. to be continued
-                
+                !
+                ihf = ijorb_to_ihf(iorb,jorb)
+                if(ihf.ne.0) then
+                   Hhf(jso,iso,ik) = hf_self_fock(ik,ihf,ispin)
+                   Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
+                end if
+                !
              end do
           end do
-       end do
-    end do
-
-    
-    Hhf=0.d0
-    do ik=1,Lk
-       do ispin=1,Nspin
-          !
-          iorb=1
-          iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(1)+2.d0*Vcell*x_iter(3)
-          !
-          iorb=2
-          iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(2)+2.d0*Vcell*x_iter(3)          
-          !
-          iorb=3
-          iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(3)+2.d0*Vcell*(x_iter(2)+x_iter(1))
-          !
-          iorb=1; iso=(ispin-1)*Norb+iorb          
-          jorb=3; jso=(ispin-1)*Norb+jorb
-          ! Hhf(jso,iso,ik) = -Vcell*x_iter(4)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
-          ! Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(6)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))
-          !
-          Hhf(jso,iso,ik) = -Vcell*(x_iter(4)+x_iter(6)*exp(-xi*dot_product(R1,kpt_latt(ik,:))))   !+- the interaction term
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + dreal(lgr(1))*phi_sgn(1)*(1.d0+exp(-xi*dot_product(R1,kpt_latt(ik,:)))) !+- the CDSB l.p.          
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - xi*dimag(lgr(1))*phi_sgn(1) !+- the TRSB l.p. ir0
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - xi*dimag(lgr(1))*phi_sgn(1)*exp(-xi*dot_product(R1,kpt_latt(ik,:))) !+- the TRSB l.p. irR
-          Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
-          !
-          iorb=2; iso=(ispin-1)*Norb+iorb          
-          jorb=3; jso=(ispin-1)*Norb+jorb
-          ! Hhf(jso,iso,ik) = -Vcell*x_iter(5)*(1.d0-exp(-xi*dot_product(R1,kpt_latt(ik,:))))
-          ! Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(7)*exp(-xi*dot_product(R1,kpt_latt(ik,:)))          
-
-          Hhf(jso,iso,ik) = -Vcell*(x_iter(5)+x_iter(7)*exp(-xi*dot_product(R1,kpt_latt(ik,:))))   !+- the interaction term
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + dreal(lgr(1))*phi_sgn(2)*(1.d0+exp(-xi*dot_product(R1,kpt_latt(ik,:)))) !+- the CDSB l.p.
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - xi*dimag(lgr(1))*phi_sgn(2) !+- the TRSB l.p. ir0
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - xi*dimag(lgr(1))*phi_sgn(2)*exp(-xi*dot_product(R1,kpt_latt(ik,:))) !+- the TRSB l.p. irR                    
-          Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
-          !
-          !
-          iorb=4
-          iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(8)+2.d0*Vcell*x_iter(10)
-          !
-          iorb=5
-          iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(9)+2.d0*Vcell*x_iter(10)          
-          !
-          iorb=6
-          iso=(ispin-1)*Norb+iorb
-          Hhf(iso,iso,ik) = 0.5d0*Ucell*x_iter(10)+2.d0*Vcell*(x_iter(9)+x_iter(8))
-          !
-          iorb=4; iso=(ispin-1)*Norb+iorb          
-          jorb=6; jso=(ispin-1)*Norb+jorb
-          ! Hhf(jso,iso,ik) = -Vcell*x_iter(11)*(1.d0-exp(xi*dot_product(R1,kpt_latt(ik,:))))
-          ! Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(13)*exp(xi*dot_product(R1,kpt_latt(ik,:)))
-
-          Hhf(jso,iso,ik) = -Vcell*(x_iter(11)+x_iter(13)*exp(xi*dot_product(R1,kpt_latt(ik,:))))   !+- the interaction term
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + dreal(lgr(1))*phi_sgn(3)*(1.d0+exp(xi*dot_product(R1,kpt_latt(ik,:))))  !+- the CDSB l.p.
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - xi*dimag(lgr(1))*phi_sgn(3) !+- the TRSB l.p. ir0
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - xi*dimag(lgr(1))*phi_sgn(3)*exp(xi*dot_product(R1,kpt_latt(ik,:))) !+- the TRSB l.p. irL
-          Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
-          !
-          iorb=5; iso=(ispin-1)*Norb+iorb          
-          jorb=6; jso=(ispin-1)*Norb+jorb
-          ! Hhf(jso,iso,ik) = -Vcell*x_iter(12)*(1.d0-exp(xi*dot_product(R1,kpt_latt(ik,:))))
-          ! Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - Vcell*x_iter(14)*exp(xi*dot_product(R1,kpt_latt(ik,:)))
-
-          Hhf(jso,iso,ik) = -Vcell*(x_iter(12)+x_iter(14)*exp(xi*dot_product(R1,kpt_latt(ik,:))))   !+- the interaction term
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) + dreal(lgr(1))*phi_sgn(4)*(1.d0+exp(xi*dot_product(R1,kpt_latt(ik,:)))) !+- the CDSB l.p.
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - xi*dimag(lgr(1))*phi_sgn(4) !+- the TRSB l.p.
-          Hhf(jso,iso,ik) = Hhf(jso,iso,ik) - xi*dimag(lgr(1))*phi_sgn(4)*exp(xi*dot_product(R1,kpt_latt(ik,:))) !+- the TRSB l.p. irL
-          !
-          Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
-          !
        end do
     end do
     !
