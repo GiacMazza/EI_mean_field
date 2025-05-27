@@ -665,8 +665,8 @@ program officina
      Uss_VS_R(6,ir) = UTa*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(7,ir) = UTa*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(8,ir) = UNi*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
-     Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
-     Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
+     Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
+     Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
      !
      ! Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
      ! Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
