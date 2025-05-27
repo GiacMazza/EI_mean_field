@@ -164,6 +164,7 @@ program officina
   call StartMsg_MPI(comm)
   rank = get_Rank_MPI(comm)
   master = get_Master_MPI(comm)
+  
   !+- PARSE INPUT DRIVER -+!
   call parse_input_variable(Nk_x,"Nk_x","input.conf",default=51)
   call parse_input_variable(Nk_y,"Nk_y","input.conf",default=1)
@@ -361,6 +362,7 @@ program officina
         iso=(ispin-1)*Norb+iorb
         Hk_toy(iso,iso,ik) = Evalence  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))
         !
+        !C*_{Ta} C_{Ni}
         iorb=1
         jorb=3
         iso=(ispin-1)*Norb+iorb
@@ -395,7 +397,7 @@ program officina
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=-R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase))
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         !
         iorb=5
@@ -403,7 +405,7 @@ program officina
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=-R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase))
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         !
         !+- Ta-Ta chain hybridization -+!
@@ -604,8 +606,6 @@ program officina
   x_iter_bare=x_iter
   call init_ihfopt_strides
   call print_hyb(x_iter,filename='bare_TNShyb')
-
-
   
   !+- print the bare energy
   ntot = 0.0
@@ -658,19 +658,21 @@ program officina
      Uss_VS_R(3,ir) = UNi*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(4,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
      Uss_VS_R(5,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
+     !
      ! Uss_VS_R(4,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
      ! Uss_VS_R(5,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
      !
      Uss_VS_R(6,ir) = UTa*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(7,ir) = UTa*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(8,ir) = UNi*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
-     Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
-     Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
+     Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
+     Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
+     !
      ! Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
      ! Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
      !
   end do
-
+  
   if(tns_toy) then
      Uss_VS_R=0d0
      !+- 
@@ -691,10 +693,10 @@ program officina
      !+- 
      Uss_VS_R(9,ir0) = Vcell
      Uss_VS_R(10,ir0) = Vcell
-     Uss_VS_R(9,irL) = Vcell
-     Uss_VS_R(10,irL) = Vcell
-     ! Uss_VS_R(9,irR) = Vcell
-     ! Uss_VS_R(10,irR) = Vcell
+     ! Uss_VS_R(9,irL) = Vcell
+     ! Uss_VS_R(10,irL) = Vcell
+     Uss_VS_R(9,irR) = Vcell
+     Uss_VS_R(10,irR) = Vcell
      !
   end if
   UsAs_VS_R = Uss_VS_R
@@ -863,14 +865,11 @@ program officina
 
 
   call print_hyb(x_iter,filename='final_hyb')
-
-
-
+  
   H_Hf=HF_hamiltonian(x_iter)
   H_Hf=H_Hf+Hk_toy
   call fix_mu(H_Hf,delta_hf,mu_fix,eout)
   
-
   !+- print bands
   unit_in=free_unit()
   open(unit=unit_in,file='TNS_bands_BLS.out')
@@ -1417,7 +1416,7 @@ contains
              hf_self_fock_out(ik,ihf,ispin)=0d0
              !           
              do jk=1,Lk              
-                if(ik.ne.jk) then
+                if(ik.ne.jk.or.tns_toy) then
                    ktmp=kxgrid(ik)-kxgrid(jk)
                    do while(ktmp.lt.-0.5d0)
                       ktmp=ktmp+1.d0
