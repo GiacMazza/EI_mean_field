@@ -155,7 +155,7 @@ program officina
 
   integer,dimension(:,:),allocatable :: ivec2idelta
   integer,dimension(:,:,:),allocatable :: idelta2ivec
-  logical ::tns_toy
+  logical ::tns_toy,op_symm
   
   
   !+- START MPI -+!
@@ -223,6 +223,7 @@ program officina
   call parse_input_variable(xi_int,"xi_int","input.conf",default=10000d0)
 
   call parse_input_variable(tns_toy,"tns_toy","input.conf",default=.false.)
+  call parse_input_variable(op_symm,"op_symm","input.conf",default=.true.)
 
   !
   call get_global_vars
@@ -665,11 +666,11 @@ program officina
      Uss_VS_R(6,ir) = UTa*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(7,ir) = UTa*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(8,ir) = UNi*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
-     Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
-     Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
+     Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1))-R1(1))/xi_int)
+     Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1))-R1(1))/xi_int)
      !
-     ! Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
-     ! Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
+     ! Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
+     ! Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
      !
   end do
   
@@ -758,10 +759,11 @@ program officina
   call xiter_ik2ir(x_iter,x_iter_ir)
   ! TRSBseed=0.d0 -> parsed from input
   ! CDSBseed=0.1d0
-  x_iter_ir(ir0,4,1) =  x_iter_ir(ir0,4,1) + xi*TRSBseed
-  x_iter_ir(irL,4,1) = -dreal(x_iter_ir(ir0,4,1)) + CDSBseed + xi*TRSBseed
+  x_iter_ir(ir0,4,:) =  x_iter_ir(ir0,4,:) + xi*TRSBseed
+  x_iter_ir(irL,4,:) = -dreal(x_iter_ir(ir0,4,:)) + CDSBseed + xi*TRSBseed
   call xiter_ir2ik(x_iter_ir,x_iter)
   call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
+  !call print_xiter(x_iter,filename='seed_xiter')
   call print_hyb(x_iter,filename='seed_TNShyb')
   !
   !+- if present read some previous solution
@@ -795,9 +797,14 @@ program officina
   open(unit=uio,file='hf_loop_BLS_hybs_chain2_ns2.out')
   close(uio)
   open(unit=uio,file='hf_loop_BLS_energy.out')
+  close(uio)  
+  open(unit=uio,file='hf_loop_order_parameter_chain1_plus.out')
   close(uio)
-
-  open(unit=uio,file='hf_loop_order_parameter.out')
+  open(unit=uio,file='hf_loop_order_parameter_chain1_minus.out')
+  close(uio)
+  open(unit=uio,file='hf_loop_order_parameter_chain2_plus.out')
+  close(uio)
+  open(unit=uio,file='hf_loop_order_parameter_chain2_minus.out')
   close(uio)
 
   unit_err=free_unit()
@@ -818,10 +825,16 @@ program officina
      H_Hf=H_Hf+Hk_toy
      !
      call fix_mu(H_Hf,delta_hf,mu_fix,eout)
-     eoutHF=eout
-     !
+
+     !+- test
+     ! do ik=1,Lk
+     !    !+- delta_hf(Nso,Nso,Lk)
+     !    write(675,'(10F18.10)') delta_hf(1,1,ik),delta_hf(2,2,ik),delta_hf(3,3,ik),delta_hf(1,3,ik),delta_hf(2,3,ik)
+     ! end do          
+     eoutHF=eout     !
      call deltak_to_xiter(delta_hf,x_iter)
-     call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
+
+     call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=.true.)
      call xiter_ik2ir(x_iter,x_iter_ir)
 
      ! call print_xiter(x_iter,filename='loop_xiter')
@@ -844,10 +857,24 @@ program officina
      open(unit=uio,file='hf_loop_BLS_hybs_chain2_ns2.out',status='old',position='append')
      write(uio,'(30F18.10)') x_iter_ir(ir0,6:10,2),x_iter_ir(irL,6:10,2)
      close(uio)
-     open(unit=uio,file='hf_loop_order_parameter.out',status='old',position='append')
-     write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,4,1)+x_iter_ir(irL,4,1)),dimag(x_iter_ir(ir0,4,1)),dimag(x_iter_ir(irL,4,1))
+     
+     open(unit=uio,file='hf_loop_order_parameter_chain1_plus.out',status='old',position='append')
+     write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,4,1)+x_iter_ir(irL,4,1)),dimag(x_iter_ir(ir0,4,1)),dimag(x_iter_ir(irL,4,1)), &
+          dreal(x_iter_ir(ir0,4,2)+x_iter_ir(irL,4,2)),dimag(x_iter_ir(ir0,4,2)),dimag(x_iter_ir(irL,4,2))
      close(uio)
-
+     open(unit=uio,file='hf_loop_order_parameter_chain1_minus.out',status='old',position='append')
+     write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,5,1)+x_iter_ir(irL,5,1)),dimag(x_iter_ir(ir0,5,1)),dimag(x_iter_ir(irL,5,1)), &
+          dreal(x_iter_ir(ir0,5,2)+x_iter_ir(irL,5,2)),dimag(x_iter_ir(ir0,5,2)),dimag(x_iter_ir(irL,5,2))     
+     close(uio)
+     open(unit=uio,file='hf_loop_order_parameter_chain2_plus.out',status='old',position='append')
+     write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,9,1)+x_iter_ir(irR,9,1)),dimag(x_iter_ir(ir0,9,1)),dimag(x_iter_ir(irR,9,1)), &
+          dreal(x_iter_ir(ir0,9,2)+x_iter_ir(irL,9,2)),dimag(x_iter_ir(ir0,9,2)),dimag(x_iter_ir(irL,9,2))
+     close(uio)
+     open(unit=uio,file='hf_loop_order_parameter_chain2_minus.out',status='old',position='append')
+     write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,10,1)+x_iter_ir(irR,10,1)),dimag(x_iter_ir(ir0,10,1)),dimag(x_iter_ir(irR,10,1)), &
+          dreal(x_iter_ir(ir0,10,2)+x_iter_ir(irR,10,2)),dimag(x_iter_ir(ir0,10,2)),dimag(x_iter_ir(irR,10,2))
+     close(uio)
+     
      !+- here I should print the energy -+!
      !
      ! ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
@@ -1186,8 +1213,8 @@ contains
     ijorb_to_ihf(5,5) = 7
     ijorb_to_ihf(6,6) = 8  
     ijorb_to_ihf(4,6) = 9
-    ijorb_to_ihf(5,6) = 10
     ijorb_to_ihf(6,4) = 9
+    ijorb_to_ihf(5,6) = 10
     ijorb_to_ihf(6,5) = 10
     !
   end subroutine init_ihfopt_strides
@@ -1249,8 +1276,12 @@ contains
        end do
     end do
     !
-    if(spin_symm_) x_iter_out(:,:,2)=x_iter_in(:,:,1)
     x_iter_in = x_iter_out
+    if(spin_symm_) x_iter_in(:,:,2)=x_iter_in(:,:,1)
+    
+    ! call print_xiter(x_iter_in,'INinv_test_xiter')
+    ! call print_xiter(x_iter_out,'OUTinv_test_xiter')
+    
   end subroutine enforce_inv_hf
 
   
@@ -1480,7 +1511,7 @@ contains
     x_iter_out(:,4,2) = deltak_in(1+Norb,3+Norb,:)
     !
     x_iter_out(:,5,1) = deltak_in(2,3,:)
-    x_iter_out(:,5,1) = deltak_in(2+Norb,3+Norb,:)
+    x_iter_out(:,5,2) = deltak_in(2+Norb,3+Norb,:)
     !
     x_iter_out(:,6,1) = deltak_in(4,4,:)
     x_iter_out(:,6,2) = deltak_in(4+Norb,4+Norb,:)
