@@ -84,7 +84,7 @@ program officina
   type(rgb_color),dimension(2) :: color_bands
   character(len=1),dimension(4) :: kpoint_name
 
-  real(8) :: Eout,EoutHF,EoutLgr
+  real(8) :: Eout,EoutHF,EoutLgr,E_dc
 
 
 
@@ -145,7 +145,8 @@ program officina
   real(8),dimension(1) :: lgr_iter_tmp_
 
   real(8),dimension(:),allocatable :: phi_list
-  real(8) :: NTNT_loop_area,hop_phase
+  real(8) :: gfactor,Bfield,hop_phase,TNTN_flux,spin_seed
+
   !
 
   !+- the dynamics
@@ -214,8 +215,10 @@ program officina
   call parse_input_variable(lgr_fix_verbose,"lgr_fix_verbose","input.conf",default=0)
   call parse_input_variable(lgr_fix_phase,"lgr_fix_phase","input.conf",default=[0d0,0d0])
   !
-  call parse_input_variable(hop_phase,"hop_phase","input.conf",default=1.d-3)
-
+  !call parse_input_variable(hop_phase,"hop_phase","input.conf",default=1.d-3)
+  call parse_input_variable(gfactor,"gfactor","input.conf",default=0.d0)
+  call parse_input_variable(Bfield,"Bfield","input.conf",default=0.d0,comment='B-field in Tesla')
+  !
   call parse_input_variable(TRSBseed,"TRSBseed","input.conf",default=0.d0)
   call parse_input_variable(CDSBseed,"CDSBseed","input.conf",default=0.d0)
 
@@ -251,6 +254,15 @@ program officina
   Bk3(3)=2.d0*pi/R3(3)
   !+- build a monkhorst-pack grid -+!
   call build_mp_grid_2d(Nk_x,Nk_y)
+
+
+  TNTN_flux=Bfield*sqrt(dot_product(R3,R3))*0.25*sqrt(dot_product(R1,R1))
+  write(*,*) "TNTN_flux",TNTN_flux
+  write(*,*) "TNTN_flux_over_flux_quantum",TNTN_flux/flux_quantum_TAng2
+  write(*,*) "zeeman field",Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield
+  hop_phase=TNTN_flux/4./(flux_quantum_TAng2/2./pi)
+  write(*,*) "hop-phase",hop_phase
+
 
   !
   Lk=Nk_x*Nk_y
@@ -806,6 +818,8 @@ program officina
   close(uio)
   open(unit=uio,file='hf_loop_order_parameter_chain2_minus.out')
   close(uio)
+  open(unit=uio,file='hf_loop_energy.out')
+  close(uio)
 
   unit_err=free_unit()
   open(unit=unit_err,file='err_BLS.out')
@@ -833,18 +847,21 @@ program officina
      ! end do          
      eoutHF=eout     !
      call deltak_to_xiter(delta_hf,x_iter)
-
      call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=.true.)
+     !
+     call get_double_counting_energy(x_iter,E_dc); Eout=Eout+E_dc
+     call get_ni_loc(x_iter,ni_orb,ntot)
+     !
      call xiter_ik2ir(x_iter,x_iter_ir)
-
      ! call print_xiter(x_iter,filename='loop_xiter')
      ! call print_hyb(x_iter,filename='loop_hyb')
-
-     
-     !+- compute the double counting energy (to be done) -+!
-
-     
      uio=free_unit()
+
+     open(unit=uio,file='hf_loop_energy.out',status='old',position='append')
+     write(uio,'(30F18.10)') Eout+mu_fix*ntot,Eout,E_dc
+     close(uio)
+
+     
      open(unit=uio,file='hf_loop_BLS_hybs_chain1_ns1.out',status='old',position='append')
      write(uio,'(30F18.10)') x_iter_ir(ir0,1:5,1),x_iter_ir(irL,1:5,1)
      close(uio)
@@ -1165,6 +1182,30 @@ program officina
   !
 contains
 
+  subroutine get_double_counting_energy(x_iter_in,E_dc)
+    implicit none
+    complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter_in
+    real(8) :: E_dc
+    complex(8) :: Ecmplx
+    complex(8),dimension(:,:,:),allocatable :: hf_self_fock
+    integer :: ihf,ik,ispin
+    !
+    E_dc=0d0
+    Ecmplx=0d0
+    !
+    call get_hf_self_fock(x_iter,hf_self_fock,iprint=.false.)
+    do ik=1,Lk
+       do ihf=1,Nhf_opt
+          do ispin=1,Nspin
+             Ecmplx = Ecmplx + hf_self_fock(ik,ihf,ispin)*conjg(x_iter_in(ik,ihf,ispin))*wtk(ik)
+          end do
+       end do
+    end do
+    if(abs(dimag(Ecmplx)).gt.1E-6) write(*,*) "WARNING abs(dimag(Ecmplx)).gt.1E-6",Ecmplx
+    E_dc=dreal(Ecmplx)
+    !
+  end subroutine get_double_counting_energy
+  
   function get_hf_err(x_iter_in,x_iter_inn) result(err)
     complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) ::  x_iter_in
     complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) ::  x_iter_inn
@@ -1470,22 +1511,26 @@ contains
     !
   end subroutine get_hf_self_fock
   !
-  subroutine get_ni_loc(x_iter_in,ni_out)
+  subroutine get_ni_loc(x_iter_in,ni_out,ntot)
     complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter_in
     complex(8),dimension(:,:),allocatable,intent(out) :: ni_out
     integer :: iorb,ispin,ihf
+    real(8),optional :: ntot
+    real(8) :: ntot_
     if(allocated(ni_out)) deallocate(ni_out)
     allocate(ni_out(Nspin,Norb)); ni_out=0d0
     !
+    ntot_=0d0
     do iorb=1,Norb
        do ispin=1,Nspin
           do ik=1,Lk
              ihf=iorb_to_ihf(iorb)
              ni_out(ispin,iorb) = ni_out(ispin,iorb) + x_iter_in(ik,ihf,ispin)*wtk(ik) !
           end do
-          write(*,*) ni_out(ispin,iorb) 
+          ntot_=ntot_+ni_out(ispin,iorb) 
        end do
     end do
+    if(present(ntot)) ntot=ntot_
     !
   end subroutine get_ni_loc
 
@@ -1781,7 +1826,7 @@ contains
     !
     lgr=0d0
     if(present(lgr_)) lgr=lgr_    
-    call get_hf_self_fock(x_iter,hf_self_fock,iprint=.true.)
+    call get_hf_self_fock(x_iter,hf_self_fock,iprint=.false.)
     Hhf=0d0
     do ik=1,Lk
        do ispin=1,Nspin
