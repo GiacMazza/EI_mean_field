@@ -849,7 +849,7 @@ program officina
      call deltak_to_xiter(delta_hf,x_iter)
      call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=.true.)
      !
-     call get_double_counting_energy(x_iter,E_dc); Eout=Eout+E_dc
+     call get_double_counting_energy(x_iter,E_dc); Eout=Eout-E_dc
      call get_ni_loc(x_iter,ni_orb,ntot)
      !
      call xiter_ik2ir(x_iter,x_iter_ir)
@@ -1198,6 +1198,7 @@ contains
        do ihf=1,Nhf_opt
           do ispin=1,Nspin
              Ecmplx = Ecmplx + hf_self_fock(ik,ihf,ispin)*conjg(x_iter_in(ik,ihf,ispin))*wtk(ik)
+             !Ecmplx = Ecmplx + conjg(hf_self_fock(ik,ihf,ispin))*(x_iter_in(ik,ihf,ispin))*wtk(ik)
           end do
        end do
     end do
