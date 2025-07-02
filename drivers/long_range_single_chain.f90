@@ -28,7 +28,6 @@ program officina
   complex(8),dimension(:,:,:,:,:),allocatable :: Hk_w90_reshape,Hk_hf_reshape
   real(8),dimension(:,:),allocatable :: kpts,kpt_path
 
-  real(8),dimension(3) :: tmpread
 
   integer,dimension(:,:),allocatable :: irvec2d,itmp
   integer,dimension(:),allocatable :: stride2D,stride2D_
@@ -130,7 +129,7 @@ program officina
   real(8) :: fs_tol
   logical :: hf_symm  !+-> HF calculation w/ symmetric order parameter <-+!
   logical :: HF_solve !+-> HF calculation with a root-finder routine  <-+
-  logical :: hf_in
+  !logical :: hf_in
   integer :: lgr_fix_verbose
   real(8) :: lgr_fix_phase(2)
 
@@ -619,6 +618,7 @@ program officina
   x_iter_bare=x_iter
   call init_ihfopt_strides
   call print_hyb(x_iter,filename='bare_TNShyb')
+
   
   !+- print the bare energy
   ntot = 0.0
@@ -672,20 +672,14 @@ program officina
      Uss_VS_R(4,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
      Uss_VS_R(5,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
      !
-     ! Uss_VS_R(4,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
-     ! Uss_VS_R(5,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1)-R1(1))+abs(rpt_latt(ir,1))-R1(1))/xi_int)
-     !
      Uss_VS_R(6,ir) = UTa*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(7,ir) = UTa*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(8,ir) = UNi*ucut_off*R1(1)/(sqrt(dot_product(rpt_latt(ir,:),rpt_latt(ir,:)))+ucut_off*R1(1))*exp(-abs(rpt_latt(ir,1)/xi_int))
      Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1))-R1(1))/xi_int)
      Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)-R1(1))-R1(1))/xi_int)
      !
-     ! Uss_VS_R(9,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
-     ! Uss_VS_R(10,ir) = Vcell*R1(1)/(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1)))*exp(-(abs(rpt_latt(ir,1))+abs(rpt_latt(ir,1)+R1(1))-R1(1))/xi_int)
-     !
   end do
-  
+  !
   if(tns_toy) then
      Uss_VS_R=0d0
      !+- 
@@ -697,8 +691,6 @@ program officina
      Uss_VS_R(5,ir0) = Vcell
      Uss_VS_R(4,irL) = Vcell
      Uss_VS_R(5,irL) = Vcell
-     ! Uss_VS_R(4,irR) = Vcell
-     ! Uss_VS_R(5,irR) = Vcell
      !+-
      Uss_VS_R(6,ir0) = UTa
      Uss_VS_R(7,ir0) = UTa
@@ -706,8 +698,6 @@ program officina
      !+- 
      Uss_VS_R(9,ir0) = Vcell
      Uss_VS_R(10,ir0) = Vcell
-     ! Uss_VS_R(9,irL) = Vcell
-     ! Uss_VS_R(10,irL) = Vcell
      Uss_VS_R(9,irR) = Vcell
      Uss_VS_R(10,irR) = Vcell
      !
@@ -741,12 +731,6 @@ program officina
   end do
   close(unit_io)
   !
-  !+- routines that give back the HF self-consistent fields
-  !
-  ! call get_hf_self_fock(x_iter,hf_self_fock,iprint=.true.)
-  ! call get_hf_self_hartree(x_iter,hf_self_hartree,iprint=.true.)
-  !
-  !
   !+- the unit cell is
   !+  |        Ta|
   !   |-N+       |
@@ -755,48 +739,18 @@ program officina
   !   |Ta        |
   !   !      +Ni-|
   !   |Ta        |
-  !+- TRSB seeds 
-  ! call xiter_ik2ir(x_iter,x_iter_ir)
-  ! TRSBseed=0.1d0
-  ! CDSBseed=0d0
-  ! x_iter_ir(ir0,4,1) =  x_iter_ir(ir0,4,1) + xi*TRSBseed
-  ! x_iter_ir(irL,4,1) = -dreal(x_iter_ir(ir0,4,1)) + CDSBseed + xi*TRSBseed
-  ! call xiter_ir2ik(x_iter_ir,x_iter)
-  ! !call print_hyb(x_iter,filename='init_TNShyb')  
-  ! call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
-  ! call print_hyb(x_iter,filename='TRSBseed_TNShyb')
-
-  !+- initialize X-iter with some symmetry breaking seed
-  x_iter=x_iter_bare
-  call xiter_ik2ir(x_iter,x_iter_ir)
-  ! TRSBseed=0.d0 -> parsed from input
-  ! CDSBseed=0.1d0
-  x_iter_ir(ir0,4,:) =  x_iter_ir(ir0,4,:) + xi*TRSBseed
-  x_iter_ir(irL,4,:) = -dreal(x_iter_ir(ir0,4,:)) + CDSBseed + xi*TRSBseed
-  call xiter_ir2ik(x_iter_ir,x_iter)
-  call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
-  !call print_xiter(x_iter,filename='seed_xiter')
-  call print_hyb(x_iter,filename='seed_TNShyb')
+     
+  
+  !x_iter=x_iter_bare
+  !call xiter_ik2ir(x_iter,x_iter_ir)
+  !x_iter_ir(ir0,4,:) =  x_iter_ir(ir0,4,:) + xi*TRSBseed
+  !x_iter_ir(irL,4,:) = -dreal(x_iter_ir(ir0,4,:)) + CDSBseed + xi*TRSBseed
+  !call xiter_ir2ik(x_iter_ir,x_iter)
+  !call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
+  !call print_hyb(x_iter,filename='seed_TNShyb')
   !
-  !+- if present read some previous solution
-  do ihf=1,Nhf_opt
-     do ispin=1,Nspin
-        file_name="x_iter_BLS_spin"//reg(txtfy(ispin))//"_ihf"//reg(txtfy(ihf))//".out"
-        inquire(file=file_name,exist=hf_in)
-        flen=file_length(file_name)
-        if(hf_in.and.flen.eq.Lk) then
-           !read it
-           uio=free_unit()
-           open (unit=uio,file=file_name)
-           do ik=1,Lk
-              read (uio,*) tmpread(1),tmpread(2),tmpread(3)
-              x_iter(ik,ihf,ispin) = tmpread(2)+xi*tmpread(3)
-           end do
-           close(uio)
-        end if
-     end do
-  end do
-  call print_xiter(x_iter,filename='x_iter_BLS')
+  !+- initialise the X-iter.
+  call init_xiter_loop(x_iter_bare,x_iter,printseed=.true.)
 
   !+- HF-loop
   uio=free_unit()
@@ -860,8 +814,7 @@ program officina
      open(unit=uio,file='hf_loop_energy.out',status='old',position='append')
      write(uio,'(30F18.10)') Eout+mu_fix*ntot,Eout,E_dc
      close(uio)
-
-     
+     !
      open(unit=uio,file='hf_loop_BLS_hybs_chain1_ns1.out',status='old',position='append')
      write(uio,'(30F18.10)') x_iter_ir(ir0,1:5,1),x_iter_ir(irL,1:5,1)
      close(uio)
@@ -874,7 +827,7 @@ program officina
      open(unit=uio,file='hf_loop_BLS_hybs_chain2_ns2.out',status='old',position='append')
      write(uio,'(30F18.10)') x_iter_ir(ir0,6:10,2),x_iter_ir(irL,6:10,2)
      close(uio)
-     
+     !
      open(unit=uio,file='hf_loop_order_parameter_chain1_plus.out',status='old',position='append')
      write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,4,1)+x_iter_ir(irL,4,1)),dimag(x_iter_ir(ir0,4,1)),dimag(x_iter_ir(irL,4,1)), &
           dreal(x_iter_ir(ir0,4,2)+x_iter_ir(irL,4,2)),dimag(x_iter_ir(ir0,4,2)),dimag(x_iter_ir(irL,4,2))
@@ -890,8 +843,7 @@ program officina
      open(unit=uio,file='hf_loop_order_parameter_chain2_minus.out',status='old',position='append')
      write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,10,1)+x_iter_ir(irR,10,1)),dimag(x_iter_ir(ir0,10,1)),dimag(x_iter_ir(irR,10,1)), &
           dreal(x_iter_ir(ir0,10,2)+x_iter_ir(irR,10,2)),dimag(x_iter_ir(ir0,10,2)),dimag(x_iter_ir(irR,10,2))
-     close(uio)
-     
+     close(uio)     
      !+- here I should print the energy -+!
      !
      ! ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
@@ -907,7 +859,7 @@ program officina
      if(err_hf.lt.hf_conv) exit
   end do
 
-
+  call print_xiter(x_iter,filename='final_x_iter_BLS')
   call print_hyb(x_iter,filename='final_hyb')
   
   H_Hf=HF_hamiltonian(x_iter)
@@ -1181,7 +1133,57 @@ program officina
   ! end do
   !
 contains
+  
+  !+- initialize X-iter with some symmetry breaking seed
+  subroutine init_xiter_loop(x_iter_in,x_iter_out,printseed)
+    complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter_in
+    complex(8),dimension(:,:,:),allocatable,intent(out) :: x_iter_out
+    complex(8),dimension(:,:,:),allocatable :: x_iter_out_ir
+    character(len=200) :: filein
+    logical,optional :: printseed
+    logical :: printseed_
+    integer :: ihf,ispin,flenin
+    logical :: hf_in
+    real(8),dimension(3) :: tmpread
+    !
+    printseed_=.false.
+    if(present(printseed)) printseed_=printseed
+    if(allocated(x_iter_out)) deallocate(x_iter_out)
+    allocate(x_iter_out(Lk,Nhf_opt,Nspin)); x_iter_out=0d0
+    !
+    x_iter_out=x_iter_in
+    call xiter_ik2ir(x_iter_out,x_iter_out_ir)
+    x_iter_out_ir(ir0,4,:) =  x_iter_out_ir(ir0,4,:) + xi*TRSBseed
+    x_iter_out_ir(irL,4,:) = -dreal(x_iter_out_ir(ir0,4,:)) + CDSBseed + xi*TRSBseed
+    call xiter_ir2ik(x_iter_out_ir,x_iter_out)
+    call enforce_inv_hf(x_iter_out,op_symm=.true.,spin_symm=.true.)
+    !
+    if(printseed_) call print_hyb(x_iter_out,filename='seed_TNShyb')
+    !+- if present read some previous solution
+    do ihf=1,Nhf_opt
+       do ispin=1,Nspin
+          filein="final_x_iter_BLS_spin"//reg(txtfy(ispin))//"_ihf"//reg(txtfy(ihf))//".out"
+          inquire(file=filein,exist=hf_in)
+          flenin=file_length(filein)
+          if(hf_in.and.flenin.eq.Lk) then
+             write(*,*) "reading x_iter"
+             !read it
+             uio=free_unit()
+             open (unit=uio,file=filein)
+             do ik=1,Lk
+                read (uio,*) tmpread(1),tmpread(2),tmpread(3)
+                x_iter_out(ik,ihf,ispin) = tmpread(2)+xi*tmpread(3)
+             end do
+             close(uio)
+          end if
+       end do
+    end do
+    if(printseed_) call print_xiter(x_iter_out,filename='init_x_iter_BLS')
+    !
+  end subroutine init_xiter_loop
 
+
+  
   subroutine get_double_counting_energy(x_iter_in,E_dc)
     implicit none
     complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter_in
