@@ -206,15 +206,13 @@ contains
        do i=1,Nso
           eout_=eout_+Ehf(i)*fermi(Ehf(i),beta)*wtk(ik)
           do j=i,Nso
-             ! do jj=1,Nso
-             !    Deltas(j,i,ik) = Deltas(j,i,ik) + &
-             !         conjg(Htmp(i,jj))*Htmp(j,jj)*fermi(Ehf(jj),beta)
-             ! end do
-             ! Deltas(i,j,ik)=conjg(Deltas(j,i,ik))
+             !
+             !+- orig
              do jj=1,Nso
                 Deltas(i,j,ik) = Deltas(i,j,ik) + &
                      conjg(Htmp(i,jj))*Htmp(j,jj)*fermi(Ehf(jj),beta)
              end do
+             !
              Deltas(j,i,ik)=conjg(Deltas(i,j,ik))
           end do
        end do
