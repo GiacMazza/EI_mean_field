@@ -231,7 +231,7 @@ program officina
   !+- monoclinic distortion
   call parse_input_variable(phn_energy,"phn_energy","input.conf",default=0.01d0,comment='phonon energy in eV')
   call parse_input_variable(ephn_g,"ephn_g","input.conf",default=0.0d0,comment='electron-phonon energy in eV')
-  call parse_input_variable(phn_ell0,"phn_ell0","input.conf",default=0.0d0,comment='Ta-distortion')
+  call parse_input_variable(phn_ell0,"phn_ell0","input.conf",default=0.05d0,comment='Ta-distortion in armstrong')
 
   
   call parse_input_variable(ucut_off,"ucut_off","input.conf",default=1d0)
@@ -854,7 +854,7 @@ program officina
      write(uio,'(30F18.10)') Eout+mu_fix*ntot,Eout,E_dc,Ephn
      close(uio)
      open(unit=uio,file='hf_loop_phonons.out',status='old',position='append')
-     write(uio,'(30F18.10)') XPHN_iter(1:4)
+     write(uio,'(30F18.10)') XPHN_iter(1:4),XPHN_iter(1)*phn_ell0
      close(uio)
      !
      open(unit=uio,file='hf_loop_BLS_hybs_chain1_ns1.out',status='old',position='append')
@@ -900,11 +900,12 @@ program officina
      x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_
      call xiter_ik2ir(x_iter,x_iter_ir)
      !update Xph_iter -> the phonons
+     XPHN_iter=0d0
      do ispin=1,Nspin
         XPHN_iter(1) = XPHN_iter(1) - gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))
         XPHN_iter(2) = XPHN_iter(2) - gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
-        XPHN_iter(3) = XPHN_iter(3) - gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irL,9,ispin))
-        XPHN_iter(4) = XPHN_iter(4) - gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irL,10,ispin))
+        XPHN_iter(3) = XPHN_iter(3) - gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
+        XPHN_iter(4) = XPHN_iter(4) - gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
      end do
      err_hf=get_hf_err(x_iter,x_iter_)
      if(err_hf.lt.hf_conv) exit
@@ -1908,24 +1909,28 @@ contains
           iso=(ispin-1)*Norb+iorb
           jso=(ispin-1)*Norb+jorb
           Hhf(iso,jso,ik) = Hhf(iso,jso,ik) + gphn(1)*xphn(1)*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = conjg(Hhf(iso,jso,ik))
           !
           iorb=2
           jorb=3          
           iso=(ispin-1)*Norb+iorb
           jso=(ispin-1)*Norb+jorb
           Hhf(iso,jso,ik) = Hhf(iso,jso,ik) + gphn(2)*xphn(2)*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = conjg(Hhf(iso,jso,ik))
           !
           iorb=4
           jorb=6          
           iso=(ispin-1)*Norb+iorb
           jso=(ispin-1)*Norb+jorb
           Hhf(iso,jso,ik) = Hhf(iso,jso,ik) + gphn(3)*xphn(3)*(1.d0+exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = conjg(Hhf(iso,jso,ik))
           !
           iorb=5
           jorb=6          
           iso=(ispin-1)*Norb+iorb
           jso=(ispin-1)*Norb+jorb
           Hhf(iso,jso,ik) = Hhf(iso,jso,ik) + gphn(4)*xphn(4)*(1.d0+exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
+          Hhf(jso,iso,ik) = conjg(Hhf(iso,jso,ik))
           !          
        end do
     end do
