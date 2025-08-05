@@ -83,7 +83,7 @@ program officina
   type(rgb_color),dimension(2) :: color_bands
   character(len=1),dimension(4) :: kpoint_name
 
-  real(8) :: Eout,EoutHF,EoutLgr,E_dc
+  real(8) :: Eout,EoutHF,EoutLgr,E_dc,Ephn
 
 
 
@@ -118,10 +118,10 @@ program officina
   complex(8),dimension(:),allocatable :: xtmp,xtmp_
   real(8) :: xphi(2)
   complex(8),dimension(2) :: xpi,xpi_
-  real(8) :: CDSBseed,TRSBseed,CDSB_breaking_field
+  real(8) :: CDSBseed,TRSBseed,CDSB_breaking_field,PHN_seed
   real(8) :: phn_energy
   real(8) :: ephn_g
-  real(8) :: phn_ell0,Xphn(4),gphn(4)
+  real(8) :: phn_ell0,Xphn_iter(4),gphn(4)
   real(8),dimension(14) :: xr_iter
   real(8),dimension(28) :: xr_tmp
 
@@ -224,7 +224,10 @@ program officina
   call parse_input_variable(TRSBseed,"TRSBseed","input.conf",default=0.d0)
   call parse_input_variable(CDSBseed,"CDSBseed","input.conf",default=0.d0)
   call parse_input_variable(CDSB_breaking_field,"CDSB_breaking_field","input.conf",default=0.d0)
+  call parse_input_variable(PHN_seed,"PHN_seed","input.conf",default=0.d0)
 
+  
+  
   !+- monoclinic distortion
   call parse_input_variable(phn_energy,"phn_energy","input.conf",default=0.01d0,comment='phonon energy in eV')
   call parse_input_variable(ephn_g,"ephn_g","input.conf",default=0.0d0,comment='electron-phonon energy in eV')
@@ -763,9 +766,24 @@ program officina
   !call enforce_inv_hf(x_iter,op_symm=.true.,spin_symm=.true.)
   !call print_hyb(x_iter,filename='seed_TNShyb')
   !
-  !+- initialise the X-iter.
+  !+- initialise the X-iter
   call init_xiter_loop(x_iter_bare,x_iter,printseed=.true.)
 
+  !+- phonon couplings -+!
+  gphn(1)=ephn_g
+  gphn(2)=ephn_g
+  gphn(3)=-1d0*ephn_g
+  gphn(4)=-1d0*ephn_g
+
+  !+- initialize phonons -+!
+  Xphn_iter(1)= PHN_seed
+  Xphn_iter(2)=-PHN_seed
+  Xphn_iter(3)= PHN_seed
+  Xphn_iter(4)=-PHN_seed
+  
+  
+  
+  
   !+- HF-loop
   uio=free_unit()
   open(unit=uio,file='hf_loop_BLS_hybs_chain1_ns1.out')
@@ -788,15 +806,12 @@ program officina
   close(uio)
   open(unit=uio,file='hf_loop_energy.out')
   close(uio)
+  open(unit=uio,file='hf_loop_phonons.out')
+  close(uio)
 
   unit_err=free_unit()
   open(unit=unit_err,file='err_BLS.out')
   close(unit_err)
-
-  gphn(1)=ephn_g
-  gphn(2)=ephn_g
-  gphn(3)=-1d0*ephn_g
-  gphn(4)=-1d0*ephn_g
   !
   err_hf=1.d0
   do jhf=1,Nhf
@@ -808,7 +823,7 @@ program officina
      !
      x_iter_=x_iter
      !+- here I should compute the HF hamiltonian -+! 
-     H_Hf=HF_hamiltonian(x_iter)
+     H_Hf=HF_hamiltonian(x_iter,xphn_=XPHN_iter)
      H_Hf=H_Hf+Hk_toy
      !
      call fix_mu(H_Hf,delta_hf,mu_fix,eout)
@@ -823,15 +838,23 @@ program officina
      call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=.true.)
      !
      call get_double_counting_energy(x_iter,E_dc); Eout=Eout-E_dc
+     !get_phonons_energy
+     Ephn=0d0
+     do i=1,4
+        Ephn=Ephn+phn_energy*0.25*XPHN_iter(i)**2d0
+     end do
+     Eout=Eout+phn_energy
      call get_ni_loc(x_iter,ni_orb,ntot)
      !
+     !+- get real space for printing 
      call xiter_ik2ir(x_iter,x_iter_ir)
-     ! call print_xiter(x_iter,filename='loop_xiter')
-     ! call print_hyb(x_iter,filename='loop_hyb')
+     !
      uio=free_unit()
-
      open(unit=uio,file='hf_loop_energy.out',status='old',position='append')
-     write(uio,'(30F18.10)') Eout+mu_fix*ntot,Eout,E_dc
+     write(uio,'(30F18.10)') Eout+mu_fix*ntot,Eout,E_dc,Ephn
+     close(uio)
+     open(unit=uio,file='hf_loop_phonons.out',status='old',position='append')
+     write(uio,'(30F18.10)') XPHN_iter(1:4)
      close(uio)
      !
      open(unit=uio,file='hf_loop_BLS_hybs_chain1_ns1.out',status='old',position='append')
@@ -871,9 +894,18 @@ program officina
      ! uio=free_unit()
      ! open(unit=uio,file='loop_fixed_order_parameter.out',status='old',position='append')
      ! write(uio, '(50F18.10)') dreal(x_iter(1:14)),dimag(x_iter(1:14)),Eout+mu_fix*ntot,EoutHF+mu_fix*ntot,EoutLgr,dreal(lgr_iter(1)),dimag(lgr_iter(2))
-     ! close(uio)        
-     !
-     x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_          
+     ! close(uio)
+     
+     !update Xiter
+     x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_
+     call xiter_ik2ir(x_iter,x_iter_ir)
+     !update Xph_iter -> the phonons
+     do ispin=1,Nspin
+        XPHN_iter(1) = XPHN_iter(1) - gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))
+        XPHN_iter(2) = XPHN_iter(2) - gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
+        XPHN_iter(3) = XPHN_iter(3) - gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irL,9,ispin))
+        XPHN_iter(4) = XPHN_iter(4) - gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irL,10,ispin))
+     end do
      err_hf=get_hf_err(x_iter,x_iter_)
      if(err_hf.lt.hf_conv) exit
   end do
@@ -1200,7 +1232,7 @@ contains
     if(printseed_) call print_xiter(x_iter_out,filename='init_x_iter_BLS')
     !
   end subroutine init_xiter_loop
-
+  
 
   
   subroutine get_double_counting_energy(x_iter_in,E_dc)
@@ -1842,8 +1874,8 @@ contains
     complex(8),dimension(:,:,:),allocatable :: hf_self_fock
     !
     complex(8),dimension(Nso,Nso,Lk) :: Hhf
-    real(8),optional :: xph_(4)
-    real(8)          :: xph(4)
+    real(8),optional :: xphn_(4)
+    real(8)          :: xphn(4)
     
     complex(8),optional :: lgr_(2)
     complex(8)          :: lgr(2)
@@ -1851,8 +1883,8 @@ contains
     !
     lgr=0d0;
     if(present(lgr_)) lgr=lgr_
-    xph=0d0;
-    if(present(xph_)) xph=xph_
+    xphn=0d0;
+    if(present(xphn_)) xphn=xphn_
     call get_hf_self_fock(x_iter,hf_self_fock,iprint=.false.)
     Hhf=0d0
     do ik=1,Lk
@@ -1870,6 +1902,31 @@ contains
                 !
              end do
           end do
+          !+- e-ph coupling -+!
+          iorb=1
+          jorb=3          
+          iso=(ispin-1)*Norb+iorb
+          jso=(ispin-1)*Norb+jorb
+          Hhf(iso,jso,ik) = Hhf(iso,jso,ik) + gphn(1)*xphn(1)*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
+          !
+          iorb=2
+          jorb=3          
+          iso=(ispin-1)*Norb+iorb
+          jso=(ispin-1)*Norb+jorb
+          Hhf(iso,jso,ik) = Hhf(iso,jso,ik) + gphn(2)*xphn(2)*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
+          !
+          iorb=4
+          jorb=6          
+          iso=(ispin-1)*Norb+iorb
+          jso=(ispin-1)*Norb+jorb
+          Hhf(iso,jso,ik) = Hhf(iso,jso,ik) + gphn(3)*xphn(3)*(1.d0+exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
+          !
+          iorb=5
+          jorb=6          
+          iso=(ispin-1)*Norb+iorb
+          jso=(ispin-1)*Norb+jorb
+          Hhf(iso,jso,ik) = Hhf(iso,jso,ik) + gphn(4)*xphn(4)*(1.d0+exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
+          !          
        end do
     end do
     !
