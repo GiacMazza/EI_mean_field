@@ -118,7 +118,10 @@ program officina
   complex(8),dimension(:),allocatable :: xtmp,xtmp_
   real(8) :: xphi(2)
   complex(8),dimension(2) :: xpi,xpi_
-  real(8) :: CDSBseed,TRSBseed
+  real(8) :: CDSBseed,TRSBseed,CDSB_breaking_field
+  real(8) :: phn_energy
+  real(8) :: ephn_g
+  real(8) :: phn_ell0,Xphn(4),gphn(4)
   real(8),dimension(14) :: xr_iter
   real(8),dimension(28) :: xr_tmp
 
@@ -220,7 +223,14 @@ program officina
   !
   call parse_input_variable(TRSBseed,"TRSBseed","input.conf",default=0.d0)
   call parse_input_variable(CDSBseed,"CDSBseed","input.conf",default=0.d0)
+  call parse_input_variable(CDSB_breaking_field,"CDSB_breaking_field","input.conf",default=0.d0)
 
+  !+- monoclinic distortion
+  call parse_input_variable(phn_energy,"phn_energy","input.conf",default=0.01d0,comment='phonon energy in eV')
+  call parse_input_variable(ephn_g,"ephn_g","input.conf",default=0.0d0,comment='electron-phonon energy in eV')
+  call parse_input_variable(phn_ell0,"phn_ell0","input.conf",default=0.0d0,comment='Ta-distortion')
+
+  
   call parse_input_variable(ucut_off,"ucut_off","input.conf",default=1d0)
   call parse_input_variable(xi_int,"xi_int","input.conf",default=10000d0)
 
@@ -380,7 +390,8 @@ program officina
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase)) 
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase))
+        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + CDSB_breaking_field*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))!hybloc*(1.d0-exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
         !
         iorb=2
@@ -388,7 +399,8 @@ program officina
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase)) 
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase))
+        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) - CDSB_breaking_field*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))!hybloc*(1.d0-exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
         !
         !+- lower chain -+!
@@ -410,6 +422,7 @@ program officina
         jso=(ispin-1)*Norb+jorb
         Rlat=-R1
         Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase))
+        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) - CDSB_breaking_field*(1.d0+exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         !
         iorb=5
@@ -418,6 +431,7 @@ program officina
         jso=(ispin-1)*Norb+jorb
         Rlat=-R1
         Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase))
+        Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + CDSB_breaking_field*(1.d0+exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))        
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         !
         !+- Ta-Ta chain hybridization -+!
@@ -762,8 +776,8 @@ program officina
   close(uio)
   open(unit=uio,file='hf_loop_BLS_hybs_chain2_ns2.out')
   close(uio)
-  open(unit=uio,file='hf_loop_BLS_energy.out')
-  close(uio)  
+  ! open(unit=uio,file='hf_loop_BLS_energy.out')
+  ! close(uio)  
   open(unit=uio,file='hf_loop_order_parameter_chain1_plus.out')
   close(uio)
   open(unit=uio,file='hf_loop_order_parameter_chain1_minus.out')
@@ -778,6 +792,11 @@ program officina
   unit_err=free_unit()
   open(unit=unit_err,file='err_BLS.out')
   close(unit_err)
+
+  gphn(1)=ephn_g
+  gphn(2)=ephn_g
+  gphn(3)=-1d0*ephn_g
+  gphn(4)=-1d0*ephn_g
   !
   err_hf=1.d0
   do jhf=1,Nhf
@@ -1817,18 +1836,23 @@ contains
   !call get_hf_self_fock(x_iter,hf_self_fock,iprint=.true.)
   !subroutine get_hf_self_fock(x_iter_in,hf_self_fock_out,iprint)
 
-  function HF_hamiltonian(x_iter,lgr_) result(Hhf)
+  function HF_hamiltonian(x_iter,xphn_,lgr_) result(Hhf)
     implicit none
     complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter
     complex(8),dimension(:,:,:),allocatable :: hf_self_fock
     !
     complex(8),dimension(Nso,Nso,Lk) :: Hhf
+    real(8),optional :: xph_(4)
+    real(8)          :: xph(4)
+    
     complex(8),optional :: lgr_(2)
     complex(8)          :: lgr(2)
     integer :: iso,jso,iorb,jorb
     !
-    lgr=0d0
-    if(present(lgr_)) lgr=lgr_    
+    lgr=0d0;
+    if(present(lgr_)) lgr=lgr_
+    xph=0d0;
+    if(present(xph_)) xph=xph_
     call get_hf_self_fock(x_iter,hf_self_fock,iprint=.false.)
     Hhf=0d0
     do ik=1,Lk
