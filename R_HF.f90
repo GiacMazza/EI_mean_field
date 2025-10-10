@@ -20,11 +20,10 @@ MODULE HF_real
   public :: FT_q2r,FTq2r
   !
   public :: fix_mu
-
-
+  !
   complex(8),dimension(:,:,:),allocatable :: Hhf_tmp,delta_hf_tmp
   logical :: tmp_print
-
+  !
 contains
 
   function check_conv_latt(deltas_new,deltas_old) result(err)
@@ -41,7 +40,7 @@ contains
     end do
   end function check_conv_latt
 
-
+  
   subroutine init_var_params_latt(delta_hf,Hr_in)
     complex(8),dimension(Nso,Nso,nrpts),intent(inout) :: delta_hf
     complex(8),dimension(Nso,Nso,nrpts),intent(in) :: Hr_in    
@@ -178,15 +177,18 @@ contains
 
   end subroutine find_chem_pot_latt
 
-  subroutine solve_HF_hamiltonian(Hhf,Deltas,eout)
+  subroutine solve_HF_hamiltonian(Hhf,Deltas,eout,sout)
     complex(8),dimension(:,:,:),intent(in) :: Hhf
     complex(8),dimension(:,:,:),intent(inout) :: Deltas
     real(8),dimension(size(Hhf,1)) :: Ehf
     complex(8),dimension(size(Hhf,1),size(Hhf,1)) :: Htmp    
     integer(8):: ik,i,j,ii,jj
     integer :: iorb,jorb
-    real(8) :: eout_
+    real(8) :: eout_,nka
     real(8),optional :: eout
+    real(8) :: sout_
+    real(8),optional :: sout
+    real(8) :: dent
     !
     if(size(Hhf,1).ne.Nso) stop "error in Hhf1"
     if(size(Hhf,2).ne.Nso) stop "error in Hhf2"
@@ -197,14 +199,20 @@ contains
     if(size(Deltas,3).ne.Lk) stop "error in Deltas3"
     !
     eout_=0.d0
-    Deltas=0.d0             
+    sout_=0.d0
+    Deltas=0.d0
+    dent=1E-12
     do ik=1,Lk
        !
        Htmp=Hhf(:,:,ik)
        call eigh(Htmp,Ehf)
        !
        do i=1,Nso
-          eout_=eout_+Ehf(i)*fermi(Ehf(i),beta)*wtk(ik)
+          eout_ = eout_ + Ehf(i)*fermi(Ehf(i),beta)*wtk(ik)
+          nka = fermi(Ehf(i),beta)
+          if(nka.gt.dent.and.nka.lt.1d0-dent) then
+             sout_ = sout_ - (nka*log(nka) + (1-nka)*log(1-nka))*wtk(ik)
+          end if
           do j=i,Nso
              !
              !+- orig
@@ -219,6 +227,8 @@ contains
        !
     end do
     if(present(eout)) eout=eout_
+    if(present(sout)) sout=sout_
+
   end subroutine solve_HF_hamiltonian
 
 
@@ -527,7 +537,7 @@ contains
 
 
   !+- K-SPACE ROUTINES -+!
-  subroutine fix_mu(Hhf,delta_hf,mu,eout,iprint) 
+  subroutine fix_mu(Hhf,delta_hf,mu,eout,sout,iprint) 
     complex(8),dimension(Nso,Nso,Lk),intent(in) :: Hhf
     complex(8),dimension(Nso,Nso,Lk),intent(inout) :: delta_hf
     complex(8),dimension(Nso,Nso,Lk) :: Hhf_k,delta_hf_k
@@ -538,8 +548,9 @@ contains
     integer :: iter,ik,ir,im
     real(8) :: x1,x2
     real(8) :: mu1,mu2
-    real(8) :: eout_
+    real(8) :: eout_,sout_
     real(8),optional :: eout
+    real(8),optional :: sout
     logical,optional :: iprint
     !
     allocate(Hhf_tmp(Nso,Nso,Lk)); Hhf_tmp=Hhf
@@ -570,7 +581,8 @@ contains
           Htmp(:,:,ik)=Hhf_tmp(:,:,ik)-mu*zeye(Nso)
           !          write(987,'(10F18.10)') mu
        end do
-       call solve_HF_hamiltonian(Htmp,delta_hf_tmp,eout)
+       call solve_HF_hamiltonian(Htmp,delta_hf_tmp,eout,sout_)
+       if(present(sout)) sout=sout_
     end if
     !+------------------+!
     delta_hf=delta_hf_tmp

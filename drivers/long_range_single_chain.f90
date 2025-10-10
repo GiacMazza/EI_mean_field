@@ -16,6 +16,7 @@ program officina
   real(8) :: Uintra,Uinter,Delta_CF
   real(8) :: Uq,thop,err_hf,hf_conv,ktmp
   logical :: plot_w90_bands
+  integer :: iconv
   !
   real(8),dimension(3) :: ktest
   !real(8),dimension(:),allocatable :: ek_out
@@ -41,7 +42,7 @@ program officina
   integer :: iso,jso,ispin,jspin,iorb,jorb,ik,isys,jk,iik
   integer :: i,j,k,idim
   integer :: Nhf,Nhf_,ihf,unit_err,unit_obs,unit_in,uio,unit_io,Nobs,jhf
-  integer :: Nhf_opt
+  integer :: Nhf_opt,ihf_print
   integer,dimension(:),allocatable :: iorb_to_ihf
   integer,dimension(:),allocatable :: ihf_to_iorb
   integer,dimension(:,:),allocatable :: ijorb_to_ihf
@@ -83,7 +84,8 @@ program officina
   type(rgb_color),dimension(2) :: color_bands
   character(len=1),dimension(4) :: kpoint_name
 
-  real(8) :: Eout,EoutHF,EoutLgr,E_dc,Ephn
+  real(8) :: Eout,EoutHF,EoutLgr,E_dc,Ephn,Ekin_bare,sout,Sphn,Nphn
+  real(8) :: Fout !+- free energy
 
 
 
@@ -158,7 +160,7 @@ program officina
 
   integer,dimension(:,:),allocatable :: ivec2idelta
   integer,dimension(:,:,:),allocatable :: idelta2ivec
-  logical ::tns_toy,op_symm
+  logical ::tns_toy,op_symm,spin_deg,enforce_cds
   
   
   !+- START MPI -+!
@@ -172,6 +174,7 @@ program officina
   call parse_input_variable(Nk_x,"Nk_x","input.conf",default=51)
   call parse_input_variable(Nk_y,"Nk_y","input.conf",default=1)
   call parse_input_variable(Nhf,"Nhf","input.conf",default=100)
+  call parse_input_variable(ihf_print,"ihf_print","input.conf",default=1)
   ! call parse_input_variable(Nhf_,"Nhf_","input.conf",default=10)
   call parse_input_variable(Lreal,"Lreal","input.conf",default=2000)
   call parse_input_variable(wmix,"wmix","input.conf",default=0.5d0)
@@ -239,6 +242,8 @@ program officina
 
   call parse_input_variable(tns_toy,"tns_toy","input.conf",default=.false.)
   call parse_input_variable(op_symm,"op_symm","input.conf",default=.true.)
+  call parse_input_variable(spin_deg,"spin_deg","input.conf",default=.true.)
+  call parse_input_variable(enforce_cds,"enforce_cds","input.conf",default=.false.)
 
   !
   call get_global_vars
@@ -379,13 +384,17 @@ program officina
         iorb=1
         iso=(ispin-1)*Norb+iorb
         Hk_toy(iso,iso,ik) = Econduction  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3)+4d0*hop_phase)
+        Hk_toy(iso,iso,ik) = Hk_toy(iso,iso,ik) + (-1d0)**dble(ispin)*Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield  !+- Zeeman field
+        !
         iorb=2
         iso=(ispin-1)*Norb+iorb
         Hk_toy(iso,iso,ik) = Econduction  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3)-4d0*hop_phase)
+        Hk_toy(iso,iso,ik) = Hk_toy(iso,iso,ik) + (-1d0)**dble(ispin)*Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield  !+- Zeeman field
         !
         iorb=3
         iso=(ispin-1)*Norb+iorb
         Hk_toy(iso,iso,ik) = Evalence  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))
+        Hk_toy(iso,iso,ik) = Hk_toy(iso,iso,ik) + (-1d0)**dble(ispin)*Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield  !+- Zeeman field
         !
         !C*_{Ta} C_{Ni}
         iorb=1
@@ -411,13 +420,17 @@ program officina
         iorb=4
         iso=(ispin-1)*Norb+iorb
         Hk_toy(iso,iso,ik) = Econduction  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3)+4d0*hop_phase)
+        Hk_toy(iso,iso,ik) = Hk_toy(iso,iso,ik) + (-1d0)**dble(ispin)*Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield  !+- Zeeman field
+        !
         iorb=5
         iso=(ispin-1)*Norb+iorb
         Hk_toy(iso,iso,ik) = Econduction  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3)-4d0*hop_phase)
+        Hk_toy(iso,iso,ik) = Hk_toy(iso,iso,ik) + (-1d0)**dble(ispin)*Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield  !+- Zeeman field
         !
         iorb=6
         iso=(ispin-1)*Norb+iorb
         Hk_toy(iso,iso,ik) = Evalence  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3))
+        Hk_toy(iso,iso,ik) = Hk_toy(iso,iso,ik) + (-1d0)**dble(ispin)*Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield  !+- Zeeman field
         !
         iorb=4
         jorb=6
@@ -528,7 +541,7 @@ program officina
   !
   mu_fix=0.d0
   !+- change this too
-  call fix_mu(Hk_toy,delta_hf,mu_fix,eout)
+  call fix_mu(Hk_toy,delta_hf,mu_fix,eout,sout)
   write(*,*) 'mu_fix',mu_fix
 
 
@@ -645,7 +658,7 @@ program officina
   !
   uio=free_unit()
   open(unit=uio,file='bare_energy.out')
-  write(uio, '(20F18.10)') Eout+mu_fix*ntot,Eout
+  write(uio, '(20F18.10)') Eout+mu_fix*ntot,Eout,sout
   close(uio)
   
   !allocate HF-hamiltonian
@@ -813,7 +826,7 @@ program officina
   open(unit=unit_err,file='err_BLS.out')
   close(unit_err)
   !
-  err_hf=1.d0
+  err_hf=1.d0;iconv=0
   do jhf=1,Nhf
      !
      unit_err=free_unit()
@@ -822,11 +835,13 @@ program officina
      close(unit_err)
      !
      x_iter_=x_iter
+
+     
      !+- here I should compute the HF hamiltonian -+! 
      H_Hf=HF_hamiltonian(x_iter,xphn_=XPHN_iter)
      H_Hf=H_Hf+Hk_toy
      !
-     call fix_mu(H_Hf,delta_hf,mu_fix,eout)
+     call fix_mu(H_Hf,delta_hf,mu_fix,eout,sout)
 
      !+- test
      ! do ik=1,Lk
@@ -835,67 +850,88 @@ program officina
      ! end do          
      eoutHF=eout     !
      call deltak_to_xiter(delta_hf,x_iter)
-     call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=.true.)
+     if(enforce_cds) then        
+        call xiter_ik2ir(x_iter,x_iter_ir)
+        do ispin=1,Nspin
+           x_iter_ir(ir0,4,ispin) = -dreal(x_iter_ir(irL,4,ispin))   + xi*dimag(x_iter_ir(ir0,4,ispin))
+           x_iter_ir(ir0,5,ispin) = -dreal(x_iter_ir(irL,5,ispin))   + xi*dimag(x_iter_ir(ir0,5,ispin)) 
+           x_iter_ir(ir0,9,ispin) = -dreal(x_iter_ir(irR,9,ispin))   + xi*dimag(x_iter_ir(ir0,9,ispin))
+           x_iter_ir(ir0,10,ispin) = -dreal(x_iter_ir(irR,10,ispin)) + xi*dimag(x_iter_ir(ir0,10,ispin))
+        end do
+        call xiter_ir2ik(x_iter_ir,x_iter)
+     end if
+
+     call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
      !
-     call get_double_counting_energy(x_iter,E_dc); Eout=Eout-E_dc
-     !get_phonons_energy
+     call get_double_counting_energy(x_iter,E_dc); Eout = Eout - E_dc
+     !+- phonon energy
      Ephn=0d0
-     do i=1,4
-        Ephn=Ephn+phn_energy*0.25*XPHN_iter(i)**2d0
+     Sphn = 0d0
+     do i=1,4        
+        Nphn = 0.25*XPHN_iter(i)**2d0 + 1./(exp(beta*phn_energy)-1.0)
+        Ephn = Ephn + phn_energy*Nphn
+        Sphn = Sphn + (1+Nphn)*log(1+Nphn)-Nphn*log(Nphn) 
      end do
-     Eout=Eout+phn_energy
+     Eout = Eout + Ephn
+     Fout = Eout - temp*(Sphn+sout)
+     
      call get_ni_loc(x_iter,ni_orb,ntot)
      !
-     !+- get real space for printing 
-     call xiter_ik2ir(x_iter,x_iter_ir)
-     !
-     uio=free_unit()
-     open(unit=uio,file='hf_loop_energy.out',status='old',position='append')
-     write(uio,'(30F18.10)') Eout+mu_fix*ntot,Eout,E_dc,Ephn
-     close(uio)
-     open(unit=uio,file='hf_loop_phonons.out',status='old',position='append')
-     write(uio,'(30F18.10)') XPHN_iter(1:4),XPHN_iter(1)*phn_ell0
-     close(uio)
-     !
-     open(unit=uio,file='hf_loop_BLS_hybs_chain1_ns1.out',status='old',position='append')
-     write(uio,'(30F18.10)') x_iter_ir(ir0,1:5,1),x_iter_ir(irL,1:5,1)
-     close(uio)
-     open(unit=uio,file='hf_loop_BLS_hybs_chain1_ns2.out',status='old',position='append')
-     write(uio,'(30F18.10)') x_iter_ir(ir0,1:5,2),x_iter_ir(irL,1:5,2)
-     close(uio)
-     open(unit=uio,file='hf_loop_BLS_hybs_chain2_ns1.out',status='old',position='append')
-     write(uio,'(30F18.10)') x_iter_ir(ir0,6:10,2),x_iter_ir(irL,6:10,2)
-     close(uio)
-     open(unit=uio,file='hf_loop_BLS_hybs_chain2_ns2.out',status='old',position='append')
-     write(uio,'(30F18.10)') x_iter_ir(ir0,6:10,2),x_iter_ir(irL,6:10,2)
-     close(uio)
-     !
-     open(unit=uio,file='hf_loop_order_parameter_chain1_plus.out',status='old',position='append')
-     write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,4,1)+x_iter_ir(irL,4,1)),dimag(x_iter_ir(ir0,4,1)),dimag(x_iter_ir(irL,4,1)), &
-          dreal(x_iter_ir(ir0,4,2)+x_iter_ir(irL,4,2)),dimag(x_iter_ir(ir0,4,2)),dimag(x_iter_ir(irL,4,2))
-     close(uio)
-     open(unit=uio,file='hf_loop_order_parameter_chain1_minus.out',status='old',position='append')
-     write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,5,1)+x_iter_ir(irL,5,1)),dimag(x_iter_ir(ir0,5,1)),dimag(x_iter_ir(irL,5,1)), &
-          dreal(x_iter_ir(ir0,5,2)+x_iter_ir(irL,5,2)),dimag(x_iter_ir(ir0,5,2)),dimag(x_iter_ir(irL,5,2))     
-     close(uio)
-     open(unit=uio,file='hf_loop_order_parameter_chain2_plus.out',status='old',position='append')
-     write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,9,1)+x_iter_ir(irR,9,1)),dimag(x_iter_ir(ir0,9,1)),dimag(x_iter_ir(irR,9,1)), &
-          dreal(x_iter_ir(ir0,9,2)+x_iter_ir(irL,9,2)),dimag(x_iter_ir(ir0,9,2)),dimag(x_iter_ir(irL,9,2))
-     close(uio)
-     open(unit=uio,file='hf_loop_order_parameter_chain2_minus.out',status='old',position='append')
-     write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,10,1)+x_iter_ir(irR,10,1)),dimag(x_iter_ir(ir0,10,1)),dimag(x_iter_ir(irR,10,1)), &
-          dreal(x_iter_ir(ir0,10,2)+x_iter_ir(irR,10,2)),dimag(x_iter_ir(ir0,10,2)),dimag(x_iter_ir(irR,10,2))
-     close(uio)     
-     !+- here I should print the energy -+!
-     !
-     ! ntot=dreal(x_iter(1))+dreal(x_iter(2))+dreal(x_iter(3))
-     ! ntot=ntot+dreal(x_iter(8))+dreal(x_iter(9))+dreal(x_iter(10))
-     ! !
-     ! uio=free_unit()
-     ! open(unit=uio,file='loop_fixed_order_parameter.out',status='old',position='append')
-     ! write(uio, '(50F18.10)') dreal(x_iter(1:14)),dimag(x_iter(1:14)),Eout+mu_fix*ntot,EoutHF+mu_fix*ntot,EoutLgr,dreal(lgr_iter(1)),dimag(lgr_iter(2))
-     ! close(uio)
+     !+- 
      
+     !PRINTING
+     if(mod(jhf-1,ihf_print).eq.0) then
+        !+- get real space for printing 
+        call xiter_ik2ir(x_iter,x_iter_ir)
+        uio=free_unit()
+        open(unit=uio,file='hf_loop_phonons.out',status='old',position='append')
+        write(uio,'(30F18.10)') XPHN_iter(1:4),XPHN_iter(1)*phn_ell0
+        close(uio)
+        !
+        open(unit=uio,file='hf_loop_BLS_hybs_chain1_ns1.out',status='old',position='append')
+        write(uio,'(30F18.10)') x_iter_ir(ir0,1:5,1),x_iter_ir(irL,1:5,1)
+        close(uio)
+        open(unit=uio,file='hf_loop_BLS_hybs_chain1_ns2.out',status='old',position='append')
+        write(uio,'(30F18.10)') x_iter_ir(ir0,1:5,2),x_iter_ir(irL,1:5,2)
+        close(uio)
+        open(unit=uio,file='hf_loop_BLS_hybs_chain2_ns1.out',status='old',position='append')
+        write(uio,'(30F18.10)') x_iter_ir(ir0,6:10,2),x_iter_ir(irL,6:10,2)
+        close(uio)
+        open(unit=uio,file='hf_loop_BLS_hybs_chain2_ns2.out',status='old',position='append')
+        write(uio,'(30F18.10)') x_iter_ir(ir0,6:10,2),x_iter_ir(irL,6:10,2)
+        close(uio)
+        !
+        open(unit=uio,file='hf_loop_order_parameter_chain1_plus.out',status='old',position='append')
+        write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,4,1)+x_iter_ir(irL,4,1)),dimag(x_iter_ir(ir0,4,1)),dimag(x_iter_ir(irL,4,1)), &
+             dreal(x_iter_ir(ir0,4,2)+x_iter_ir(irL,4,2)),dimag(x_iter_ir(ir0,4,2)),dimag(x_iter_ir(irL,4,2))
+        close(uio)
+        open(unit=uio,file='hf_loop_order_parameter_chain1_minus.out',status='old',position='append')
+        write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,5,1)+x_iter_ir(irL,5,1)),dimag(x_iter_ir(ir0,5,1)),dimag(x_iter_ir(irL,5,1)), &
+             dreal(x_iter_ir(ir0,5,2)+x_iter_ir(irL,5,2)),dimag(x_iter_ir(ir0,5,2)),dimag(x_iter_ir(irL,5,2))     
+        close(uio)
+        open(unit=uio,file='hf_loop_order_parameter_chain2_plus.out',status='old',position='append')
+        write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,9,1)+x_iter_ir(irR,9,1)),dimag(x_iter_ir(ir0,9,1)),dimag(x_iter_ir(irR,9,1)), &
+             dreal(x_iter_ir(ir0,9,2)+x_iter_ir(irL,9,2)),dimag(x_iter_ir(ir0,9,2)),dimag(x_iter_ir(irL,9,2))
+        close(uio)
+        open(unit=uio,file='hf_loop_order_parameter_chain2_minus.out',status='old',position='append')
+        write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,10,1)+x_iter_ir(irR,10,1)),dimag(x_iter_ir(ir0,10,1)),dimag(x_iter_ir(irR,10,1)), &
+             dreal(x_iter_ir(ir0,10,2)+x_iter_ir(irR,10,2)),dimag(x_iter_ir(ir0,10,2)),dimag(x_iter_ir(irR,10,2))
+        close(uio)
+        
+        Ekin_bare=0d0
+        do ik=1,Lk
+           do iso=1,Nso
+              Ekin_bare=Ekin_bare+Hk_toy(iso,iso,ik)*delta_hf(iso,iso,ik)*wtk(ik)
+              do jso=iso+1,Nso
+                 Ekin_bare=Ekin_bare+2d0*dreal(Hk_toy(iso,jso,ik)*delta_hf(iso,jso,ik))*wtk(ik)
+              end do
+           end do
+        end do        
+     end if
+     open(unit=uio,file='hf_loop_energy.out',status='old',position='append')
+     write(uio,'(30F18.10)') Eout+mu_fix*ntot,Fout+mu_fix*ntot,sout,Sphn,Eout,Fout,E_dc,Ephn,Ekin_bare
+     close(uio)
+     !
      !update Xiter
      x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_
      call xiter_ik2ir(x_iter,x_iter_ir)
@@ -908,13 +944,14 @@ program officina
         XPHN_iter(4) = XPHN_iter(4) - gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
      end do
      err_hf=get_hf_err(x_iter,x_iter_)
-     if(err_hf.lt.hf_conv) exit
+     if(err_hf.lt.hf_conv) iconv=iconv+1
+     if(iconv.eq.2) exit
   end do
 
   call print_xiter(x_iter,filename='final_x_iter_BLS')
   call print_hyb(x_iter,filename='final_hyb')
-  
-  H_Hf=HF_hamiltonian(x_iter)
+
+  H_Hf=HF_hamiltonian(x_iter,xphn_=XPHN_iter)
   H_Hf=H_Hf+Hk_toy
   call fix_mu(H_Hf,delta_hf,mu_fix,eout)
   
@@ -1208,7 +1245,7 @@ contains
     x_iter_out_ir(ir0,4,:) =  x_iter_out_ir(ir0,4,:) + xi*TRSBseed
     x_iter_out_ir(irL,4,:) = -dreal(x_iter_out_ir(ir0,4,:)) + CDSBseed + xi*TRSBseed
     call xiter_ir2ik(x_iter_out_ir,x_iter_out)
-    call enforce_inv_hf(x_iter_out,op_symm=.true.,spin_symm=.true.)
+    call enforce_inv_hf(x_iter_out,op_symm=op_symm,spin_symm=spin_deg)
     !
     if(printseed_) call print_hyb(x_iter_out,filename='seed_TNShyb')
     !+- if present read some previous solution
@@ -1247,7 +1284,8 @@ contains
     E_dc=0d0
     Ecmplx=0d0
     !
-    call get_hf_self_fock(x_iter,hf_self_fock,iprint=.false.)
+    !call get_hf_self_fock(x_iter,hf_self_fock,iprint=.false.)
+    call get_hf_self_fock(x_iter_in,hf_self_fock,iprint=.false.)
     do ik=1,Lk
        do ihf=1,Nhf_opt
           do ispin=1,Nspin
