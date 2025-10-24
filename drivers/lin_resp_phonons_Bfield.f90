@@ -739,7 +739,7 @@ program officina
   !   |Ta        |
   !   !      +Ni-|
   !   |Ta        |
-     
+  !
   !+- initialise the X-iter
   call init_xiter_loop(x_iter_bare,x_iter,printseed=.true.)
 
@@ -812,11 +812,12 @@ program officina
   Pphn_dyn=0d0
   X2phn_dyn=0d0
   
+  
   do ispin=1,Nspin
      phn_dyn(1)  = phn_dyn(1) - gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))
-     phn_dyn(5)  = phn_dyn(5) - gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
-     phn_dyn(9)  = phn_dyn(9) - gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
-     phn_dyn(13) = phn_dyn(13) - gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
+     phn_dyn(2)  = phn_dyn(2) - gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
+     phn_dyn(3)  = phn_dyn(3) - gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
+     phn_dyn(4) = phn_dyn(4) - gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
   end do
   call delta2psi(delta_hf,xphn_dyn,psit)   
   ! do ik=1,Lk

@@ -936,13 +936,24 @@ program officina
      x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_
      call xiter_ik2ir(x_iter,x_iter_ir)
      !update Xph_iter -> the phonons
+
+     !+- critical error there was a facto 4 missing!!
+     ! XPHN_iter=0d0
+     ! do ispin=1,Nspin
+     !    XPHN_iter(1) = XPHN_iter(1) - gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))
+     !    XPHN_iter(2) = XPHN_iter(2) - gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
+     !    XPHN_iter(3) = XPHN_iter(3) - gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
+     !    XPHN_iter(4) = XPHN_iter(4) - gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
+     ! end do
+
      XPHN_iter=0d0
      do ispin=1,Nspin
-        XPHN_iter(1) = XPHN_iter(1) - gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))
-        XPHN_iter(2) = XPHN_iter(2) - gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
-        XPHN_iter(3) = XPHN_iter(3) - gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
-        XPHN_iter(4) = XPHN_iter(4) - gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
+        XPHN_iter(1) = XPHN_iter(1) - 4.0*gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))
+        XPHN_iter(2) = XPHN_iter(2) - 4.0*gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
+        XPHN_iter(3) = XPHN_iter(3) - 4.0*gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
+        XPHN_iter(4) = XPHN_iter(4) - 4.0*gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
      end do
+
      err_hf=get_hf_err(x_iter,x_iter_)
      if(err_hf.lt.hf_conv) iconv=iconv+1
      if(iconv.eq.2) exit
