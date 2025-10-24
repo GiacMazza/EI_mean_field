@@ -874,9 +874,8 @@ program officina
   !
   t_grid = linspace(tstart,tstep*real(Nt-1,8),Nt)
   t_grid_aux = linspace(tstart,0.5d0*tstep*real(Nt_aux-1,8),Nt_aux)
-
-
   
+  !
   !+- here put the option to go to the HF equilibrium   
   Ndyn=size(delta_hf)
   allocate(psit(Ndyn)); psit=0d0

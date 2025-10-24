@@ -868,7 +868,7 @@ program officina
      Ephn=0d0
      Sphn = 0d0
      do i=1,4        
-        Nphn = 0.25*XPHN_iter(i)**2d0 + 1./(exp(beta*phn_energy)-1.0)
+        Nphn = -0.25*XPHN_iter(i)**2d0 + 1./(exp(beta*phn_energy)-1.0)
         Ephn = Ephn + phn_energy*Nphn
         Sphn = Sphn + (1+Nphn)*log(1+Nphn)-Nphn*log(Nphn) 
      end do
