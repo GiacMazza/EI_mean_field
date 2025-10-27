@@ -864,11 +864,12 @@ program officina
      call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
      !
      call get_double_counting_energy(x_iter,E_dc); Eout = Eout - E_dc
-     !+- phonon energy
+     !+- phonon energy !+-NBB: this is  [Ephn = \hbar \o_0 <\b^* b> ]
+     !                         the linear term is already included in the electronic hamiltonian contribution
      Ephn=0d0
      Sphn = 0d0
      do i=1,4        
-        Nphn = -0.25*XPHN_iter(i)**2d0 + 1./(exp(beta*phn_energy)-1.0)
+        Nphn = 0.25*XPHN_iter(i)**2d0 + 1./(exp(beta*phn_energy)-1.0)
         Ephn = Ephn + phn_energy*Nphn
         Sphn = Sphn + (1+Nphn)*log(1+Nphn)-Nphn*log(Nphn) 
      end do
@@ -929,7 +930,8 @@ program officina
         end do        
      end if
      open(unit=uio,file='hf_loop_energy.out',status='old',position='append')
-     write(uio,'(30F18.10)') Eout+mu_fix*ntot,Fout+mu_fix*ntot,sout,Sphn,Eout,Fout,E_dc,Ephn,Ekin_bare
+     !write(uio,'(30F18.10)') Eout+mu_fix*ntot,Fout+mu_fix*ntot,sout,Sphn,Eout,Fout,E_dc,Ephn,Ekin_bare
+     write(uio,'(30F18.10)') Eout+mu_fix*ntot,E_dc,Ephn,Ekin_bare,Eout
      close(uio)
      !
      !update Xiter
@@ -937,7 +939,7 @@ program officina
      call xiter_ik2ir(x_iter,x_iter_ir)
      !update Xph_iter -> the phonons
 
-     !+- critical error there was a facto 4 missing!!
+     !+- critical error there was a factor 4 missing!!
      ! XPHN_iter=0d0
      ! do ispin=1,Nspin
      !    XPHN_iter(1) = XPHN_iter(1) - gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))

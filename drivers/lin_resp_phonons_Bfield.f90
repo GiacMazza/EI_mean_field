@@ -36,7 +36,7 @@ program officina
   integer :: iso,jso,ispin,jspin,iorb,jorb,ik,isys,jk,iik
   integer :: i,j,k,idim
   integer :: Nhf,Nhf_,ihf,unit_err,unit_obs,unit_in,uio,unit_io,Nobs,jhf
-  integer :: Nhf_opt,ihf_print
+  integer :: Nhf_opt,it_print
   integer,dimension(:),allocatable :: iorb_to_ihf
   integer,dimension(:),allocatable :: ihf_to_iorb
   integer,dimension(:,:),allocatable :: ijorb_to_ihf
@@ -146,7 +146,7 @@ program officina
   !+- the dynamics
   complex(8),dimension(:),allocatable :: psit
   integer :: Nt_aux,Ndyn,it,Nt
-  real(8) :: tstart,tstop,time
+  real(8) :: tstart,tstop,time,tstep
   real(8),dimension(:),allocatable :: t_grid,t_grid_aux
 
 
@@ -166,7 +166,7 @@ program officina
   call parse_input_variable(Nk_x,"Nk_x","input.conf",default=51)
   call parse_input_variable(Nk_y,"Nk_y","input.conf",default=1)
   call parse_input_variable(Nhf,"Nhf","input.conf",default=100)
-  call parse_input_variable(ihf_print,"ihf_print","input.conf",default=1)
+  call parse_input_variable(it_print,"it_print","input.conf",default=20)
   ! call parse_input_variable(Nhf_,"Nhf_","input.conf",default=10)
   call parse_input_variable(Lreal,"Lreal","input.conf",default=2000)
   call parse_input_variable(wmix,"wmix","input.conf",default=0.5d0)
@@ -227,7 +227,7 @@ program officina
   call parse_input_variable(phn_energy,"phn_energy","input.conf",default=0.01d0,comment='phonon energy in eV')
   call parse_input_variable(ephn_g,"ephn_g","input.conf",default=0.0d0,comment='electron-phonon energy in eV')
   call parse_input_variable(phn_ell0,"phn_ell0","input.conf",default=0.05d0,comment='Ta-distortion in armstrong')
-
+  
   
   call parse_input_variable(ucut_off,"ucut_off","input.conf",default=1d0)
   call parse_input_variable(xi_int,"xi_int","input.conf",default=10000d0)
@@ -237,8 +237,8 @@ program officina
   call parse_input_variable(spin_deg,"spin_deg","input.conf",default=.true.)
   call parse_input_variable(enforce_cds,"enforce_cds","input.conf",default=.false.)
   !
-  call parse_input_variable(tstart,"TSTART","input.conf",default=0.d0)
-  call parse_input_variable(tstop,"TSTOP","input.conf",default=0.1d0)
+  call parse_input_variable(tstart,"TSTART","input.conf",default=0.d0,comment='initial time [ps]')
+  call parse_input_variable(tstop,"TSTOP","input.conf",default=10d0,comment='final time [ps]')
   call parse_input_variable(tstep,"TSTEP","input.conf",default=1.d-3)  
   !
   call get_global_vars
@@ -753,22 +753,22 @@ program officina
   call xiter_ik2ir(x_iter,x_iter_ir)
   XPHN_iter=0d0
   do ispin=1,Nspin
-     XPHN_iter(1) = XPHN_iter(1) - gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))
-     XPHN_iter(2) = XPHN_iter(2) - gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
-     XPHN_iter(3) = XPHN_iter(3) - gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
-     XPHN_iter(4) = XPHN_iter(4) - gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
+     XPHN_iter(1) = XPHN_iter(1) - 4d0*gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))
+     XPHN_iter(2) = XPHN_iter(2) - 4d0*gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
+     XPHN_iter(3) = XPHN_iter(3) - 4d0*gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
+     XPHN_iter(4) = XPHN_iter(4) - 4d0*gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
   end do
   
-  !+- HF-loop
-  uio=free_unit()
-  open(unit=uio,file='hf_dyn_BLS_hybs_chain1_ns1.out')
-  close(uio)
-  open(unit=uio,file='hf_dyn_BLS_hybs_chain1_ns2.out')
-  close(uio)
-  open(unit=uio,file='hf_dyn_BLS_hybs_chain2_ns1.out')
-  close(uio)
-  open(unit=uio,file='hf_dyn_BLS_hybs_chain2_ns2.out')
-  close(uio)
+  !+- time-dep loop
+  ! uio=free_unit()
+  ! open(unit=uio,file='hf_dyn_BLS_hybs_chain1_ns1.out')
+  ! close(uio)
+  ! open(unit=uio,file='hf_dyn_BLS_hybs_chain1_ns2.out')
+  ! close(uio)
+  ! open(unit=uio,file='hf_dyn_BLS_hybs_chain2_ns1.out')
+  ! close(uio)
+  ! open(unit=uio,file='hf_dyn_BLS_hybs_chain2_ns2.out')
+  ! close(uio)
 
   !+-
   open(unit=uio,file='hf_dyn_order_parameter_chain1_plus.out')
@@ -785,6 +785,7 @@ program officina
   close(uio)
   
   !+- initialize dynamics -+!
+  !+- remember - I measure time in ps.
   Nt=nint((tstop-tstart)/tstep)
   if(master) write(*,*) 'number of time steps Nt',Nt
   Nt_aux=2*Nt+1
@@ -801,26 +802,35 @@ program officina
   !+- init the dynamical vector -+!
   allocate(psit(Ndyn)); psit=0d0
 
-  !+- solve the equilibrium hamiltonian upon reading the solution -+!
+  !+- solve the equilibrium hamiltonian after reading the solution -+!
   H_Hf = HF_hamiltonian(x_iter,xphn_=XPHN_iter)
   H_Hf = H_Hf + Hk_toy
   call fix_mu(H_Hf,delta_hf,mu_fix,eout,sout)
   call deltak_to_xiter(delta_hf,x_iter)
   call xiter_ik2ir(x_iter,x_iter_ir)
+  call get_ni_loc(x_iter,ni_orb,ntot)
+  write(500,*) eout,eout+mu_fix*ntot
   phn_dyn=0d0 ![1:4  X, 5:8 P , 9:12 X^2, 13:16 P^2]
-  Xphn_dyn=0d0
-  Pphn_dyn=0d0
-  X2phn_dyn=0d0
-  
-  
+  ! NBB
+  ! Xphn \equiv     (b+b*)/\sqrt(2)
+  ! Pphn \equiv -xi*(b-b*)/\sqrt(2)
+  !init <Xphn>
   do ispin=1,Nspin
-     phn_dyn(1)  = phn_dyn(1) - gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))
-     phn_dyn(2)  = phn_dyn(2) - gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
-     phn_dyn(3)  = phn_dyn(3) - gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
-     phn_dyn(4) = phn_dyn(4) - gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
+     phn_dyn(1)  =  phn_dyn(1) - 4d0*gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))/sqrt(2d0)
+     phn_dyn(2)  =  phn_dyn(2) - 4d0*gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))/sqrt(2d0)
+     phn_dyn(3)  =  phn_dyn(3) - 4d0*gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))/sqrt(2d0)
+     phn_dyn(4)  =  phn_dyn(4) - 4d0*gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))/sqrt(2d0)
   end do
-  call delta2psi(delta_hf,xphn_dyn,psit)   
-  ! do ik=1,Lk
+  !init <Pphn>
+  phn_dyn(5:8) = 0d0
+  !init <X2phn> and <P2phn>
+  do i=1,4
+     phn_dyn(i+8) =   0.5d0*phn_dyn(i)**2d0 + 1./(exp(beta*phn_energy)-1.0) + 0.5d0  !+- <X2phn> -+!
+     phn_dyn(i+12) = -0.5d0*phn_dyn(i)**2d0 + 1./(exp(beta*phn_energy)-1.0) + 0.5d0  !+- <P2phn> -+!
+  end do
+  call delta2psi(delta_hf,phn_dyn,psit)
+  
+  ! do ik=1,Lk  ->>>NB this is now done inside delta2psi
   !    do iso=1,Nso
   !       do jso=1,Nso
   !          isys=idelta2ivec(iso,jso,ik)
@@ -831,48 +841,47 @@ program officina
   !
   !
   !+- allocate the dynamical HF hamiltonian
-  allocate(H_hf_dyn(Nso,Nso,Lk)); H_hf_dyn=0d0
-  
+  allocate(H_hf_dyn(Nso,Nso,Lk)); H_hf_dyn=0d0  
   !+-
   do it=1,Nt-1
      !
      !+- compute the dynamical HF hamiltonian -+!
-     call psi2delta(psit,delta_hf,xphn_iter)
-     H_Hf_dyn=HF_hamiltonian(x_iter,xphn_=XPHN_iter)
-     H_Hf_dyn=H_Hf_dyn+Hk_toy
-     
+     !call psi2delta(psit,delta_hf,xphn_iter)
+     call psi2delta(psit,delta_hf,phn_dyn)
+     xphn_iter=phn_dyn(1:4)*sqrt(2d0)
+     H_Hf_dyn=HF_hamiltonian(x_iter,xphn_=xphn_iter)
+     H_Hf_dyn=H_Hf_dyn+Hk_toy     
      ! !
      ! call fix_mu(H_Hf,delta_hf,mu_fix,eout,sout)
-     ! eoutHF=eout     !
+     H_HF_dyn=H_HF
+     eout=0d0     !
+     do ik=1,Lk
+        do iso=1,Nso
+           eout = eout + delta_hf(iso,iso,ik)*H_HF_dyn(iso,iso,ik)*wtk(ik)
+           do jso=iso+1,Nso
+              eout = eout + 2d0*dreal(delta_hf(iso,jso,ik)*H_HF_dyn(iso,jso,ik))*wtk(ik)
+           end do
+        end do
+     end do
+     !     
      ! call deltak_to_xiter(delta_hf,x_iter)
-     ! if(enforce_cds) then        
-     !    call xiter_ik2ir(x_iter,x_iter_ir)
-     !    do ispin=1,Nspin
-     !       x_iter_ir(ir0,4,ispin) = -dreal(x_iter_ir(irL,4,ispin))   + xi*dimag(x_iter_ir(ir0,4,ispin))
-     !       x_iter_ir(ir0,5,ispin) = -dreal(x_iter_ir(irL,5,ispin))   + xi*dimag(x_iter_ir(ir0,5,ispin)) 
-     !       x_iter_ir(ir0,9,ispin) = -dreal(x_iter_ir(irR,9,ispin))   + xi*dimag(x_iter_ir(ir0,9,ispin))
-     !       x_iter_ir(ir0,10,ispin) = -dreal(x_iter_ir(irR,10,ispin)) + xi*dimag(x_iter_ir(ir0,10,ispin))
-     !    end do
-     !    call xiter_ir2ik(x_iter_ir,x_iter)
-     ! end if
-
+     !+- here @equ ---> enforce_cds + enforce_inv
      ! call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
-     !
-     call get_double_counting_energy(x_iter,E_dc); Eout = Eout - E_dc
+     call deltak_to_xiter(delta_hf,x_iter)     
+     call get_double_counting_energy(x_iter,E_dc); eout = eout - E_dc
      !+- phonon energy
      Ephn=0d0
-     do i=1,4        
-        Nphn = 0.25*XPHN_iter(i)**2d0 + 1./(exp(beta*phn_energy)-1.0)
+     do i=1,4
+        !Nphn=0.5*(<X2> + <P2>)
+        Nphn = 0.5d0*phn_dyn(i+8)+0.5d0*phn_dyn(i+12) 
+        !Nphn = 0.25*XPHN_iter(i)**2d0 + 1./(exp(beta*phn_energy)-1.0)
         Ephn = Ephn + phn_energy*Nphn
      end do
-     Eout = Eout + Ephn
-     
+     Eout = Eout + Ephn     
      call get_ni_loc(x_iter,ni_orb,ntot)
-     !
-     !+- 
      
      !PRINTING
-     if(mod(jhf-1,ihf_print).eq.0) then
+     if(mod(it-1,it_print).eq.0) then
         !+- get real space for printing 
         call xiter_ik2ir(x_iter,x_iter_ir)
         uio=free_unit()
@@ -880,133 +889,56 @@ program officina
         write(uio,'(30F18.10)') XPHN_iter(1:4),XPHN_iter(1)*phn_ell0
         close(uio)
         !
-        open(unit=uio,file='hf_dyn_BLS_hybs_chain1_ns1.out',status='old',position='append')
-        write(uio,'(30F18.10)') x_iter_ir(ir0,1:5,1),x_iter_ir(irL,1:5,1)
-        close(uio)
-        open(unit=uio,file='hf_dyn_BLS_hybs_chain1_ns2.out',status='old',position='append')
-        write(uio,'(30F18.10)') x_iter_ir(ir0,1:5,2),x_iter_ir(irL,1:5,2)
-        close(uio)
-        open(unit=uio,file='hf_dyn_BLS_hybs_chain2_ns1.out',status='old',position='append')
-        write(uio,'(30F18.10)') x_iter_ir(ir0,6:10,2),x_iter_ir(irL,6:10,2)
-        close(uio)
-        open(unit=uio,file='hf_dyn_BLS_hybs_chain2_ns2.out',status='old',position='append')
-        write(uio,'(30F18.10)') x_iter_ir(ir0,6:10,2),x_iter_ir(irL,6:10,2)
-        close(uio)
+        !
+        ! open(unit=uio,file='hf_dyn_BLS_hybs_chain1_ns1.out',status='old',position='append')
+        ! write(uio,'(30F18.10)') x_iter_ir(ir0,1:5,1),x_iter_ir(irL,1:5,1)
+        ! close(uio)
+        ! open(unit=uio,file='hf_dyn_BLS_hybs_chain1_ns2.out',status='old',position='append')
+        ! write(uio,'(30F18.10)') x_iter_ir(ir0,1:5,2),x_iter_ir(irL,1:5,2)
+        ! close(uio)
+        ! open(unit=uio,file='hf_dyn_BLS_hybs_chain2_ns1.out',status='old',position='append')
+        ! write(uio,'(30F18.10)') x_iter_ir(ir0,6:10,2),x_iter_ir(irL,6:10,2)
+        ! close(uio)
+        ! open(unit=uio,file='hf_dyn_BLS_hybs_chain2_ns2.out',status='old',position='append')
+        ! write(uio,'(30F18.10)') x_iter_ir(ir0,6:10,2),x_iter_ir(irL,6:10,2)
+        ! close(uio)
+        !
         !
         open(unit=uio,file='hf_dyn_order_parameter_chain1_plus.out',status='old',position='append')
-        write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,4,1)+x_iter_ir(irL,4,1)),dimag(x_iter_ir(ir0,4,1)),dimag(x_iter_ir(irL,4,1)), &
+        write(uio,'(30F18.10)') t_grid(it), &
+             dreal(x_iter_ir(ir0,4,1)+x_iter_ir(irL,4,1)),dimag(x_iter_ir(ir0,4,1)),dimag(x_iter_ir(irL,4,1)), &
              dreal(x_iter_ir(ir0,4,2)+x_iter_ir(irL,4,2)),dimag(x_iter_ir(ir0,4,2)),dimag(x_iter_ir(irL,4,2))
         close(uio)
+        
         open(unit=uio,file='hf_dyn_order_parameter_chain1_minus.out',status='old',position='append')
-        write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,5,1)+x_iter_ir(irL,5,1)),dimag(x_iter_ir(ir0,5,1)),dimag(x_iter_ir(irL,5,1)), &
+        write(uio,'(30F18.10)') t_grid(it), &
+             dreal(x_iter_ir(ir0,5,1)+x_iter_ir(irL,5,1)),dimag(x_iter_ir(ir0,5,1)),dimag(x_iter_ir(irL,5,1)), &
              dreal(x_iter_ir(ir0,5,2)+x_iter_ir(irL,5,2)),dimag(x_iter_ir(ir0,5,2)),dimag(x_iter_ir(irL,5,2))     
         close(uio)
+        
         open(unit=uio,file='hf_dyn_order_parameter_chain2_plus.out',status='old',position='append')
-        write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,9,1)+x_iter_ir(irR,9,1)),dimag(x_iter_ir(ir0,9,1)),dimag(x_iter_ir(irR,9,1)), &
+        write(uio,'(30F18.10)') t_grid(it), &
+             dreal(x_iter_ir(ir0,9,1)+x_iter_ir(irR,9,1)),dimag(x_iter_ir(ir0,9,1)),dimag(x_iter_ir(irR,9,1)), &
              dreal(x_iter_ir(ir0,9,2)+x_iter_ir(irL,9,2)),dimag(x_iter_ir(ir0,9,2)),dimag(x_iter_ir(irL,9,2))
         close(uio)
+        
         open(unit=uio,file='hf_dyn_order_parameter_chain2_minus.out',status='old',position='append')
-        write(uio,'(30F18.10)') dreal(x_iter_ir(ir0,10,1)+x_iter_ir(irR,10,1)),dimag(x_iter_ir(ir0,10,1)),dimag(x_iter_ir(irR,10,1)), &
+        write(uio,'(30F18.10)') t_grid(it), &
+             dreal(x_iter_ir(ir0,10,1)+x_iter_ir(irR,10,1)),dimag(x_iter_ir(ir0,10,1)),dimag(x_iter_ir(irR,10,1)), &
              dreal(x_iter_ir(ir0,10,2)+x_iter_ir(irR,10,2)),dimag(x_iter_ir(ir0,10,2)),dimag(x_iter_ir(irR,10,2))
         close(uio)
-        
-        Ekin_bare=0d0
-        do ik=1,Lk
-           do iso=1,Nso
-              Ekin_bare=Ekin_bare+Hk_toy(iso,iso,ik)*delta_hf(iso,iso,ik)*wtk(ik)
-              do jso=iso+1,Nso
-                 Ekin_bare=Ekin_bare+2d0*dreal(Hk_toy(iso,jso,ik)*delta_hf(iso,jso,ik))*wtk(ik)
-              end do
-           end do
-        end do        
+        !
+        open(unit=uio,file='hf_dyn_energy.out',status='old',position='append')
+        write(uio,'(30F18.10)') t_grid(it),Eout+mu_fix*ntot,E_dc,Ephn
+        close(uio)
+        !
      end if
-     open(unit=uio,file='hf_dyn_energy.out',status='old',position='append')
-     write(uio,'(30F18.10)') Eout+mu_fix*ntot,Fout+mu_fix*ntot,sout,Sphn,Eout,Fout,E_dc,Ephn,Ekin_bare
-     close(uio)
      !
-     !update Xiter
-     x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_
-     call xiter_ik2ir(x_iter,x_iter_ir)
-     !update Xph_iter -> the phonons
-     XPHN_iter=0d0
-     do ispin=1,Nspin
-        XPHN_iter(1) = XPHN_iter(1) - gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))
-        XPHN_iter(2) = XPHN_iter(2) - gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
-        XPHN_iter(3) = XPHN_iter(3) - gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
-        XPHN_iter(4) = XPHN_iter(4) - gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
-     end do
-     err_hf=get_hf_err(x_iter,x_iter_)
-     if(err_hf.lt.hf_conv) iconv=iconv+1
-     if(iconv.eq.2) exit
+     !psit = RK_step(Ndyn,4,tstep,t_grid(it),psit,HF_eqs_of_motion)
+     !     
   end do
-
-  call print_xiter(x_iter,filename='final_x_iter_BLS')
-  call print_hyb(x_iter,filename='final_hyb')
-
-  H_Hf=HF_hamiltonian(x_iter,xphn_=XPHN_iter)
-  H_Hf=H_Hf+Hk_toy
-  call fix_mu(H_Hf,delta_hf,mu_fix,eout)
+  !+- next the post-processing for computing the response function
   
-  !+- print bands
-  unit_in=free_unit()
-  open(unit=unit_in,file='TNS_bands_BLS.out')
-  uio=free_unit()
-  open(uio,file='TNS_fat_BLS.out')  
-  do ir=1,nrpts
-     call FT_q2r(rpt_latt(ir,:),Hr_toy(:,:,ir),H_hf)
-  end do
-  modk=0.d0
-  do i=1,3
-     delta_kpath=kpath(i+1,:)-kpath(i,:)
-     do ik=1,100
-        j=(i-1)*100 + ik
-        kpt_path(j,:) = kpath(i,:) + dble(ik-1)/100.d0*delta_kpath
-        modk=modk+sqrt(dot_product(1.d0/100.d0*delta_kpath,1.d0/100.d0*delta_kpath))
-        !
-        call FT_r2q(kpt_path(j,:),Hktmp,Hr_toy)
-        !
-        ek_out_up=0.0d0
-        call eigh(Hktmp(1:Norb,1:Norb),ek_out_up)
-        !
-        ek_out_dw=0.0d0
-        call eigh(Hktmp(Norb+1:2*Norb,Norb+1:2*Norb),ek_out_dw)
-        !
-        Ta_fat=0.d0
-        do ispin=1,2
-           do iorb=1,2
-              iso=(ispin-1)*Norb+iorb
-              Ta_fat(:,ispin)=Ta_fat(:,ispin)+abs(Hktmp(iso,(ispin-1)*Norb+1:(ispin-1)*Norb+Norb))**2.d0
-              !Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
-           end do
-           do iorb=4,5
-              iso=(ispin-1)*Norb+iorb
-              Ta_fat(:,ispin)=Ta_fat(:,ispin)+abs(Hktmp(iso,(ispin-1)*Norb+1:(ispin-1)*Norb+Norb))**2.d0
-              !Ta_fat=Ta_fat+abs(Hktmp(iso,:))**2.d0
-           end do
-        end do
-        Ni_fat=0.d0
-        do ispin=1,2
-           iorb=3
-           iso=(ispin-1)*Norb+iorb
-           Ni_fat(:,ispin)=Ni_fat(:,ispin)+abs(Hktmp(iso,(ispin-1)*Norb+1:(ispin-1)*Norb+Norb))**2.d0
-           ! Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0
-           iorb=6
-           iso=(ispin-1)*Norb+iorb
-           Ni_fat(:,ispin)=Ni_fat(:,ispin)+abs(Hktmp(iso,(ispin-1)*Norb+1:(ispin-1)*Norb+Norb))**2.d0
-           ! Ni_fat=Ni_fat+abs(Hktmp(iso,:))**2.d0           
-        end do
-        !
-        write(unit_in,'(30F18.10)') modk,ek_out_up-mu_fix,ek_out_dw-mu_fix
-        write(uio,'(30F18.10)') modk,Ta_fat(:,1),Ta_fat(:,2),Ni_fat(:,1),Ni_fat(:,2)        
-        !
-     end do
-     !
-  end do
-  close(unit_in)
-  close(uio)
-
-
-
 
   !+- equilibrium HF loop -+!
   !   !+-
@@ -1851,73 +1783,73 @@ contains
 
   
 
-  subroutine set_HF_get_obs(y,x_iter,eout)
-    implicit none
-    complex(8),intent(inout)  :: x_iter(14)
-    real(8),intent(inout)     :: eout
-    complex(8),dimension(:),allocatable,intent(in) :: y
-    complex(8),dimension(:,:,:),allocatable :: delta_hf_dyn
-    integer :: iso,jso,ik,isys,i,ir
-    !
-    if(.not.allocated(y)) stop "psi2delta not allocated"
-    if(size(y).ne.Ndyn)  stop "psi2delta size(y).ne.Ndyn"
-    !
-    call psi2delta(y,delta_hf_dyn)
-    !
-    do i=1,3
-       ir=ixr(i)
-       delta_hfr(:,:,ir)=0.d0
-       do ik=1,Lk
-          delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
-               delta_hf_dyn(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
-       end do
-    end do
-    !
-    x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
-    x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
-    x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
-    !
-    x_iter(4) = delta_hfr(1,3,ir0)
-    x_iter(5) = delta_hfr(2,3,ir0)
-    !
-    x_iter(6) = delta_hfr(1,3,ir0)+delta_hfr(1,3,irR)
-    x_iter(7) = delta_hfr(2,3,ir0)+delta_hfr(2,3,irR)
-    !
-    x_iter(8) = delta_hfr(4,4,ir0)+delta_hfr(4+Norb,4+Norb,ir0)
-    x_iter(9) = delta_hfr(5,5,ir0)+delta_hfr(5+Norb,5+Norb,ir0)
-    x_iter(10) = delta_hfr(6,6,ir0)+delta_hfr(6+Norb,6+Norb,ir0)
-    !
-    x_iter(11) = delta_hfr(4,6,ir0)
-    x_iter(12) = delta_hfr(5,6,ir0)
-    !
-    x_iter(13) = delta_hfr(4,6,ir0)+delta_hfr(4,6,irL)
-    x_iter(14) = delta_hfr(5,6,ir0)+delta_hfr(5,6,irL)
-    !
-    ! set the dynamical HF hamiltonian
-    H_hf_dyn=HF_hamiltonian(x_iter)
-    H_hf_dyn=H_hf_dyn+Hk_toy
-    !
-    eout=0d0
-    do ik=1,Lk
-       do iso=1,Nso
-          eout = eout + H_hf_dyn(iso,iso,ik)*delta_hf_dyn(iso,iso,ik)*wtk(ik) 
-          do jso=iso+1,Nso
-             eout = eout + 2d0*dreal(H_hf_dyn(iso,jso,ik)*delta_hf_dyn(iso,jso,ik))*wtk(ik) 
-          end do
-       end do
-    end do
-    Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
-    Eout=Eout-2d0*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
-    Eout=Eout + 2.d0*Vcell*(abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0)
-    Eout=Eout + 2.d0*Vcell*(abs(x_iter(6)-x_iter(4))**2.d0+abs(x_iter(7)-x_iter(5))**2.d0)
-    !
-    Eout=Eout-Ucell*0.25d0*(dreal(x_iter(8))**2.d0+dreal(x_iter(9))**2.d0+dreal(x_iter(10))**2.d0)
-    Eout=Eout-2d0*Vcell*(dreal(x_iter(8))*dreal(x_iter(10))+dreal(x_iter(9))*dreal(x_iter(10)))
-    !
-    Eout=Eout + 2.d0*Vcell*(abs(x_iter(11))**2.d0+abs(x_iter(12))**2.d0)
-    Eout=Eout + 2.d0*Vcell*(abs(x_iter(13)-x_iter(11))**2.d0+abs(x_iter(14)-x_iter(12))**2.d0)
-    !
-  end subroutine set_HF_get_obs
+  ! subroutine set_HF_get_obs(y,x_iter,eout)
+  !   implicit none
+  !   complex(8),intent(inout)  :: x_iter(14)
+  !   real(8),intent(inout)     :: eout
+  !   complex(8),dimension(:),allocatable,intent(in) :: y
+  !   complex(8),dimension(:,:,:),allocatable :: delta_hf_dyn
+  !   integer :: iso,jso,ik,isys,i,ir
+  !   !
+  !   if(.not.allocated(y)) stop "psi2delta not allocated"
+  !   if(size(y).ne.Ndyn)  stop "psi2delta size(y).ne.Ndyn"
+  !   !
+  !   call psi2delta(y,delta_hf_dyn)
+  !   !
+  !   do i=1,3
+  !      ir=ixr(i)
+  !      delta_hfr(:,:,ir)=0.d0
+  !      do ik=1,Lk
+  !         delta_hfr(:,:,ir)=delta_hfr(:,:,ir) + &
+  !              delta_hf_dyn(:,:,ik)*exp(xi*dot_product(rpt_latt(ir,:),kpt_latt(ik,:)))*wtk(ik)
+  !      end do
+  !   end do
+  !   !
+  !   x_iter(1) = delta_hfr(1,1,ir0)+delta_hfr(1+Norb,1+Norb,ir0)
+  !   x_iter(2) = delta_hfr(2,2,ir0)+delta_hfr(2+Norb,2+Norb,ir0)
+  !   x_iter(3) = delta_hfr(3,3,ir0)+delta_hfr(3+Norb,3+Norb,ir0)
+  !   !
+  !   x_iter(4) = delta_hfr(1,3,ir0)
+  !   x_iter(5) = delta_hfr(2,3,ir0)
+  !   !
+  !   x_iter(6) = delta_hfr(1,3,ir0)+delta_hfr(1,3,irR)
+  !   x_iter(7) = delta_hfr(2,3,ir0)+delta_hfr(2,3,irR)
+  !   !
+  !   x_iter(8) = delta_hfr(4,4,ir0)+delta_hfr(4+Norb,4+Norb,ir0)
+  !   x_iter(9) = delta_hfr(5,5,ir0)+delta_hfr(5+Norb,5+Norb,ir0)
+  !   x_iter(10) = delta_hfr(6,6,ir0)+delta_hfr(6+Norb,6+Norb,ir0)
+  !   !
+  !   x_iter(11) = delta_hfr(4,6,ir0)
+  !   x_iter(12) = delta_hfr(5,6,ir0)
+  !   !
+  !   x_iter(13) = delta_hfr(4,6,ir0)+delta_hfr(4,6,irL)
+  !   x_iter(14) = delta_hfr(5,6,ir0)+delta_hfr(5,6,irL)
+  !   !
+  !   ! set the dynamical HF hamiltonian
+  !   H_hf_dyn=HF_hamiltonian(x_iter)
+  !   H_hf_dyn=H_hf_dyn+Hk_toy
+  !   !
+  !   eout=0d0
+  !   do ik=1,Lk
+  !      do iso=1,Nso
+  !         eout = eout + H_hf_dyn(iso,iso,ik)*delta_hf_dyn(iso,iso,ik)*wtk(ik) 
+  !         do jso=iso+1,Nso
+  !            eout = eout + 2d0*dreal(H_hf_dyn(iso,jso,ik)*delta_hf_dyn(iso,jso,ik))*wtk(ik) 
+  !         end do
+  !      end do
+  !   end do
+  !   Eout=Eout-Ucell*0.25d0*(dreal(x_iter(1))**2.d0+dreal(x_iter(2))**2.d0+dreal(x_iter(3))**2.d0)
+  !   Eout=Eout-2d0*Vcell*(dreal(x_iter(1))*dreal(x_iter(3))+dreal(x_iter(2))*dreal(x_iter(3)))
+  !   Eout=Eout + 2.d0*Vcell*(abs(x_iter(4))**2.d0+abs(x_iter(5))**2.d0)
+  !   Eout=Eout + 2.d0*Vcell*(abs(x_iter(6)-x_iter(4))**2.d0+abs(x_iter(7)-x_iter(5))**2.d0)
+  !   !
+  !   Eout=Eout-Ucell*0.25d0*(dreal(x_iter(8))**2.d0+dreal(x_iter(9))**2.d0+dreal(x_iter(10))**2.d0)
+  !   Eout=Eout-2d0*Vcell*(dreal(x_iter(8))*dreal(x_iter(10))+dreal(x_iter(9))*dreal(x_iter(10)))
+  !   !
+  !   Eout=Eout + 2.d0*Vcell*(abs(x_iter(11))**2.d0+abs(x_iter(12))**2.d0)
+  !   Eout=Eout + 2.d0*Vcell*(abs(x_iter(13)-x_iter(11))**2.d0+abs(x_iter(14)-x_iter(12))**2.d0)
+  !   !
+  ! end subroutine set_HF_get_obs
   !
   !  
   !
@@ -2012,13 +1944,13 @@ contains
           end do
        end do
     end do
-    if(isys.ne.Ndyn-4) stop "if(isys.ne.Ndyn-4)"
+    if(isys.ne.Ndyn-16) stop "if(isys.ne.Ndyn-16)"
     y(isys+1:Ndyn) = xphn
   end subroutine delta2psi
   subroutine psi2delta(y,delta,xphn)
     integer :: ik,iso,jso,isys
     complex(8),dimension(:,:,:),allocatable,intent(inout) :: delta
-    real(8),dimension(4),intent(inout) :: xphn
+    real(8),dimension(16),intent(inout) :: xphn
     complex(8),dimension(:),allocatable,intent(in) :: y
 
     if(.not.allocated(y)) stop "psi2delta not allocated"
@@ -2026,13 +1958,14 @@ contains
     !
     if(allocated(delta)) deallocate(delta)
     allocate(delta(Nso,Nso,Lk));delta=0d0
-    do isys=1,Ndyn-4
+    do isys=1,Ndyn-16
        iso=ivec2idelta(isys,1)
        jso=ivec2idelta(isys,2)
        ik=ivec2idelta(isys,3)
-       delta(iso,jso,ik) = y(isys)
+       delta(iso,jso,ik) = y(isys)       
     end do
-    xphn(isys+1:Ndyn) = y(isys)
+    !write(*,*) isys,isys+1-Ndyn,Lk*Nso*Nso
+    xphn(1:16) = dreal(y(isys:Ndyn))
   end subroutine psi2delta
   
   subroutine init_tdHF_strides
@@ -2084,7 +2017,7 @@ contains
           !
        end do
     end do
-    yout=-xi*yout!/(hbar_ev_ps*1d3) !+- here the time is measured in fs 
+    yout=-xi*yout/(hbar_ev_ps) !+- here the time is measured in ps 
     !
   end function HF_eqs_of_motion
   
