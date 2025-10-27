@@ -639,7 +639,11 @@ program officina
   allocate(x_iter_bare(Lk,Nhf_opt,Nspin)); x_iter_bare=0d0
   call deltak_to_xiter(delta_hf,x_iter)
   call print_xiter(x_iter,filename='bare_xiter')
-    
+
+  call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
+  call print_xiter(x_iter,filename='bare_after_inv_x_iter_BLS')
+
+  
   x_iter_bare=x_iter
   call init_ihfopt_strides
   call print_hyb(x_iter,filename='bare_TNShyb')
@@ -803,13 +807,26 @@ program officina
   allocate(psit(Ndyn)); psit=0d0
 
   !+- solve the equilibrium hamiltonian after reading the solution -+!
+  call get_double_counting_energy(x_iter,E_dc);
+  call get_ni_loc(x_iter,ni_orb,ntot)
+  write(500,*) E_dc,Xphn_iter
+  
   H_Hf = HF_hamiltonian(x_iter,xphn_=XPHN_iter)
   H_Hf = H_Hf + Hk_toy
   call fix_mu(H_Hf,delta_hf,mu_fix,eout,sout)
   call deltak_to_xiter(delta_hf,x_iter)
+
+  
   call xiter_ik2ir(x_iter,x_iter_ir)
   call get_ni_loc(x_iter,ni_orb,ntot)
-  write(500,*) eout,eout+mu_fix*ntot
+  !
+  call print_xiter(x_iter,filename='before_inv_x_iter_BLS')
+  call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
+  call print_xiter(x_iter,filename='after_inv_x_iter_BLS')
+
+  call get_double_counting_energy(x_iter,E_dc); eout = eout - E_dc
+  write(500,*) eout+mu_fix*ntot,E_dc,eout
+  stop
   phn_dyn=0d0 ![1:4  X, 5:8 P , 9:12 X^2, 13:16 P^2]
   ! NBB
   ! Xphn \equiv     (b+b*)/\sqrt(2)
@@ -825,8 +842,8 @@ program officina
   phn_dyn(5:8) = 0d0
   !init <X2phn> and <P2phn>
   do i=1,4
-     phn_dyn(i+8) =   0.5d0*phn_dyn(i)**2d0 + 1./(exp(beta*phn_energy)-1.0) + 0.5d0  !+- <X2phn> -+!
-     phn_dyn(i+12) = -0.5d0*phn_dyn(i)**2d0 + 1./(exp(beta*phn_energy)-1.0) + 0.5d0  !+- <P2phn> -+!
+     phn_dyn(i+8) =   0.5d0*phn_dyn(i)**2d0 + 0.5d0*phn_dyn(i)**2d0 + 1./(exp(beta*phn_energy)-1.0) + 0.5d0  !+- <X2phn> -+!
+     phn_dyn(i+12) = -0.5d0*phn_dyn(i)**2d0 + 0.5d0*phn_dyn(i)**2d0 + 1./(exp(beta*phn_energy)-1.0) + 0.5d0  !+- <P2phn> -+!
   end do
   call delta2psi(delta_hf,phn_dyn,psit)
   
@@ -929,7 +946,7 @@ program officina
         close(uio)
         !
         open(unit=uio,file='hf_dyn_energy.out',status='old',position='append')
-        write(uio,'(30F18.10)') t_grid(it),Eout+mu_fix*ntot,E_dc,Ephn
+        write(uio,'(30F18.10)') t_grid(it),Eout,E_dc,Ephn
         close(uio)
         !
      end if

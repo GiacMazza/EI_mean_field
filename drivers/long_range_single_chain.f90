@@ -835,6 +835,16 @@ program officina
      close(unit_err)
      !
      x_iter_=x_iter
+     !+- set the phonon displacement
+     call xiter_ik2ir(x_iter,x_iter_ir)
+     XPHN_iter=0d0
+     do ispin=1,Nspin
+        XPHN_iter(1) = XPHN_iter(1) - 4.0*gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))
+        XPHN_iter(2) = XPHN_iter(2) - 4.0*gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
+        XPHN_iter(3) = XPHN_iter(3) - 4.0*gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
+        XPHN_iter(4) = XPHN_iter(4) - 4.0*gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
+     end do
+
 
      
      !+- here I should compute the HF hamiltonian -+! 
@@ -927,7 +937,7 @@ program officina
                  Ekin_bare=Ekin_bare+2d0*dreal(Hk_toy(iso,jso,ik)*delta_hf(iso,jso,ik))*wtk(ik)
               end do
            end do
-        end do        
+        end do
      end if
      open(unit=uio,file='hf_loop_energy.out',status='old',position='append')
      !write(uio,'(30F18.10)') Eout+mu_fix*ntot,Fout+mu_fix*ntot,sout,Sphn,Eout,Fout,E_dc,Ephn,Ekin_bare
@@ -936,7 +946,7 @@ program officina
      !
      !update Xiter
      x_iter=x_iter*wmix+(1.d0-wmix)*x_iter_
-     call xiter_ik2ir(x_iter,x_iter_ir)
+     !call xiter_ik2ir(x_iter,x_iter_ir)
      !update Xph_iter -> the phonons
 
      !+- critical error there was a factor 4 missing!!
@@ -948,21 +958,21 @@ program officina
      !    XPHN_iter(4) = XPHN_iter(4) - gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
      ! end do
 
-     XPHN_iter=0d0
-     do ispin=1,Nspin
-        XPHN_iter(1) = XPHN_iter(1) - 4.0*gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))
-        XPHN_iter(2) = XPHN_iter(2) - 4.0*gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
-        XPHN_iter(3) = XPHN_iter(3) - 4.0*gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
-        XPHN_iter(4) = XPHN_iter(4) - 4.0*gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
-     end do
+     ! XPHN_iter=0d0
+     ! do ispin=1,Nspin
+     !    XPHN_iter(1) = XPHN_iter(1) - 4.0*gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))
+     !    XPHN_iter(2) = XPHN_iter(2) - 4.0*gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
+     !    XPHN_iter(3) = XPHN_iter(3) - 4.0*gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
+     !    XPHN_iter(4) = XPHN_iter(4) - 4.0*gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
+     ! end do
 
      err_hf=get_hf_err(x_iter,x_iter_)
      if(err_hf.lt.hf_conv) iconv=iconv+1
      if(iconv.eq.2) exit
   end do
 
-  call print_xiter(x_iter,filename='final_x_iter_BLS')
-  call print_hyb(x_iter,filename='final_hyb')
+  call print_xiter(x_iter_,filename='final_x_iter_BLS')
+  call print_hyb(x_iter_,filename='final_hyb')
 
   H_Hf=HF_hamiltonian(x_iter,xphn_=XPHN_iter)
   H_Hf=H_Hf+Hk_toy
