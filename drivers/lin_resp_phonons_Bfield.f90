@@ -1,5 +1,4 @@
-program officina
-  !
+program officina  !
   USE SCIFOR
   USE DMFT_TOOLS
   !
@@ -758,10 +757,13 @@ program officina
   XPHN_iter=0d0
   do ispin=1,Nspin
      XPHN_iter(1) = XPHN_iter(1) - 4d0*gphn(1)/phn_energy*dreal(x_iter_ir(ir0,4,ispin)+x_iter_ir(irL,4,ispin))
-     XPHN_iter(2) = XPHN_iter(2) - 4d0*gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
-     XPHN_iter(3) = XPHN_iter(3) - 4d0*gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
-     XPHN_iter(4) = XPHN_iter(4) - 4d0*gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
+     ! XPHN_iter(2) = XPHN_iter(2) - 4d0*gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))
+     ! XPHN_iter(3) = XPHN_iter(3) - 4d0*gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))
+     ! XPHN_iter(4) = XPHN_iter(4) - 4d0*gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))
   end do
+  XPHN_iter(2) = -1d0*XPHN_iter(1)
+  XPHN_iter(3) =  1d0*XPHN_iter(1)
+  XPHN_iter(4) = -1d0*XPHN_iter(1)
   
   !+- time-dep loop
   ! uio=free_unit()
@@ -815,14 +817,32 @@ program officina
   H_Hf = H_Hf + Hk_toy
   call fix_mu(H_Hf,delta_hf,mu_fix,eout,sout)
   call deltak_to_xiter(delta_hf,x_iter)
-
+  
   
   call xiter_ik2ir(x_iter,x_iter_ir)
   call get_ni_loc(x_iter,ni_orb,ntot)
   !
   call print_xiter(x_iter,filename='before_inv_x_iter_BLS')
+  call print_hyb(x_iter,filename='before_hyb')
+
+  call xiter_ik2ir(x_iter,x_iter_ir)
+  write(700,'(30F18.10)') x_iter_ir(ir0,4,1),x_iter_ir(irL,4,1)
+       !dreal(x_iter_ir(ir0,4,1)+x_iter_ir(irL,4,1)),dimag(x_iter_ir(ir0,4,1)),dimag(x_iter_ir(irL,4,1)), &
+       !dreal(x_iter_ir(ir0,4,2)+x_iter_ir(irL,4,2)),dimag(x_iter_ir(ir0,4,2)),dimag(x_iter_ir(irL,4,2))
+  write(700,'(30F18.10)') x_iter_ir(ir0,5,1),x_iter_ir(irL,5,1)
+       ! dreal(x_iter_ir(ir0,5,1)+x_iter_ir(irL,5,1)),dimag(x_iter_ir(ir0,5,1)),dimag(x_iter_ir(irL,5,1)), &
+       ! dreal(x_iter_ir(ir0,5,2)+x_iter_ir(irL,5,2)),dimag(x_iter_ir(ir0,5,2)),dimag(x_iter_ir(irL,5,2))
+
+  write(700,*)
   call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
   call print_xiter(x_iter,filename='after_inv_x_iter_BLS')
+  call xiter_ik2ir(x_iter,x_iter_ir)
+  write(700,'(30F18.10)') x_iter_ir(ir0,4,1),x_iter_ir(irL,4,1)
+             ! dreal(x_iter_ir(ir0,4,1)+x_iter_ir(irL,4,1)),dimag(x_iter_ir(ir0,4,1)),dimag(x_iter_ir(irL,4,1)), &
+             ! dreal(x_iter_ir(ir0,4,2)+x_iter_ir(irL,4,2)),dimag(x_iter_ir(ir0,4,2)),dimag(x_iter_ir(irL,4,2))
+  write(700,'(30F18.10)') x_iter_ir(ir0,5,1),x_iter_ir(irL,5,1)
+             ! dreal(x_iter_ir(ir0,5,1)+x_iter_ir(irL,5,1)),dimag(x_iter_ir(ir0,5,1)),dimag(x_iter_ir(irL,5,1)), &
+             ! dreal(x_iter_ir(ir0,5,2)+x_iter_ir(irL,5,2)),dimag(x_iter_ir(ir0,5,2)),dimag(x_iter_ir(irL,5,2))
 
   call get_double_counting_energy(x_iter,E_dc); eout = eout - E_dc
   write(500,*) eout+mu_fix*ntot,E_dc,eout
@@ -1714,13 +1734,18 @@ contains
                 if(ik.ne.jk.or.tns_toy) then
                    ktmp=kxgrid(ik)-kxgrid(jk)
                    do while(ktmp.lt.-0.5d0)
+                   !do while(ktmp.lt.kxgrid(1))
                       ktmp=ktmp+1.d0
                    end do
                    do while(ktmp.gt.0.5d0)
+                   !do while(ktmp.gt.kxgrid(Lk))
                       ktmp=ktmp-1.d0
                    end do
                    iik = 1+nint((ktmp-kxgrid(1))/(kxgrid(2)-kxgrid(1)))
-                   if(iik.lt.1.or.iik.gt.Lk) stop "(iik.lt.1.or.iik.gt.Lk)"
+                   if(iik.lt.1.or.iik.gt.Lk) then
+                      write(*,*) iik,ktmp,kxgrid(1),Lk
+                      stop "(iik.lt.1.or.iik.gt.Lk)"
+                   end if
                    !
                    hf_self_fock_out(ik,ihf,ispin) = hf_self_fock_out(ik,ihf,ispin) - &
                         Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)
@@ -2081,6 +2106,8 @@ contains
           jorb=3          
           iso=(ispin-1)*Norb+iorb
           jso=(ispin-1)*Norb+jorb
+          !+-
+          Rlat=R1
           Hhf(iso,jso,ik) = Hhf(iso,jso,ik) + gphn(1)*xphn(1)*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
           Hhf(jso,iso,ik) = conjg(Hhf(iso,jso,ik))
           !
@@ -2088,6 +2115,7 @@ contains
           jorb=3          
           iso=(ispin-1)*Norb+iorb
           jso=(ispin-1)*Norb+jorb
+          Rlat=R1
           Hhf(iso,jso,ik) = Hhf(iso,jso,ik) + gphn(2)*xphn(2)*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
           Hhf(jso,iso,ik) = conjg(Hhf(iso,jso,ik))
           !
@@ -2095,6 +2123,7 @@ contains
           jorb=6          
           iso=(ispin-1)*Norb+iorb
           jso=(ispin-1)*Norb+jorb
+          Rlat=R1
           Hhf(iso,jso,ik) = Hhf(iso,jso,ik) + gphn(3)*xphn(3)*(1.d0+exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
           Hhf(jso,iso,ik) = conjg(Hhf(iso,jso,ik))
           !
@@ -2102,6 +2131,7 @@ contains
           jorb=6          
           iso=(ispin-1)*Norb+iorb
           jso=(ispin-1)*Norb+jorb
+          Rlat=R1
           Hhf(iso,jso,ik) = Hhf(iso,jso,ik) + gphn(4)*xphn(4)*(1.d0+exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
           Hhf(jso,iso,ik) = conjg(Hhf(iso,jso,ik))
           !          

@@ -160,7 +160,7 @@ program officina
 
   integer,dimension(:,:),allocatable :: ivec2idelta
   integer,dimension(:,:,:),allocatable :: idelta2ivec
-  logical ::tns_toy,op_symm,spin_deg,enforce_cds
+  logical ::tns_toy,op_symm,spin_deg,enforce_cds,inv_symm
   
   
   !+- START MPI -+!
@@ -242,6 +242,8 @@ program officina
 
   call parse_input_variable(tns_toy,"tns_toy","input.conf",default=.false.)
   call parse_input_variable(op_symm,"op_symm","input.conf",default=.true.)
+  call parse_input_variable(inv_symm,"inv_symm","input.conf",default=.true.)
+
   call parse_input_variable(spin_deg,"spin_deg","input.conf",default=.true.)
   call parse_input_variable(enforce_cds,"enforce_cds","input.conf",default=.false.)
 
@@ -846,54 +848,10 @@ program officina
      end do
 
 
-     
-     !+- here I should compute the HF hamiltonian -+! 
-     H_Hf=HF_hamiltonian(x_iter,xphn_=XPHN_iter)
-     H_Hf=H_Hf+Hk_toy
-     !
-     call fix_mu(H_Hf,delta_hf,mu_fix,eout,sout)
-
-     !+- test
-     ! do ik=1,Lk
-     !    !+- delta_hf(Nso,Nso,Lk)
-     !    write(675,'(10F18.10)') delta_hf(1,1,ik),delta_hf(2,2,ik),delta_hf(3,3,ik),delta_hf(1,3,ik),delta_hf(2,3,ik)
-     ! end do          
-     eoutHF=eout     !
-     call deltak_to_xiter(delta_hf,x_iter)
-     if(enforce_cds) then        
-        call xiter_ik2ir(x_iter,x_iter_ir)
-        do ispin=1,Nspin
-           x_iter_ir(ir0,4,ispin) = -dreal(x_iter_ir(irL,4,ispin))   + xi*dimag(x_iter_ir(ir0,4,ispin))
-           x_iter_ir(ir0,5,ispin) = -dreal(x_iter_ir(irL,5,ispin))   + xi*dimag(x_iter_ir(ir0,5,ispin)) 
-           x_iter_ir(ir0,9,ispin) = -dreal(x_iter_ir(irR,9,ispin))   + xi*dimag(x_iter_ir(ir0,9,ispin))
-           x_iter_ir(ir0,10,ispin) = -dreal(x_iter_ir(irR,10,ispin)) + xi*dimag(x_iter_ir(ir0,10,ispin))
-        end do
-        call xiter_ir2ik(x_iter_ir,x_iter)
-     end if
-
-     call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
-     !
-     call get_double_counting_energy(x_iter,E_dc); Eout = Eout - E_dc
-     !+- phonon energy !+-NBB: this is  [Ephn = \hbar \o_0 <\b^* b> ]
-     !                         the linear term is already included in the electronic hamiltonian contribution
-     Ephn=0d0
-     Sphn = 0d0
-     do i=1,4        
-        Nphn = 0.25*XPHN_iter(i)**2d0 + 1./(exp(beta*phn_energy)-1.0)
-        Ephn = Ephn + phn_energy*Nphn
-        Sphn = Sphn + (1+Nphn)*log(1+Nphn)-Nphn*log(Nphn) 
-     end do
-     Eout = Eout + Ephn
-     Fout = Eout - temp*(Sphn+sout)
-     
-     call get_ni_loc(x_iter,ni_orb,ntot)
-     !
-     !+- 
-     
      !PRINTING
      if(mod(jhf-1,ihf_print).eq.0) then
         !+- get real space for printing 
-        call xiter_ik2ir(x_iter,x_iter_ir)
+        !call xiter_ik2ir(x_iter,x_iter_ir)
         uio=free_unit()
         open(unit=uio,file='hf_loop_phonons.out',status='old',position='append')
         write(uio,'(30F18.10)') XPHN_iter(1:4),XPHN_iter(1)*phn_ell0
@@ -929,19 +887,66 @@ program officina
              dreal(x_iter_ir(ir0,10,2)+x_iter_ir(irR,10,2)),dimag(x_iter_ir(ir0,10,2)),dimag(x_iter_ir(irR,10,2))
         close(uio)
         
-        Ekin_bare=0d0
-        do ik=1,Lk
-           do iso=1,Nso
-              Ekin_bare=Ekin_bare+Hk_toy(iso,iso,ik)*delta_hf(iso,iso,ik)*wtk(ik)
-              do jso=iso+1,Nso
-                 Ekin_bare=Ekin_bare+2d0*dreal(Hk_toy(iso,jso,ik)*delta_hf(iso,jso,ik))*wtk(ik)
-              end do
-           end do
-        end do
+        ! Ekin_bare=0d0
+        ! do ik=1,Lk
+        !    do iso=1,Nso
+        !       Ekin_bare=Ekin_bare+Hk_toy(iso,iso,ik)*delta_hf(iso,iso,ik)*wtk(ik)
+        !       do jso=iso+1,Nso
+        !          Ekin_bare=Ekin_bare+2d0*dreal(Hk_toy(iso,jso,ik)*delta_hf(iso,jso,ik))*wtk(ik)
+        !       end do
+        !    end do
+        ! end do
      end if
+
+     
+
+     
+     !+- here I should compute the HF hamiltonian -+! 
+     H_Hf=HF_hamiltonian(x_iter,xphn_=XPHN_iter)
+     H_Hf=H_Hf+Hk_toy
+     !
+     call fix_mu(H_Hf,delta_hf,mu_fix,eout,sout)
+
+     !+- test
+     ! do ik=1,Lk
+     !    !+- delta_hf(Nso,Nso,Lk)
+     !    write(675,'(10F18.10)') delta_hf(1,1,ik),delta_hf(2,2,ik),delta_hf(3,3,ik),delta_hf(1,3,ik),delta_hf(2,3,ik)
+     ! end do          
+     eoutHF=eout     !
+     call deltak_to_xiter(delta_hf,x_iter)
+     if(enforce_cds) then        
+        call xiter_ik2ir(x_iter,x_iter_ir)
+        do ispin=1,Nspin
+           x_iter_ir(ir0,4,ispin) = -dreal(x_iter_ir(irL,4,ispin))   + xi*dimag(x_iter_ir(ir0,4,ispin))
+           x_iter_ir(ir0,5,ispin) = -dreal(x_iter_ir(irL,5,ispin))   + xi*dimag(x_iter_ir(ir0,5,ispin)) 
+           x_iter_ir(ir0,9,ispin) = -dreal(x_iter_ir(irR,9,ispin))   + xi*dimag(x_iter_ir(ir0,9,ispin))
+           x_iter_ir(ir0,10,ispin) = -dreal(x_iter_ir(irR,10,ispin)) + xi*dimag(x_iter_ir(ir0,10,ispin))
+        end do
+        call xiter_ir2ik(x_iter_ir,x_iter)
+     end if
+
+     call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg,inv_symm=inv_symm)
+     !
+     call get_double_counting_energy(x_iter,E_dc); Eout = Eout - E_dc
+     !+- phonon energy !+-NBB: this is  [Ephn = \hbar \o_0 <\b^* b> ]
+     !                         the linear term is already included in the electronic hamiltonian contribution
+     Ephn=0d0
+     Sphn = 0d0
+     do i=1,4        
+        Nphn = 0.25*XPHN_iter(i)**2d0 + 1./(exp(beta*phn_energy)-1.0)
+        Ephn = Ephn + phn_energy*Nphn
+        Sphn = Sphn + (1+Nphn)*log(1+Nphn)-Nphn*log(Nphn) 
+     end do
+     Eout = Eout + Ephn
+     Fout = Eout - temp*(Sphn+sout)
+     
+     call get_ni_loc(x_iter,ni_orb,ntot)
+     !
+     !+- 
+     
      open(unit=uio,file='hf_loop_energy.out',status='old',position='append')
      !write(uio,'(30F18.10)') Eout+mu_fix*ntot,Fout+mu_fix*ntot,sout,Sphn,Eout,Fout,E_dc,Ephn,Ekin_bare
-     write(uio,'(30F18.10)') Eout+mu_fix*ntot,E_dc,Ephn,Ekin_bare,Eout
+     write(uio,'(30F18.10)') Eout+mu_fix*ntot,E_dc,Ephn,Eout
      close(uio)
      !
      !update Xiter
@@ -1268,7 +1273,7 @@ contains
     x_iter_out_ir(ir0,4,:) =  x_iter_out_ir(ir0,4,:) + xi*TRSBseed
     x_iter_out_ir(irL,4,:) = -dreal(x_iter_out_ir(ir0,4,:)) + CDSBseed + xi*TRSBseed
     call xiter_ir2ik(x_iter_out_ir,x_iter_out)
-    call enforce_inv_hf(x_iter_out,op_symm=op_symm,spin_symm=spin_deg)
+    call enforce_inv_hf(x_iter_out,op_symm=.true.,spin_symm=.true.,inv_symm=.true.)
     !
     if(printseed_) call print_hyb(x_iter_out,filename='seed_TNShyb')
     !+- if present read some previous solution
@@ -1378,10 +1383,10 @@ contains
 
 
 
-  subroutine enforce_inv_hf(x_iter_in,op_symm,spin_symm)
+  subroutine enforce_inv_hf(x_iter_in,op_symm,spin_symm,inv_symm)
     complex(8),dimension(Lk,Nhf_opt,Nspin),intent(inout) :: x_iter_in
-    logical,optional :: op_symm,spin_symm
-    logical :: op_symm_,spin_symm_
+    logical,optional :: op_symm,spin_symm,inv_symm
+    logical :: op_symm_,spin_symm_,inv_symm_
     real(8) :: tmpkphase
     complex(8),dimension(:,:,:),allocatable :: x_iter_out
     integer :: ispin,ihf,ik
@@ -1393,6 +1398,8 @@ contains
     if(present(op_symm)) op_symm_=op_symm
     spin_symm_=.false.
     if(present(spin_symm)) spin_symm_=spin_symm
+    inv_symm_=.true.
+    if(present(inv_symm)) inv_symm_=inv_symm
     !
     if(op_symm_) then
        !+- enforce the order parameter symmetry of the upper chains
@@ -1406,32 +1413,34 @@ contains
        end do
     end if
     !+- enforce the inversion symmetry of the double chains
-    do ik=1,Lk
-       do ispin=1,Nspin
-          !+- diagonal terms
-          !+- ihf=6 !<Ta2+Ta2+>          
-          !+- ihf=7 !<Ta2-Ta2->          
-          !+- ihf=8 !<Ni2Ni2>
-          do ihf=6,8
+    if(inv_symm_) then
+       do ik=1,Lk
+          do ispin=1,Nspin
+             !+- diagonal terms
+             !+- ihf=6 !<Ta2+Ta2+>          
+             !+- ihf=7 !<Ta2-Ta2->          
+             !+- ihf=8 !<Ni2Ni2>
+             do ihf=6,8
+                if(op_symm_) then
+                   x_iter_out(ik,ihf,ispin) = x_iter_out(Lk+1-ik,ihf-5,ispin)
+                else
+                   x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,ihf-5,ispin)
+                end if
+             end do
+             !+- off-diagonal terms
+             !+- ihf=9 !<Ta2+Ni2>
+             ihf=9
              if(op_symm_) then
-                x_iter_out(ik,ihf,ispin) = x_iter_out(Lk+1-ik,ihf-5,ispin)
+                x_iter_out(ik,ihf,ispin) = x_iter_out(Lk+1-ik,5,ispin)
              else
-                x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,ihf-5,ispin)
+                x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,5,ispin)             
              end if
+             !+- ihf=10 !<Ta2-Ni2>
+             ihf=10
+             x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,4,ispin)          
           end do
-          !+- off-diagonal terms
-          !+- ihf=9 !<Ta2+Ni2>
-          ihf=9
-          if(op_symm_) then
-             x_iter_out(ik,ihf,ispin) = x_iter_out(Lk+1-ik,5,ispin)
-          else
-             x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,5,ispin)             
-          end if
-          !+- ihf=10 !<Ta2-Ni2>
-          ihf=10
-          x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,4,ispin)          
        end do
-    end do
+    end if
     !
     x_iter_in = x_iter_out
     if(spin_symm_) x_iter_in(:,:,2)=x_iter_in(:,:,1)
@@ -1965,6 +1974,8 @@ contains
              end do
           end do
           !+- e-ph coupling -+!
+          Rlat=R1
+          !
           iorb=1
           jorb=3          
           iso=(ispin-1)*Norb+iorb
