@@ -385,12 +385,12 @@ program officina
         !
         iorb=1
         iso=(ispin-1)*Norb+iorb
-        Hk_toy(iso,iso,ik) = Econduction  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3)+4d0*hop_phase)
+        Hk_toy(iso,iso,ik) = Econduction  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3)+4d0*hop_phase) !+checked phase
         Hk_toy(iso,iso,ik) = Hk_toy(iso,iso,ik) + (-1d0)**dble(ispin)*Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield  !+- Zeeman field
         !
         iorb=2
         iso=(ispin-1)*Norb+iorb
-        Hk_toy(iso,iso,ik) = Econduction  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3)-4d0*hop_phase)
+        Hk_toy(iso,iso,ik) = Econduction  + 2.d0*tk(iorb)*dcos(kpt_latt(ik,1)*R1(1)+kpt_latt(ik,2)*R1(2)+kpt_latt(ik,3)*R1(3)-4d0*hop_phase) !+checked phase
         Hk_toy(iso,iso,ik) = Hk_toy(iso,iso,ik) + (-1d0)**dble(ispin)*Bohr_magneton_in_eVoT*gfactor*0.5d0*Bfield  !+- Zeeman field
         !
         iorb=3
@@ -404,7 +404,7 @@ program officina
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase))
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase)) !+- checked
         Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + CDSB_breaking_field*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))!hybloc*(1.d0-exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
         !
@@ -413,7 +413,7 @@ program officina
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase))
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase)) !+- checked
         Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) - CDSB_breaking_field*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))!hybloc*(1.d0-exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
         !
@@ -439,7 +439,7 @@ program officina
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=-R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase))
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase)) !- checked  and updated
         Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) - CDSB_breaking_field*(1.d0+exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         !
@@ -448,7 +448,7 @@ program officina
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=-R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase))
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase))
         Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + CDSB_breaking_field*(1.d0+exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))        
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         !
@@ -925,7 +925,7 @@ program officina
         call xiter_ir2ik(x_iter_ir,x_iter)
      end if
 
-     call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg,inv_symm=inv_symm)
+     if(inv_symm) call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg,inv_symm=inv_symm)
      !
      call get_double_counting_energy(x_iter,E_dc); Eout = Eout - E_dc
      !+- phonon energy !+-NBB: this is  [Ephn = \hbar \o_0 <\b^* b> ]
@@ -1420,13 +1420,22 @@ contains
              !+- ihf=6 !<Ta2+Ta2+>          
              !+- ihf=7 !<Ta2-Ta2->          
              !+- ihf=8 !<Ni2Ni2>
-             do ihf=6,8
-                if(op_symm_) then
-                   x_iter_out(ik,ihf,ispin) = x_iter_out(Lk+1-ik,ihf-5,ispin)
-                else
-                   x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,ihf-5,ispin)
-                end if
-             end do
+             if(op_symm_) then
+                x_iter_out(ik,6,ispin) = x_iter_out(Lk+1-ik,2,ispin) !
+                x_iter_out(ik,7,ispin) = x_iter_out(Lk+1-ik,1,ispin) !
+                x_iter_out(ik,8,ispin) = x_iter_out(Lk+1-ik,3,ispin) !
+             else
+                x_iter_out(ik,6,ispin) = x_iter_in(Lk+1-ik,2,ispin) !
+                x_iter_out(ik,7,ispin) = x_iter_in(Lk+1-ik,1,ispin) !
+                x_iter_out(ik,8,ispin) = x_iter_in(Lk+1-ik,3,ispin) !             
+             end if
+             ! do ihf=6,8
+             !    if(op_symm_) then
+             !       x_iter_out(ik,ihf,ispin) = x_iter_out(Lk+1-ik,ihf-5,ispin)
+             !    else
+             !       x_iter_out(ik,ihf,ispin) = x_iter_in(Lk+1-ik,ihf-5,ispin)
+             !    end if
+             ! end do
              !+- off-diagonal terms
              !+- ihf=9 !<Ta2+Ni2>
              ihf=9

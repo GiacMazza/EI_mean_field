@@ -396,7 +396,7 @@ program officina  !
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase))
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase))  !+checked
         Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + CDSB_breaking_field*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))!hybloc*(1.d0-exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
         !
@@ -405,7 +405,7 @@ program officina  !
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase))
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase)) !+-checked
         Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) - CDSB_breaking_field*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))!hybloc*(1.d0-exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
         !
@@ -431,8 +431,7 @@ program officina  !
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=-R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase))
-        !Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase))
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(-xi*hop_phase)) !+- checked
         Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) - CDSB_breaking_field*(1.d0+exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         !
@@ -441,8 +440,7 @@ program officina  !
         iso=(ispin-1)*Norb+iorb
         jso=(ispin-1)*Norb+jorb
         Rlat=-R1
-        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase))
-        !Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase))
+        Hk_toy(iso,jso,ik) = hybloc*(1.d0*exp(-xi*hop_phase)-exp(xi*dot_product(Rlat,kpt_latt(ik,:)))*exp(xi*hop_phase))  !+- checked
         Hk_toy(iso,jso,ik) = Hk_toy(iso,jso,ik) + CDSB_breaking_field*(1.d0+exp(-xi*dot_product(Rlat,kpt_latt(ik,:))))        
         Hk_toy(jso,iso,ik) = conjg(Hk_toy(iso,jso,ik))
         !
@@ -640,14 +638,13 @@ program officina  !
   allocate(x_iter_bare(Lk,Nhf_opt,Nspin)); x_iter_bare=0d0
   call deltak_to_xiter(delta_hf,x_iter)
   call print_xiter(x_iter,filename='bare_xiter')
-  call print_hyb(x_iter,filename='bare_hyb')
+  
+  ! call print_hyb(x_iter,filename='bare_hyb')
+  ! call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
+  ! call print_xiter(x_iter,filename='bare_after_inv_x_iter_BLS')
+  ! call print_hyb(x_iter,filename='bare_after_inv_hyb')
 
-
-  call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
-  call print_xiter(x_iter,filename='bare_after_inv_x_iter_BLS')
-  call print_hyb(x_iter,filename='bare_after_inv_hyb')
-
-  stop
+  !stop
   
   x_iter_bare=x_iter
   call init_ihfopt_strides
