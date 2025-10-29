@@ -112,7 +112,7 @@ program officina  !
   real(8) :: phn_energy
   real(8) :: ephn_g
   real(8) :: phn_ell0,Xphn_iter(4),gphn(4)
-  real(8) :: phn_dyn(12),Xphn_dyn(4),Pphn_dyn(4),Nphn_dyn(4),X2phn_dyn(4),P2phn_dyn(4)
+  real(8) :: phn_dyn(12),Xphn_dyn(4),Pphn_dyn(4),Nphn_dyn(4),X2phn_dyn(4),P2phn_dyn(4),op_el_phn(4)
   real(8),dimension(14) :: xr_iter
   real(8),dimension(28) :: xr_tmp
 
@@ -855,10 +855,10 @@ program officina  !
      ! phn_dyn(2)  =  phn_dyn(2) - 4d0*gphn(2)/phn_energy*dreal(x_iter_ir(ir0,5,ispin)+x_iter_ir(irL,5,ispin))/sqrt(2d0)
      ! phn_dyn(3)  =  phn_dyn(3) - 4d0*gphn(3)/phn_energy*dreal(x_iter_ir(ir0,9,ispin)+x_iter_ir(irR,9,ispin))/sqrt(2d0)
      ! phn_dyn(4)  =  phn_dyn(4) - 4d0*gphn(4)/phn_energy*dreal(x_iter_ir(ir0,10,ispin)+x_iter_ir(irR,10,ispin))/sqrt(2d0)
-     phn_dyn(1)  =  phn_dyn(1) - 4d0*gphn(1)/phn_energy*dreal(x_iter_ir(1,4,ispin)+x_iter_ir(3,4,ispin))/sqrt(2d0)
-     phn_dyn(2)  =  phn_dyn(2) - 4d0*gphn(2)/phn_energy*dreal(x_iter_ir(1,5,ispin)+x_iter_ir(3,5,ispin))/sqrt(2d0)
-     phn_dyn(3)  =  phn_dyn(3) - 4d0*gphn(3)/phn_energy*dreal(x_iter_ir(1,9,ispin)+x_iter_ir(2,9,ispin))/sqrt(2d0)
-     phn_dyn(4)  =  phn_dyn(4) - 4d0*gphn(4)/phn_energy*dreal(x_iter_ir(1,10,ispin)+x_iter_ir(2,10,ispin))/sqrt(2d0)
+     phn_dyn(1)  =  phn_dyn(1) - 4d0*gphn(1)/phn_energy*dreal(x_iter_dyn(1,4,ispin)+x_iter_dyn(3,4,ispin))/sqrt(2d0)
+     phn_dyn(2)  =  phn_dyn(2) - 4d0*gphn(2)/phn_energy*dreal(x_iter_dyn(1,5,ispin)+x_iter_dyn(3,5,ispin))/sqrt(2d0)
+     phn_dyn(3)  =  phn_dyn(3) - 4d0*gphn(3)/phn_energy*dreal(x_iter_dyn(1,9,ispin)+x_iter_dyn(2,9,ispin))/sqrt(2d0)
+     phn_dyn(4)  =  phn_dyn(4) - 4d0*gphn(4)/phn_energy*dreal(x_iter_dyn(1,10,ispin)+x_iter_dyn(2,10,ispin))/sqrt(2d0)
   end do
   !init <Pphn>
   phn_dyn(5:8) = 0d0
@@ -892,9 +892,9 @@ program officina  !
      !+- get electronic order parameters
      call deltak_to_xiter(delta_hf,x_iter)
      call xiter_ik2ir_loc(x_iter,x_iter_dyn)
-     write(*,*) size(x_iter_dyn,1)
-     stop
-     
+     !+- electronic order paratameter that defines the phonon displacement term in the ph-hamiltonian
+     op_el_phn=0d0
+     !
      H_Hf_dyn=HF_hamiltonian(x_iter,xphn_=xphn_iter)
      H_Hf_dyn=H_Hf_dyn+Hk_toy     
      ! !
@@ -1698,8 +1698,6 @@ contains
        end do
     end do
     !+- the phononic part
-    
-    
     do i=1,4
        
        
