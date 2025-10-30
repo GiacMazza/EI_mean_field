@@ -115,7 +115,7 @@ program officina  !
   real(8) :: phn_energy
   real(8) :: ephn_g
   real(8) :: phn_ell0,Xphn_iter(4),gphn(4)
-  real(8) :: phn_dyn(12),Xphn_dyn(4),Pphn_dyn(4),Nphn_dyn(4),X2phn_dyn(4),P2phn_dyn(4),op_el_phn(4)
+  real(8) :: phn_dyn(12),Xphn_dyn(4),Pphn_dyn(4),Nphn_dyn(4),X2phn_dyn(4),P2phn_dyn(4)!op_el_phn(4)
   real(8),dimension(14) :: xr_iter
   real(8),dimension(28) :: xr_tmp
 
@@ -850,14 +850,14 @@ program officina  !
      phn_dyn(i+8) =   0.5d0*phn_dyn(i)**2d0 + 1./(exp(beta*phn_energy)-1.0)  !+- <Nphn> -+!
   end do
 
-  op_el_phn=0d0
-  do ispin=1,Nspin
-     op_el_phn(1) = op_el_phn(1) + 2.d0*dreal(x_iter_dyn(1,4,ispin)+x_iter_dyn(3,4,ispin))
-     op_el_phn(2) = op_el_phn(2) + 2.d0*dreal(x_iter_dyn(1,5,ispin)+x_iter_dyn(3,5,ispin))
-     op_el_phn(3) = op_el_phn(3) + 2.d0*dreal(x_iter_dyn(1,9,ispin)+x_iter_dyn(2,9,ispin))
-     op_el_phn(4) = op_el_phn(4) + 2.d0*dreal(x_iter_dyn(1,10,ispin)+x_iter_dyn(2,10,ispin))
-  end do
-  write(*,*) dsqrt(2d0)*gphn(1)*op_el_phn(1),phn_dyn(1),dsqrt(2d0)*gphn(1)*op_el_phn(1)+phn_dyn(1)*phn_energy
+  ! op_el_phn=0d0
+  ! do ispin=1,Nspin
+  !    op_el_phn(1) = op_el_phn(1) + 2.d0*dreal(x_iter_dyn(1,4,ispin)+x_iter_dyn(3,4,ispin))
+  !    op_el_phn(2) = op_el_phn(2) + 2.d0*dreal(x_iter_dyn(1,5,ispin)+x_iter_dyn(3,5,ispin))
+  !    op_el_phn(3) = op_el_phn(3) + 2.d0*dreal(x_iter_dyn(1,9,ispin)+x_iter_dyn(2,9,ispin))
+  !    op_el_phn(4) = op_el_phn(4) + 2.d0*dreal(x_iter_dyn(1,10,ispin)+x_iter_dyn(2,10,ispin))
+  ! end do
+  ! write(*,*) dsqrt(2d0)*gphn(1)*op_el_phn(1),phn_dyn(1),dsqrt(2d0)*gphn(1)*op_el_phn(1)+phn_dyn(1)*phn_energy
   !stop
   
   
@@ -920,11 +920,14 @@ program officina  !
   !+-
   do it=1,Nt-1
      !
-     !+- compute energy
+     !+- compute the energy (eventually this can even go inside the printing lines)
+     call psi2delta(psit,delta_hf,phn_dyn)
      call deltak_to_xiter(delta_hf,x_iter)
      call xiter_ik2ir_loc(x_iter,x_iter_dyn)     
-
-     ! 
+     
+     H_Hf_dyn=HF_hamiltonian(x_iter,xphn_=phn_dyn(1:4)*sqrt(2d0))
+     H_Hf_dyn=H_Hf_dyn+Hk_toy
+     !if(inv_symm) call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
      eout=0d0     !
      do ik=1,Lk
         do iso=1,Nso
@@ -1002,32 +1005,14 @@ program officina  !
      close(uio)
      !
      !+- do the time step
-     !+- electronic order paratameter that defines the phonon displacement term that enters the e-ph hamiltonian
-     op_el_phn=0d0
-     do ispin=1,Nspin
-        op_el_phn(1) = op_el_phn(1) + 2.d0*dreal(x_iter_dyn(1,4,ispin)+x_iter_dyn(3,4,ispin))
-        op_el_phn(2) = op_el_phn(2) + 2.d0*dreal(x_iter_dyn(1,5,ispin)+x_iter_dyn(3,5,ispin))
-        op_el_phn(3) = op_el_phn(3) + 2.d0*dreal(x_iter_dyn(1,9,ispin)+x_iter_dyn(2,9,ispin))
-        op_el_phn(4) = op_el_phn(4) + 2.d0*dreal(x_iter_dyn(1,10,ispin)+x_iter_dyn(2,10,ispin))
-     end do
-
-     if(fast_eom) then
-        psit = RK_step(Ndyn,4,tstep,t_grid(it),psit,fast_HF_eqs_of_motion)
-     else        
-        psit = RK_step(Ndyn,4,tstep,t_grid(it),psit,HF_eqs_of_motion)
-     end if
-     
-     !+- update the hamiltonians
-     call psi2delta(psit,delta_hf,phn_dyn)
-     call deltak_to_xiter(delta_hf,x_iter)
-     call xiter_ik2ir_loc(x_iter,x_iter_dyn)     
-     !write(*,*) sqrt(2d0)*gphn(1)*op_el_phn(1)+phn_dyn(1)    
+     psit = RK_step(Ndyn,4,tstep,t_grid(it),psit,fast_HF_eqs_of_motion)
      !
-     xphn_iter=phn_dyn(1:4)*sqrt(2d0)     
-     H_Hf_dyn=HF_hamiltonian(x_iter,xphn_=xphn_iter)
-     H_Hf_dyn=H_Hf_dyn+Hk_toy
-     !if(inv_symm) call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
-     !     
+     ! if(fast_eom) then
+     !    psit = RK_step(Ndyn,4,tstep,t_grid(it),psit,fast_HF_eqs_of_motion)
+     ! else        
+     !    psit = RK_step(Ndyn,4,tstep,t_grid(it),psit,HF_eqs_of_motion)
+     ! end if
+     !
   end do
   !
 
@@ -1682,10 +1667,10 @@ contains
     integer :: ik,iso,jso,isys
     complex(8),dimension(:,:,:),allocatable,intent(inout) :: delta
     real(8),dimension(12),intent(inout) :: xphn
-    complex(8),dimension(:),allocatable,intent(in) :: y
+    complex(8),dimension(Ndyn) :: y
 
-    if(.not.allocated(y)) stop "psi2delta not allocated"
-    if(size(y).ne.Ndyn)  stop "psi2delta size(y).ne.Ndyn"
+    !if(.not.allocated(y)) stop "psi2delta not allocated"
+    !if(size(y).ne.Ndyn)  stop "psi2delta size(y).ne.Ndyn"
     !
     if(allocated(delta)) deallocate(delta)
     allocate(delta(Nso,Nso,Lk));delta=0d0
@@ -1774,7 +1759,7 @@ contains
     !+- the phononic part
     do i=1,4
        !
-       lambda_eph=sqrt(2d0)*gphn(i)*op_el_phn(i)       
+       lambda_eph=sqrt(2d0)*gphn(i)!op_el_phn(i)       
        !+- the linear response perturbation
        lambda_eph=lambda_eph+(-1d0)**(i+1)*lin_response_probe(time)
        !
@@ -1810,9 +1795,39 @@ contains
     integer :: Nsys
     real(8) :: time
     complex(8),dimension(Nsys) :: yin,yout
+
+    !complex(8),dimension(:),allocatable :: psi_tmp
+
     integer :: ik,jk,iso,jso,iso_,jso_,isys,jsys,jsys_,iX,iP,iN
     integer ::  checkNsys,unit,it_aux
     real(8) :: lambda_eph
+    
+    real(8) :: phn_t(12),op_el_phn(4)
+    complex(8),dimension(:,:,:),allocatable :: delta_hf_t,x_iter_t,x_iter_loc,H_Hf_t
+
+    !+- reconstruct the electronic and phoninc observables.
+    
+    !+- update the hamiltonians
+    !allocate(psi_tmp(size()))
+    call psi2delta(yin,delta_hf_t,phn_t)
+    allocate(x_iter_t(Lk,Nhf_opt,Nspin)); x_iter_t=0d0
+    call deltak_to_xiter(delta_hf_t,x_iter_t)
+    call xiter_ik2ir_loc(x_iter_t,x_iter_loc)     
+    !write(*,*) sqrt(2d0)*gphn(1)*op_el_phn(1)+phn_dyn(1)
+    
+    op_el_phn=0d0
+    do ispin=1,Nspin
+       op_el_phn(1) = op_el_phn(1) + 2.d0*dreal(x_iter_loc(1,4,ispin)+x_iter_loc(3,4,ispin))
+       op_el_phn(2) = op_el_phn(2) + 2.d0*dreal(x_iter_loc(1,5,ispin)+x_iter_loc(3,5,ispin))
+       op_el_phn(3) = op_el_phn(3) + 2.d0*dreal(x_iter_loc(1,9,ispin)+x_iter_loc(2,9,ispin))
+       op_el_phn(4) = op_el_phn(4) + 2.d0*dreal(x_iter_loc(1,10,ispin)+x_iter_loc(2,10,ispin))
+    end do    
+    xphn_iter=phn_dyn(1:4)*sqrt(2d0)
+    !
+    allocate(H_hf_t(Nso,Nso,Lk)); 
+    H_Hf_t=HF_hamiltonian(x_iter,xphn_=phn_dyn(1:4)*sqrt(2d0))
+    H_Hf_t=H_Hf_t+Hk_toy
+    !
     !+- the electronic part
     do ik=1,Lk
        do iso=1,Nso
@@ -1822,10 +1837,10 @@ contains
              do jso_=1,Nso
                 !
                 jsys=idelta2ivec(iso,jso_,ik)
-                yout(isys) = yout(isys) + H_hf_dyn(jso,jso_,ik)*yin(jsys)
+                yout(isys) = yout(isys) + H_hf_t(jso,jso_,ik)*yin(jsys)
                 !
                 jsys=idelta2ivec(jso_,jso,ik)          
-                yout(isys) = yout(isys) - H_hf_dyn(jso_,iso,ik)*yin(jsys)
+                yout(isys) = yout(isys) - H_hf_t(jso_,iso,ik)*yin(jsys)
                 !
              end do
              jsys=idelta2ivec(jso,iso,ik)
