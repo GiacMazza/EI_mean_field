@@ -155,7 +155,7 @@ program officina  !
 
   integer,dimension(:,:),allocatable :: ivec2idelta
   integer,dimension(:,:,:),allocatable :: idelta2ivec
-  logical ::tns_toy,op_symm,spin_deg,enforce_cds,inv_symm
+  logical ::tns_toy,op_symm,spin_deg,enforce_cds,inv_symm,fast_eom
   
   
   !+- START MPI -+!
@@ -240,6 +240,7 @@ program officina  !
   call parse_input_variable(spin_deg,"spin_deg","input.conf",default=.true.)
   call parse_input_variable(enforce_cds,"enforce_cds","input.conf",default=.false.)
   call parse_input_variable(inv_symm,"inv_symm","input.conf",default=.false.)
+  call parse_input_variable(fast_eom,"fast_eom","input.conf",default=.false.)
   !
   call parse_input_variable(tstart,"TSTART","input.conf",default=-1.d0,comment='initial time [ps]')
   call parse_input_variable(tstop,"TSTOP","input.conf",default=10d0,comment='final time [ps]')
@@ -837,10 +838,10 @@ program officina  !
   ! NBB  ! Xphn \equiv     (b+b*)/\sqrt(2)   ! Pphn \equiv -xi*(b-b*)/\sqrt(2)
   !init <Xphn>
   do ispin=1,Nspin
-     phn_dyn(1)  =  phn_dyn(1) - 4d0*gphn(1)/phn_energy*dreal(x_iter_dyn(1,4,ispin)+x_iter_dyn(3,4,ispin))/sqrt(2d0)
-     phn_dyn(2)  =  phn_dyn(2) - 4d0*gphn(2)/phn_energy*dreal(x_iter_dyn(1,5,ispin)+x_iter_dyn(3,5,ispin))/sqrt(2d0)
-     phn_dyn(3)  =  phn_dyn(3) - 4d0*gphn(3)/phn_energy*dreal(x_iter_dyn(1,9,ispin)+x_iter_dyn(2,9,ispin))/sqrt(2d0)
-     phn_dyn(4)  =  phn_dyn(4) - 4d0*gphn(4)/phn_energy*dreal(x_iter_dyn(1,10,ispin)+x_iter_dyn(2,10,ispin))/sqrt(2d0)
+     phn_dyn(1)  =  phn_dyn(1) - 4d0*gphn(1)/phn_energy*dreal(x_iter_dyn(1,4,ispin)+x_iter_dyn(3,4,ispin))/dsqrt(2d0)
+     phn_dyn(2)  =  phn_dyn(2) - 4d0*gphn(2)/phn_energy*dreal(x_iter_dyn(1,5,ispin)+x_iter_dyn(3,5,ispin))/dsqrt(2d0)
+     phn_dyn(3)  =  phn_dyn(3) - 4d0*gphn(3)/phn_energy*dreal(x_iter_dyn(1,9,ispin)+x_iter_dyn(2,9,ispin))/dsqrt(2d0)
+     phn_dyn(4)  =  phn_dyn(4) - 4d0*gphn(4)/phn_energy*dreal(x_iter_dyn(1,10,ispin)+x_iter_dyn(2,10,ispin))/dsqrt(2d0)
   end do
   !init <Pphn>
   phn_dyn(5:8) = 0d0
@@ -848,6 +849,16 @@ program officina  !
   do i=1,4
      phn_dyn(i+8) =   0.5d0*phn_dyn(i)**2d0 + 1./(exp(beta*phn_energy)-1.0)  !+- <Nphn> -+!
   end do
+
+  op_el_phn=0d0
+  do ispin=1,Nspin
+     op_el_phn(1) = op_el_phn(1) + 2.d0*dreal(x_iter_dyn(1,4,ispin)+x_iter_dyn(3,4,ispin))
+     op_el_phn(2) = op_el_phn(2) + 2.d0*dreal(x_iter_dyn(1,5,ispin)+x_iter_dyn(3,5,ispin))
+     op_el_phn(3) = op_el_phn(3) + 2.d0*dreal(x_iter_dyn(1,9,ispin)+x_iter_dyn(2,9,ispin))
+     op_el_phn(4) = op_el_phn(4) + 2.d0*dreal(x_iter_dyn(1,10,ispin)+x_iter_dyn(2,10,ispin))
+  end do
+  write(*,*) dsqrt(2d0)*gphn(1)*op_el_phn(1),phn_dyn(1),dsqrt(2d0)*gphn(1)*op_el_phn(1)+phn_dyn(1)*phn_energy
+  !stop
   
   
   !+- this is just testing -+! 
@@ -904,31 +915,15 @@ program officina  !
   
   !
   !+- allocate the dynamical HF hamiltonian
-  allocate(H_hf_dyn(Nso,Nso,Lk)); H_hf_dyn=0d0  
+  allocate(H_hf_dyn(Nso,Nso,Lk)); 
+  H_Hf_dyn=H_Hf
   !+-
   do it=1,Nt-1
      !
-     !+- compute the dynamical HF hamiltonian -+!
-
-     call psi2delta(psit,delta_hf,phn_dyn) 
+     !+- compute energy
      call deltak_to_xiter(delta_hf,x_iter)
-     if(inv_symm) call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
-     xphn_iter=phn_dyn(1:4)*sqrt(2d0)
-     
-     !+- get electronic order parameters
-     !+- electronic order paratameter that defines the phonon displacement term that enters the e-ph hamiltonian
-     call xiter_ik2ir_loc(x_iter,x_iter_dyn)
-     op_el_phn=0d0
-     do ispin=1,Nspin
-        op_el_phn(1) = op_el_phn(1) + 2.d0*dreal(x_iter_dyn(1,4,ispin)+x_iter_dyn(3,4,ispin))
-        op_el_phn(2) = op_el_phn(2) + 2.d0*dreal(x_iter_dyn(1,5,ispin)+x_iter_dyn(3,5,ispin))
-        op_el_phn(3) = op_el_phn(3) + 2.d0*dreal(x_iter_dyn(1,9,ispin)+x_iter_dyn(2,9,ispin))
-        op_el_phn(4) = op_el_phn(4) + 2.d0*dreal(x_iter_dyn(1,10,ispin)+x_iter_dyn(2,10,ispin))
-     end do
-     write(*,*) sqrt(2d0)*gphn(1)*op_el_phn(1),phn_dyn(1)    
-     !
-     H_Hf_dyn=HF_hamiltonian(x_iter,xphn_=xphn_iter)
-     H_Hf_dyn=H_Hf_dyn+Hk_toy     
+     call xiter_ik2ir_loc(x_iter,x_iter_dyn)     
+
      ! 
      eout=0d0     !
      do ik=1,Lk
@@ -940,15 +935,10 @@ program officina  !
         end do
      end do
      !     
-     ! call deltak_to_xiter(delta_hf,x_iter)
-     !+- here @equ ---> enforce_cds + enforce_inv
-     ! call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
      call get_double_counting_energy(x_iter,E_dc); eout = eout - E_dc
      !+- phonon energy
      Ephn=0d0
      do i=1,4
-        !Nphn = 0.5*(<X2> + <P2>) - 0.5
-        !Nphn = 0.5d0*phn_dyn(i+8)+0.5d0*phn_dyn(i+12)-0.5d0 
         Ephn = Ephn + phn_energy*phn_dyn(i+8)        
      end do
      Eout = Eout + Ephn     
@@ -1011,8 +1001,32 @@ program officina  !
      write(uio,'(30F18.10)') t_grid(it),Eout,E_dc,Ephn,lin_response_probe(t_grid(it))
      close(uio)
      !
-     psit = RK_step(Ndyn,4,tstep,t_grid(it),psit,HF_eqs_of_motion)
-     stop
+     !+- do the time step
+     !+- electronic order paratameter that defines the phonon displacement term that enters the e-ph hamiltonian
+     op_el_phn=0d0
+     do ispin=1,Nspin
+        op_el_phn(1) = op_el_phn(1) + 2.d0*dreal(x_iter_dyn(1,4,ispin)+x_iter_dyn(3,4,ispin))
+        op_el_phn(2) = op_el_phn(2) + 2.d0*dreal(x_iter_dyn(1,5,ispin)+x_iter_dyn(3,5,ispin))
+        op_el_phn(3) = op_el_phn(3) + 2.d0*dreal(x_iter_dyn(1,9,ispin)+x_iter_dyn(2,9,ispin))
+        op_el_phn(4) = op_el_phn(4) + 2.d0*dreal(x_iter_dyn(1,10,ispin)+x_iter_dyn(2,10,ispin))
+     end do
+
+     if(fast_eom) then
+        psit = RK_step(Ndyn,4,tstep,t_grid(it),psit,fast_HF_eqs_of_motion)
+     else        
+        psit = RK_step(Ndyn,4,tstep,t_grid(it),psit,HF_eqs_of_motion)
+     end if
+     
+     !+- update the hamiltonians
+     call psi2delta(psit,delta_hf,phn_dyn)
+     call deltak_to_xiter(delta_hf,x_iter)
+     call xiter_ik2ir_loc(x_iter,x_iter_dyn)     
+     !write(*,*) sqrt(2d0)*gphn(1)*op_el_phn(1)+phn_dyn(1)    
+     !
+     xphn_iter=phn_dyn(1:4)*sqrt(2d0)     
+     H_Hf_dyn=HF_hamiltonian(x_iter,xphn_=xphn_iter)
+     H_Hf_dyn=H_Hf_dyn+Hk_toy
+     !if(inv_symm) call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
      !     
   end do
   !
@@ -1741,6 +1755,22 @@ contains
           !
        end do
     end do
+    ! do ik=1,Lk
+    !    i=500
+    !    do iso=1,Nso
+    !       do jso=iso,Nso
+    !          isys=idelta2ivec(iso,jso,ik)
+    !          write(i,'(10F18.10)') yout(isys)
+    !          i=i+1
+    !       end do
+    !    end do
+    ! end do
+    ! do iso=1,Nso
+    !    do jso=iso,Nso
+    !       write(400,*) iso,jso
+    !    end do
+    ! end do
+    ! stop    
     !+- the phononic part
     do i=1,4
        !
@@ -1760,18 +1790,79 @@ contains
        yout(iN) = xi*lambda_eph*yin(iP)
        !
        !write(*,*) op_el_phn(i),yin(iX),yout(iX),yout(iP),yout(iN)
-       if(i.eq.1) write(500,*) yout(iP),yin(iX),lambda_eph
+       !write(500,*) yout(iP),yin(iX),lambda_eph
     end do
     !stop
+    !write(500,*)
     if(iN.ne.Ndyn) stop "if(iN.ne.Ndyn)"
     !
     yout=-xi*yout/hbar_ev_ps !+- here the time is measured in ps
-    !=- add a phenomenological dissipation for FT convergence
+    !
+    !+- add a tiny damping for FT convergence
     yout=yout-kdiss/hbar_ev_ps*(yin-psit_init)
-
-
     !
   end function HF_eqs_of_motion
+
+
+
+
+  function fast_HF_eqs_of_motion(time,yin,Nsys) result(yout)
+    integer :: Nsys
+    real(8) :: time
+    complex(8),dimension(Nsys) :: yin,yout
+    integer :: ik,jk,iso,jso,iso_,jso_,isys,jsys,jsys_,iX,iP,iN
+    integer ::  checkNsys,unit,it_aux
+    real(8) :: lambda_eph
+    !+- the electronic part
+    do ik=1,Lk
+       do iso=1,Nso
+          do jso=iso,Nso
+             isys=idelta2ivec(iso,jso,ik)
+             yout(isys) = 0d0
+             do jso_=1,Nso
+                !
+                jsys=idelta2ivec(iso,jso_,ik)
+                yout(isys) = yout(isys) + H_hf_dyn(jso,jso_,ik)*yin(jsys)
+                !
+                jsys=idelta2ivec(jso_,jso,ik)          
+                yout(isys) = yout(isys) - H_hf_dyn(jso_,iso,ik)*yin(jsys)
+                !
+             end do
+             jsys=idelta2ivec(jso,iso,ik)
+             yout(jsys) = -conjg(yout(isys))             
+          end do
+       end do
+    end do
+    !+- the phononic part
+    do i=1,4
+       !
+       lambda_eph=sqrt(2d0)*gphn(i)*op_el_phn(i)       
+       !+- the linear response perturbation
+       lambda_eph=lambda_eph+(-1d0)**(i+1)*lin_response_probe(time)
+       !
+       jsys = isys+i
+       iX = jsys
+       iP = jsys+4
+       iN = jsys+8
+       !\dot <X>       
+       yout(iX) = xi*phn_energy*yin(iP)
+       !\dot <P>
+       yout(iP) = -xi*phn_energy*yin(iX) - xi*lambda_eph
+       !\dot <Nphn>
+       yout(iN) = xi*lambda_eph*yin(iP)
+       !
+    end do
+    !stop
+    !write(500,*)
+
+    if(iN.ne.Ndyn) stop "if(iN.ne.Ndyn)"
+    !
+    yout=-xi*yout/hbar_ev_ps !+- here the time is measured in ps
+    !
+    !+- add a tiny damping for FT convergence
+    yout=yout-kdiss/hbar_ev_ps*(yin-psit_init)
+    !
+  end function fast_HF_eqs_of_motion
   
 
   function HF_hamiltonian(x_iter,xphn_,lgr_) result(Hhf)

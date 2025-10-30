@@ -572,7 +572,7 @@ contains
     !write(*,*) x1,x2
     mu=brentq(deltaN_fix,mu1,mu2)
     Nout=deltaN_fix(mu)
-    write(530,*) Nout,Ndens,mu
+    !write(530,*) Nout,Ndens,mu
 
     !+- compute energy -+!
     if(present(eout)) then
