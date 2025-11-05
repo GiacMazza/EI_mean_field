@@ -13,6 +13,7 @@ program officina  !
   !integer :: Nint
   real(8) :: KKx,KKy
   complex(8),dimension(:,:,:),allocatable :: delta_hf,H_hf,delta_hf_,Hhf_grid,delta_hfr,delta_hfr_,H_hf_dyn
+  complex(8),dimension(:,:,:,:),allocatable :: H_hf_symm,Hk_toy_symm
   complex(8),dimension(:,:,:),allocatable :: Hr_w90,Hr_w90_tmp,Hr_toy  
   real(8) :: mu_fix
   real(8) :: Uintra,Uinter,Delta_CF
@@ -42,6 +43,7 @@ program officina  !
   integer,dimension(:),allocatable :: iorb_to_ihf
   integer,dimension(:),allocatable :: ihf_to_iorb
   integer,dimension(:,:),allocatable :: ijorb_to_ihf,ihf2ij
+  integer :: j2ihf(3)
   complex(8),dimension(:,:),allocatable :: ni_orb
   
   integer,dimension(:),allocatable :: units_loc_obs
@@ -104,7 +106,7 @@ program officina  !
   logical :: H1d
   real(8) :: alphaU,deltar,hybloc
   real(8),dimension(:),allocatable :: tk
-  complex(8),dimension(:,:,:),allocatable :: x_iter,x_iter_,x_iter_ir,x_iter_bare,x_iter_dyn
+  complex(8),dimension(:,:,:),allocatable :: x_iter,x_iter_,x_iter_ir,x_iter_bare,x_iter_dyn,x_iter_symm
   complex(8),dimension(:,:,:),allocatable :: hf_self_fock
   complex(8),dimension(:,:,:),allocatable :: hf_self_hartree
 
@@ -425,6 +427,34 @@ program officina  !
      end do
      !
   end do
+
+  allocate(Hk_toy_symm(2,2,Nspin,Lk)); Hk_toy_symm=0d0
+  do ik=1,Lk
+     do ispin=1,Nspin
+        !
+        iorb=1
+        jorb=1
+        iso=(ispin-1)*Norb+iorb
+        jso=(ispin-1)*Norb+jorb
+        Hk_toy_symm(1,1,ispin,ik) = Hk_toy(iso,jso,ik)
+        !
+        iorb=3
+        jorb=3
+        iso=(ispin-1)*Norb+iorb
+        jso=(ispin-1)*Norb+jorb
+        Hk_toy_symm(2,2,ispin,ik) = Hk_toy(iso,jso,ik)
+        !
+        iorb=1
+        jorb=3
+        iso=(ispin-1)*Norb+iorb
+        jso=(ispin-1)*Norb+jorb
+        Hk_toy_symm(1,2,ispin,ik) = Hk_toy(iso,jso,ik)
+        Hk_toy_symm(2,1,ispin,ik) = conjg(Hk_toy_symm(1,2,ispin,ik))
+     end do
+  end do
+  
+
+  
   !
   !
   allocate(Hr_toy(Nso,Nso,nrpts))
@@ -541,7 +571,9 @@ program officina  !
   close(uio)
   
   !allocate HF-hamiltonian
-  allocate(H_Hf(Nso,Nso,Lk))  
+  allocate(H_Hf(Nso,Nso,Lk))
+  allocate(H_hf_symm(2,2,Nspin,Lk))
+
 
   !+- define the long-range interaction
   unit_io=free_unit()
@@ -684,7 +716,8 @@ program officina  !
   close(uio)
   
   !
-  Ndyn=size(delta_hf) + 6 !+- here the + 6 = 3(X,P,Nph)x2  for the phonons
+  !Ndyn=size(delta_hf) + 6 !+- here the + 6 = 3(X,P,Nph)x2  for the phonons
+  Ndyn=Lk*2*Nspin + 3
   !
   !+- init tdHF strides -+!
   call init_tdHF_strides
@@ -693,28 +726,74 @@ program officina  !
   allocate(psit(Ndyn)); psit=0d0
   allocate(psit_init(Ndyn)); psit_init=0d0
   
-  !+- solve the equilibrium hamiltonian after reading the solution -+!  
-  H_Hf = HF_hamiltonian(x_iter,xphn_=XPHN_iter)
+  !+- solve the equilibrium hamiltonian after reading the solution -+!
+  allocate(x_iter_symm(Lk,3,Nspin)); x_iter_symm=0d0
+  do ik=1,Lk
+     do ispin=1,Nspin
+          x_iter_symm(ik,1,ispin) = x_iter(ik,1,ispin)
+          x_iter_symm(ik,2,ispin) = x_iter(ik,3,ispin)
+          x_iter_symm(ik,3,ispin) = x_iter(ik,4,ispin)
+     end do
+  end do
+  !
+  H_hf_symm = HF_hamiltonian_symm(x_iter_symm,xphn_=XPHN_iter(1))
+  H_hf_symm = H_hf_symm + Hk_toy_symm
+  !
+  H_Hf = HF_hamiltonian(x_iter,xphn_=XPHN_iter(1))
   H_Hf = H_Hf + Hk_toy
   call fix_mu(H_Hf,delta_hf,mu_fix,eout,sout)
   call deltak_to_xiter(delta_hf,x_iter)
   call xiter_ik2ir_loc(x_iter,x_iter_dyn)
-  !+- update the phonons 
-  ! phn_dyn=0d0 ![1:4  X, 5:8 P , 9:12 Nphn=0.5*X^2+0.5*P^2-0.5]
-  ! ! NBB  ! Xphn \equiv     (b+b*)/\sqrt(2)   ! Pphn \equiv -xi*(b-b*)/\sqrt(2)
-  ! !init <Xphn>
-  ! do ispin=1,Nspin
-  !    phn_dyn(1)  =  phn_dyn(1) - 4d0*gphn(1)/phn_energy*dreal(x_iter_dyn(1,4,ispin)+x_iter_dyn(3,4,ispin))/dsqrt(2d0)
-  !    phn_dyn(2)  =  phn_dyn(2) - 4d0*gphn(2)/phn_energy*dreal(x_iter_dyn(1,5,ispin)+x_iter_dyn(3,5,ispin))/dsqrt(2d0)
-  ! end do
-  ! !init <Pphn>
-  ! phn_dyn(3:4) = 0d0
-  ! !init <Nphn> 
-  ! do i=1,2
-  !    phn_dyn(i+4) =   0.5d0*phn_dyn(i)**2d0 + 1./(exp(beta*phn_energy)-1.0)  !+- <Nphn> -+!
-  ! end do
 
+  !+- test symm
+  do ik=1,Lk
+     !
+     ispin=1
+     iorb=1
+     jorb=1
+     iso=(ispin-1)*Norb+iorb
+     jso=(ispin-1)*Norb+jorb
+     write(500,'(10F18.10)') H_hf(iso,jso,ik)-H_hf_symm(1,1,ispin,ik),H_hf(iso,jso,ik),H_hf_symm(1,1,ispin,ik),Hk_toy(iso,jso,ik)-Hk_toy_symm(1,1,ispin,ik)
+     ispin=2
+     iorb=1
+     jorb=1
+     iso=(ispin-1)*Norb+iorb
+     jso=(ispin-1)*Norb+jorb
+     write(501,'(10F18.10)') H_hf(iso,jso,ik)-H_hf_symm(1,1,ispin,ik),H_hf(iso,jso,ik),H_hf_symm(1,1,ispin,ik),Hk_toy(iso,jso,ik)-Hk_toy_symm(1,1,ispin,ik)
+     !
+     !
+     ispin=1
+     iorb=3
+     jorb=3
+     iso=(ispin-1)*Norb+iorb
+     jso=(ispin-1)*Norb+jorb
+     write(502,'(10F18.10)') H_hf(iso,jso,ik)-H_hf_symm(2,2,ispin,ik),H_hf(iso,jso,ik),H_hf_symm(2,2,ispin,ik)
+     ispin=2
+     iorb=3
+     jorb=3
+     iso=(ispin-1)*Norb+iorb
+     jso=(ispin-1)*Norb+jorb
+     write(503,'(10F18.10)') H_hf(iso,jso,ik)-H_hf_symm(2,2,ispin,ik),H_hf(iso,jso,ik),H_hf_symm(2,2,ispin,ik)
+     !
+     ispin=1
+     iorb=1
+     jorb=3
+     iso=(ispin-1)*Norb+iorb
+     jso=(ispin-1)*Norb+jorb
+     write(504,'(10F18.10)') H_hf(iso,jso,ik)-H_hf_symm(1,2,ispin,ik)
+     ispin=2
+     iorb=1
+     jorb=3
+     iso=(ispin-1)*Norb+iorb
+     jso=(ispin-1)*Norb+jorb
+     write(505,'(10F18.10)') H_hf(iso,jso,ik)-H_hf_symm(1,2,ispin,ik)
+     !
+  end do
+  stop
+  !
 
+  
+  !+- init the phonons 
   phn_dyn=0d0 ![1:4  X, 5:8 P , 9:12 Nphn=0.5*X^2+0.5*P^2-0.5]
   ! NBB  ! Xphn \equiv     (b+b*)/\sqrt(2)   ! Pphn \equiv -xi*(b-b*)/\sqrt(2)
   !init <Xphn>
@@ -730,45 +809,6 @@ program officina  !
   do i=1,2
      phn_dyn(i+4) =   0.5d0*phn_dyn(i)**2d0 + 1./(exp(beta*phn_energy)-1.0)  !+- <Nphn> -+!
   end do
-  ! write(700,*) phn_dyn
-  ! write(700,*)
-  
-  !+- this is just testing -+! 
-  ! call get_double_counting_energy(x_iter,E_dc);
-  ! write(*,*) 'Edc',E_dc
-  ! call deltak_to_xiter(delta_hf,x_iter)
-  ! call print_xiter(x_iter,filename='before_inv_x_iter_BLS')
-  ! call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
-  ! call print_xiter(x_iter,filename='after_inv_x_iter_BLS')
-  ! call get_double_counting_energy(x_iter,E_dc); 
-  ! write(*,*) 'Edc',E_dc,Xphn_iter
-  ! stop
-  ! call get_ni_loc(x_iter,ni_orb,ntot)
-  ! write(500,*) eout+mu_fix*ntot,E_dc,Xphn_iter
-  ! call deltak_to_xiter(delta_hf,x_iter)
-  ! call xiter_ik2ir(x_iter,x_iter_ir)
-  ! call get_ni_loc(x_iter,ni_orb,ntot)
-
-  ! call print_hyb(x_iter,filename='before_hyb')
-  ! write(700,'(30F18.10)') x_iter_ir(ir0,4,1),x_iter_ir(irL,4,1)
-  !      !dreal(x_iter_ir(ir0,4,1)+x_iter_ir(irL,4,1)),dimag(x_iter_ir(ir0,4,1)),dimag(x_iter_ir(irL,4,1)), &
-  !      !dreal(x_iter_ir(ir0,4,2)+x_iter_ir(irL,4,2)),dimag(x_iter_ir(ir0,4,2)),dimag(x_iter_ir(irL,4,2))
-  ! write(700,'(30F18.10)') x_iter_ir(ir0,5,1),x_iter_ir(irL,5,1)
-  !      ! dreal(x_iter_ir(ir0,5,1)+x_iter_ir(irL,5,1)),dimag(x_iter_ir(ir0,5,1)),dimag(x_iter_ir(irL,5,1)), &
-  !      ! dreal(x_iter_ir(ir0,5,2)+x_iter_ir(irL,5,2)),dimag(x_iter_ir(ir0,5,2)),dimag(x_iter_ir(irL,5,2))
-  ! write(700,*)
-  ! call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
-  ! call print_xiter(x_iter,filename='after_inv_x_iter_BLS')
-  ! call xiter_ik2ir(x_iter,x_iter_ir)
-  ! write(700,'(30F18.10)') x_iter_ir(ir0,4,1),x_iter_ir(irL,4,1)
-  !            ! dreal(x_iter_ir(ir0,4,1)+x_iter_ir(irL,4,1)),dimag(x_iter_ir(ir0,4,1)),dimag(x_iter_ir(irL,4,1)), &
-  !            ! dreal(x_iter_ir(ir0,4,2)+x_iter_ir(irL,4,2)),dimag(x_iter_ir(ir0,4,2)),dimag(x_iter_ir(irL,4,2))
-  ! write(700,'(30F18.10)') x_iter_ir(ir0,5,1),x_iter_ir(irL,5,1)
-  !            ! dreal(x_iter_ir(ir0,5,1)+x_iter_ir(irL,5,1)),dimag(x_iter_ir(ir0,5,1)),dimag(x_iter_ir(irL,5,1)), &
-  !            ! dreal(x_iter_ir(ir0,5,2)+x_iter_ir(irL,5,2)),dimag(x_iter_ir(ir0,5,2)),dimag(x_iter_ir(irL,5,2))
-  ! call get_double_counting_energy(x_iter,E_dc); eout = eout - E_dc
-  ! write(500,*) eout+mu_fix*ntot,E_dc,eout
-  ! stop
     
   call delta2psi(delta_hf,phn_dyn,psit)  
   ! do ik=1,Lk  ->>>NB this is now done inside delta2psi
@@ -1014,6 +1054,11 @@ contains
     ihf2ij(5,1) = 2
     ihf2ij(5,2) = 3
     !
+    j2ihf=0
+    j2ihf(1) = 1
+    j2ihf(2) = 3
+    j2ihf(3) = 4
+
   end subroutine init_ihfopt_strides
 
 
@@ -1254,7 +1299,7 @@ contains
                    end if
                    !
                    hf_self_fock_out(ik,ihf,ispin) = hf_self_fock_out(ik,ihf,ispin) - &
-                        Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)
+                        Uss_VS_q(ihf,iik)*x_iter_in(jk,ihf,ispin)*wtk(jk)
                 end if
              end do
              if(iprint_) write(uio, '(40F18.10)') kpt_latt(ik,1),dreal(hf_self_fock_out(ik,ihf,ispin)),dimag(hf_self_fock_out(ik,ihf,ispin))
@@ -1264,6 +1309,59 @@ contains
     end do    
     !
   end subroutine get_hf_self_fock
+  !
+  subroutine get_hf_self_fock_symm(x_iter_in,hf_self_fock_out,iprint)
+    implicit none
+    complex(8),dimension(Lk,3,Nspin),intent(in) :: x_iter_in
+    complex(8),dimension(:,:,:),allocatable,intent(out) :: hf_self_fock_out
+    logical,optional :: iprint
+    logical :: iprint_
+    integer :: ispint,ihf,ik,iik,jk,jhf
+    real(8) :: ktmp
+    !
+    iprint_=.false.
+    if(present(iprint)) iprint_=iprint
+    if(allocated(hf_self_fock_out)) deallocate(hf_self_fock_out)
+    allocate(hf_self_fock_out(Lk,3,Nspin)); hf_self_fock_out=0d0
+    !
+    do ispin=1,Nspin
+       do jhf=1,3         
+          !-> determine ihf
+          ihf=j2ihf(jhf)
+          uio=free_unit() 
+          if(iprint_) open(unit=uio,file="hf_self_fock_symm_spin"//reg(txtfy(ispin))//"_jhf"//reg(txtfy(jhf))//".out")
+          do ik=1,Lk        
+             !
+             hf_self_fock_out(ik,jhf,ispin)=0d0
+             !           
+             do jk=1,Lk              
+                if(ik.ne.jk.or.tns_toy) then
+                   ktmp=kxgrid(ik)-kxgrid(jk)
+                   do while(ktmp.lt.-0.5d0)
+                      ktmp=ktmp+1.d0
+                   end do
+                   do while(ktmp.gt.0.5d0)
+                      ktmp=ktmp-1.d0
+                   end do
+                   iik = 1+nint((ktmp-kxgrid(1))/(kxgrid(2)-kxgrid(1)))
+                   if(iik.lt.1.or.iik.gt.Lk) then
+                      write(*,*) iik,ktmp,kxgrid(1),Lk
+                      stop "(iik.lt.1.or.iik.gt.Lk)"
+                   end if
+                   !
+                   hf_self_fock_out(ik,jhf,ispin) = hf_self_fock_out(ik,jhf,ispin) - &
+                        Uss_VS_q(ihf,iik)*x_iter_in(jk,jhf,ispin)*wtk(jk)
+                end if
+             end do
+             if(iprint_) write(uio, '(40F18.10)') kpt_latt(ik,1),dreal(hf_self_fock_out(ik,jhf,ispin)),dimag(hf_self_fock_out(ik,jhf,ispin))
+          end do
+          if(iprint_) close(uio)
+       end do
+    end do    
+    !
+  end subroutine get_hf_self_fock_symm
+
+  
   !
   subroutine get_ni_loc(x_iter_in,ni_out,ntot)
     complex(8),dimension(Lk,Nhf_opt,Nspin),intent(in) :: x_iter_in
@@ -1516,7 +1614,7 @@ contains
   end subroutine psi2delta
   
   subroutine init_tdHF_strides
-    integer :: ik,iso,jso,isys
+    integer :: ik,iso,jso,isys   
     !
     allocate(ivec2idelta(Lk*Nso*Nso,3)) ; ivec2idelta=0
     allocate(idelta2ivec(Nso,Nso,Lk)) ; idelta2ivec=0
@@ -1787,6 +1885,66 @@ contains
     !
   end function HF_hamiltonian
   !
+  function HF_hamiltonian_symm(x_iter_symm,xphn_,lgr_) result(Hhf_symm)
+    implicit none
+    complex(8),dimension(Lk,3,Nspin),intent(in) :: x_iter_symm
+    complex(8),dimension(:,:,:),allocatable :: hf_self_fock
+    !
+    complex(8),dimension(2,2,Nspin,Lk) :: Hhf_symm
+    real(8),optional :: xphn_
+    real(8)          :: xphn
+    
+    complex(8),optional :: lgr_(2)
+    complex(8)          :: lgr(2)
+    integer :: iso,jso,iorb,jorb
+    !
+    lgr=0d0;
+    if(present(lgr_)) lgr=lgr_
+    xphn=0d0;
+    if(present(xphn_)) xphn=xphn_        
+    call get_hf_self_fock_symm(x_iter_symm,hf_self_fock,iprint=.true.)
+    do ik=1,Lk
+       do ispin=1,Nspin
+
+          Hhf_symm(:,:,ispin,ik) = 0d0
+          Hhf_symm(1,1,ispin,ik) = hf_self_fock(ik,1,ispin)
+          Hhf_symm(2,2,ispin,ik) = hf_self_fock(ik,2,ispin)
+          Hhf_symm(2,1,ispin,ik) = hf_self_fock(ik,3,ispin)
+          Hhf_symm(1,2,ispin,ik) = conjg(Hhf_symm(2,1,ispin,ik))
+
+          !
+          ! do iorb=1,Norb
+          !    do jorb=iorb,Norb
+          !       iso=(ispin-1)*Norb+iorb
+          !       jso=(ispin-1)*Norb+jorb                
+          !       ihf = ijorb_to_ihf(iorb,jorb)
+          !       if(ihf.ne.0) then
+          !          Hhf(jso,iso,ik) = hf_self_fock(ik,ihf,ispin)
+          !          Hhf(iso,jso,ik) = conjg(Hhf(jso,iso,ik))
+          !       end if
+          !    end do
+          ! end do
+          !
+          !+- e-ph coupling -+!
+          Rlat=R1
+          !
+          !+-          
+          Hhf_symm(1,2,ispin,ik) = Hhf_symm(1,2,ispin,ik) + gphn(1)*xphn*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
+          Hhf_symm(2,1,ispin,ik) = conjg(Hhf_symm(1,2,ispin,ik))
+          !
+          ! Hhf(iso,jso,ik) = Hhf(iso,jso,ik) + gphn(1)*xphn(1)*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = conjg(Hhf(iso,jso,ik))
+          ! !
+          ! iorb=2
+          ! jorb=3          
+          ! iso=(ispin-1)*Norb+iorb
+          ! jso=(ispin-1)*Norb+jorb
+          ! Hhf(iso,jso,ik) = Hhf(iso,jso,ik) + gphn(2)*xphn(2)*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
+          ! Hhf(jso,iso,ik) = conjg(Hhf(iso,jso,ik))
+       end do
+    end do
+  end function HF_hamiltonian_symm
+
   !
   subroutine build_mp_grid_2d(Nx,Ny)
     implicit none

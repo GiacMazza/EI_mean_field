@@ -1634,7 +1634,7 @@ contains
                    if(iik.lt.1.or.iik.gt.Lk) stop "(iik.lt.1.or.iik.gt.Lk)"
                    !
                    hf_self_fock_out(ik,ihf,ispin) = hf_self_fock_out(ik,ihf,ispin) - &
-                        Uss_VS_q(ihf,iik)*x_iter(jk,ihf,ispin)*wtk(jk)
+                        Uss_VS_q(ihf,iik)*x_iter_in(jk,ihf,ispin)*wtk(jk)
                 end if
              end do
              if(iprint_) write(uio, '(40F18.10)') kpt_latt(ik,1),dreal(hf_self_fock_out(ik,ihf,ispin)),dimag(hf_self_fock_out(ik,ihf,ispin))
