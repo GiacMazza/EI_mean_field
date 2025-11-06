@@ -1804,19 +1804,40 @@ contains
           Hhf_symm(3,3,ispin,ik) = hf_self_fock(ik,2,ispin)
           !
           Hhf_symm(3,1,ispin,ik) = hf_self_fock(ik,3,ispin)
-          Hhf_symm(3,2,ispin,ik) = -1d0*hf_self_fock(Lk+1-ik,3,ispin)*exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))
+          !Hhf_symm(3,2,ispin,ik) = -1d0*hf_self_fock(Lk+1-ik,3,ispin)*exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))
           !
           Hhf_symm(1,3,ispin,ik) = conjg(Hhf_symm(3,1,ispin,ik))
-          Hhf_symm(2,3,ispin,ik) = conjg(Hhf_symm(3,2,ispin,ik))
+          !Hhf_symm(2,3,ispin,ik) = conjg(Hhf_symm(3,2,ispin,ik))
           !
           !+- e-ph coupling -+!
           Hhf_symm(1,3,ispin,ik) = Hhf_symm(1,3,ispin,ik) + gphn(1)*xphn*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
-          Hhf_symm(2,3,ispin,ik) = Hhf_symm(2,3,ispin,ik) - gphn(1)*xphn*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
+          !Hhf_symm(2,3,ispin,ik) = Hhf_symm(2,3,ispin,ik) - gphn(1)*xphn*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
           !
           Hhf_symm(3,1,ispin,ik) = conjg(Hhf_symm(1,3,ispin,ik))
-          Hhf_symm(3,2,ispin,ik) = conjg(Hhf_symm(2,3,ispin,ik))
+          !Hhf_symm(3,2,ispin,ik) = conjg(Hhf_symm(2,3,ispin,ik))
+          !
+          !
+          !
+          ! Hhf_symm(3,2,ispin,ik) = -1d0*hf_self_fock(Lk+1-ik,3,ispin)*exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))
+          ! !
+          ! Hhf_symm(1,3,ispin,ik) = conjg(Hhf_symm(3,1,ispin,ik))
+          ! Hhf_symm(2,3,ispin,ik) = conjg(Hhf_symm(3,2,ispin,ik))
+          ! !
+          ! !+- e-ph coupling -+!
+          ! Hhf_symm(1,3,ispin,ik) = Hhf_symm(1,3,ispin,ik) + gphn(1)*xphn*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
+          ! Hhf_symm(2,3,ispin,ik) = Hhf_symm(2,3,ispin,ik) - gphn(1)*xphn*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
+          ! !
+          ! Hhf_symm(3,1,ispin,ik) = conjg(Hhf_symm(1,3,ispin,ik))
+          ! Hhf_symm(3,2,ispin,ik) = conjg(Hhf_symm(2,3,ispin,ik))
        end do
     end do
+    do ik=1,Lk
+       do ispin=1,Nspin
+          Hhf_symm(3,2,ispin,ik) = -1d0*Hhf_symm(3,1,ispin,Lk+1-ik)*exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))
+          Hhf_symm(2,3,ispin,ik) = conjg(Hhf_symm(3,2,ispin,ik))
+       end do
+    end do
+    
   end function HF_hamiltonian_symm
 
   !
