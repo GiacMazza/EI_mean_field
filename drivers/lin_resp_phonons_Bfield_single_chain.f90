@@ -7,7 +7,6 @@ program officina  !
   USE MPI
 
   USE RK_IDE
-
   !
   implicit none
   !integer :: Nint
@@ -725,14 +724,16 @@ program officina  !
   !             if(ik.eq.1) write(*,*) 'info',ispin,iorb,jorb,i
   !             iso=(ispin-1)*Norb+iorb
   !             jso=(ispin-1)*Norb+jorb
-  !             write(i,'(10F18.10)') H_hf_symm(iorb,jorb,ispin,ik),H_hf(iso,jso,ik)
-  !             !write(i,'(10F18.10)') H_hf(iso,jso,ik)-H_hf_symm(iorb,jorb,ispin,ik),H_hf(iso,jso,ik),H_hf_symm(iorb,jorb,ispin,ik),Hk_toy(iso,jso,ik)-Hk_toy_symm(iorb,jorb,ispin,ik)              
+  !             !write(i,'(10F18.10)') H_hf_symm(iorb,jorb,ispin,ik),H_hf(iso,jso,ik)
+  !             write(i,'(10F18.10)') H_hf(iso,jso,ik)-H_hf_symm(iorb,jorb,ispin,ik),H_hf(iso,jso,ik),H_hf_symm(iorb,jorb,ispin,ik),Hk_toy(iso,jso,ik)-Hk_toy_symm(iorb,jorb,ispin,ik)              
   !          end do
   !       end do
   !    end do
   ! end do
+ 
   ! stop
   
+  !if(inv_symm) call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg,inv_symm=inv_symm)
   
   !+- test symm  
   !+- init the phonons 
@@ -743,7 +744,7 @@ program officina  !
      phn_dyn(2)  =  phn_dyn(2) - 4d0*gphn(2)/phn_energy*dreal(x_iter_dyn(1,5,ispin)+x_iter_dyn(3,5,ispin))/dsqrt(2d0)
   end do
   
-  phn_dyn(1:2) = XPHN_iter(1:2)/sqrt(2d0) !+- init the phonons  with XPHN used for the H_HF.
+  !phn_dyn(1:2) = XPHN_iter(1:2)/sqrt(2d0) !+- init the phonons  with XPHN used for the H_HF.
   !init <Pphn>
   phn_dyn(3:4) = 0d0
   !init <Nphn> 
@@ -756,6 +757,21 @@ program officina  !
   !
   allocate(delta_hf_symm(Norb,Norb,Nspin,Lk)); delta_hf_symm=0d0
   do ik=1,Lk
+     
+     i=0
+     ispin=1
+     do iorb=1,Norb
+        do jorb=1,Norb
+           i=i+1
+           if(ik.eq.1) write(*,*) 'info',iorb,jorb,i
+           iso=(ispin-1)*Norb+iorb
+           jso=(ispin-1)*Norb+jorb     
+           write(700+i,'(10F18.10)') kpt_latt(ik,1),delta_hf(iso,jso,ik)
+           write(800+i,'(10F18.10)') kpt_latt(ik,1),H_hf(iso,jso,ik)
+        end do
+        write(900+iorb,'(10F18.10)') kpt_latt(ik,1),x_iter_symm(ik,iorb,ispin)
+     end do
+     
      do ispin=1,Nspin
         do iorb=1,Norb
            do jorb=iorb,Norb
@@ -764,9 +780,10 @@ program officina  !
               delta_hf_symm(iorb,jorb,ispin,ik) = delta_hf(iso,jso,ik)
               delta_hf_symm(jorb,iorb,ispin,ik) = conjg(delta_hf_symm(iorb,jorb,ispin,ik))
            end do
-        end do
+        end do        
      end do
   end do
+  stop
   call delta2psi(delta_hf_symm,phn_dyn_symm,psit)
   !write(*,*) phn_dyn
   !stop
@@ -827,7 +844,6 @@ program officina  !
         !
         ! H_Hf_dyn=HF_hamiltonian(x_iter,xphn_=phn_dyn*sqrt(2d0))
         ! H_Hf_dyn=H_Hf_dyn+Hk_toy
-        !if(inv_symm) call enforce_inv_hf(x_iter,op_symm=op_symm,spin_symm=spin_deg)
         eout=0d0     !
         do ik=1,Lk
            do ispin=1,Nspin
@@ -1506,13 +1522,16 @@ contains
     do ik=1,Lk
        do ispin=1,Nspin
           !+- here I reconstruct HF amplitudes
-          iorb=1;jorb=1;isys=idelta2ivec(iorb,jorb,ispin,ik)          
+          iorb=1;jorb=1;
+          isys=idelta2ivec(iorb,jorb,ispin,ik)          
           x_iter_t(ik,1,ispin) = yin(isys)
           !
-          iorb=3;jorb=3;isys=idelta2ivec(iorb,jorb,ispin,ik)          
+          iorb=3;jorb=3;
+          isys=idelta2ivec(iorb,jorb,ispin,ik)          
           x_iter_t(ik,2,ispin) = yin(isys)
           !
-          iorb=1;jorb=3;isys=idelta2ivec(iorb,jorb,ispin,ik)          
+          iorb=1;jorb=3;
+          isys=idelta2ivec(iorb,jorb,ispin,ik)          
           x_iter_t(ik,3,ispin) = yin(isys)
           !
           x_iter_loc = x_iter_loc + (1d0 + exp(-xi*dot_product(kpt_latt(ik,:),Rlat)))*wtk(ik)*yin(isys)
@@ -1524,9 +1543,10 @@ contains
     op_el_phn=2d0*dreal(x_iter_loc)
     ! !
     allocate(H_hf_t(Norb,Norb,Nspin,Lk));  H_hf_t=0d0
-    H_Hf_t = HF_hamiltonian_symm(x_iter_t,xphn_=phn_t(1)*sqrt(2d0))
-    H_Hf_t = H_Hf_t+Hk_toy_symm
+    ! H_Hf_t = HF_hamiltonian_symm(x_iter_t,xphn_=phn_t(1)*sqrt(2d0))
+    ! H_Hf_t = H_Hf_t+Hk_toy_symm
     !
+    H_Hf_t=H_hf_symm
     ! do ik=1,Lk
     !    i=599
     !    do ispin=1,Nspin
@@ -1556,58 +1576,27 @@ contains
                    if(iorb.le.jorb_) then
                       jsys=idelta2ivec(iorb,jorb_,ispin,ik)
                       yout(isys) = yout(isys) + H_hf_t(jorb,jorb_,ispin,ik)*yin(jsys)             !
-                      !write(700,*) iorb,jorb_,jsys
                    else
                       jsys=idelta2ivec(jorb_,iorb,ispin,ik)
                       yout(isys) = yout(isys) + H_hf_t(jorb,jorb_,ispin,ik)*conjg(yin(jsys))             !
-                      !write(701,*) iorb,jorb_,jsys
                    end if
                    !
                    if(jorb_.le.jorb) then
                       jsys=idelta2ivec(jorb_,jorb,ispin,ik)          
                       yout(isys) = yout(isys) - H_hf_t(jorb_,iorb,ispin,ik)*yin(jsys)             !
-                      !write(800,*) jorb_,jorb,jsys                                            
                    else
                       jsys=idelta2ivec(jorb,jorb_,ispin,ik)          
                       yout(isys) = yout(isys) - H_hf_t(jorb_,iorb,ispin,ik)*conjg(yin(jsys))             !
-                      !write(801,*) jorb_,jorb,jsys                                            
                    end if
                 end do
-             end do             
+             end do
           end do
        end do
-       !stop
     end do
-
-    !   do ik=1,Lk
-    !      do ispin=1,Nspin
-    !         do iorb=1,Norb
-    !            do jorb=iorb,Norb
-    !               isys=idelta2ivec(iorb,jorb,ispin,ik)
-    !               !
-    !               yout(isys) = 0d0
-    !               !+-scrivi eoms
-    !               ! do jso_=1,Nso
-    !               !    !
-    !               !    jsys=idelta2ivec(iso,jso_,ik)
-    !               !    yout(isys) = yout(isys) + H_hf_t(jso,jso_,ik)*yin(jsys)
-    !               !    !
-    !               !    jsys=idelta2ivec(jso_,jso,ik)          
-    !               !    yout(isys) = yout(isys) - H_hf_t(jso_,iso,ik)*yin(jsys)
-    !               !    !
-    !               ! end do
-    !               !
-    !               !+- 
-    !               ! jsys=idelta2ivec(jso,iso,ik)
-    !               ! yout(jsys) = -conjg(yout(isys))             
-    !            end do
-    !         end do
-  !      end do
-  !   end do
-
     !+- the phonons
     !
     lambda_eph=sqrt(2d0)*gphn(1)*op_el_phn
+    !lambda_eph=0d0
     !+- the linear response perturbation
     lambda_eph=lambda_eph-1d0*lin_response_probe(time)
     ! !
