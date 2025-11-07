@@ -35,7 +35,7 @@ program officina  !
   integer,dimension(:),allocatable :: stride1D,stride1D_
   !
   integer :: nr2d,nr1d
-  integer :: iso,jso,ispin,jspin,iorb,jorb,ik,isys,jk,iik
+  integer :: iso,jso,ispin,jspin,iorb,jorb,ik,isys,jk,iik,iorb_,jorb_,iso_,jso_
   integer :: i,j,k,idim
   integer :: Nhf,Nhf_,ihf,unit_err,unit_obs,unit_in,uio,unit_io,Nobs,jhf
   integer :: Nhf_opt,it_print
@@ -755,23 +755,24 @@ program officina  !
   phn_dyn_symm(2) = phn_dyn(3)
   phn_dyn_symm(3) = phn_dyn(5)
   !
+  !  
   allocate(delta_hf_symm(Norb,Norb,Nspin,Lk)); delta_hf_symm=0d0
   do ik=1,Lk
-     
-     i=0
-     ispin=1
-     do iorb=1,Norb
-        do jorb=1,Norb
-           i=i+1
-           if(ik.eq.1) write(*,*) 'info',iorb,jorb,i
-           iso=(ispin-1)*Norb+iorb
-           jso=(ispin-1)*Norb+jorb     
-           write(700+i,'(10F18.10)') kpt_latt(ik,1),delta_hf(iso,jso,ik)
-           write(800+i,'(10F18.10)') kpt_latt(ik,1),H_hf(iso,jso,ik)
-        end do
-        write(900+iorb,'(10F18.10)') kpt_latt(ik,1),x_iter_symm(ik,iorb,ispin)
-     end do
-     
+     !
+     ! i=0
+     ! ispin=1
+     ! do iorb=1,Norb
+     !    do jorb=1,Norb
+     !       i=i+1
+     !       if(ik.eq.1) write(*,*) 'info',iorb,jorb,i
+     !       iso=(ispin-1)*Norb+iorb
+     !       jso=(ispin-1)*Norb+jorb     
+     !       ! write(700+i,'(10F18.10)') kpt_latt(ik,1),delta_hf(iso,jso,ik)
+     !       ! write(800+i,'(10F18.10)') kpt_latt(ik,1),H_hf(iso,jso,ik)
+     !    end do
+     !    ! write(900+iorb,'(10F18.10)') kpt_latt(ik,1),x_iter_symm(ik,iorb,ispin)
+     ! end do
+     !
      do ispin=1,Nspin
         do iorb=1,Norb
            do jorb=iorb,Norb
@@ -780,13 +781,10 @@ program officina  !
               delta_hf_symm(iorb,jorb,ispin,ik) = delta_hf(iso,jso,ik)
               delta_hf_symm(jorb,iorb,ispin,ik) = conjg(delta_hf_symm(iorb,jorb,ispin,ik))
            end do
-        end do        
+        end do
      end do
   end do
-  stop
   call delta2psi(delta_hf_symm,phn_dyn_symm,psit)
-  !write(*,*) phn_dyn
-  !stop
   !+- store the initial dynamical vector
   psit_init = psit
   
@@ -797,7 +795,6 @@ program officina  !
   do it=1,Nt-1
      !PRINTING
      if(mod(it-1,it_print).eq.0) then
-
         !+- compute the energy (eventually this can even go inside the printing lines)
         call psi2delta(psit,delta_hf_symm,phn_dyn_symm)
         x_iter_dyn=0d0
@@ -1543,10 +1540,10 @@ contains
     op_el_phn=2d0*dreal(x_iter_loc)
     ! !
     allocate(H_hf_t(Norb,Norb,Nspin,Lk));  H_hf_t=0d0
-    ! H_Hf_t = HF_hamiltonian_symm(x_iter_t,xphn_=phn_t(1)*sqrt(2d0))
-    ! H_Hf_t = H_Hf_t+Hk_toy_symm
+    H_Hf_t = HF_hamiltonian_symm(x_iter_t,xphn_=phn_t(1)*sqrt(2d0))
+    H_Hf_t = H_Hf_t+Hk_toy_symm
     !
-    H_Hf_t=H_hf_symm
+    !H_Hf_t=H_hf_symm
     ! do ik=1,Lk
     !    i=599
     !    do ispin=1,Nspin
@@ -1793,17 +1790,17 @@ contains
           Hhf_symm(3,3,ispin,ik) = hf_self_fock(ik,2,ispin)
           !
           Hhf_symm(3,1,ispin,ik) = hf_self_fock(ik,3,ispin)
-          !Hhf_symm(3,2,ispin,ik) = -1d0*hf_self_fock(Lk+1-ik,3,ispin)*exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))
+          Hhf_symm(3,2,ispin,ik) = -1d0*hf_self_fock(Lk+1-ik,3,ispin)*exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))
           !
           Hhf_symm(1,3,ispin,ik) = conjg(Hhf_symm(3,1,ispin,ik))
-          !Hhf_symm(2,3,ispin,ik) = conjg(Hhf_symm(3,2,ispin,ik))
+          Hhf_symm(2,3,ispin,ik) = conjg(Hhf_symm(3,2,ispin,ik))
           !
           !+- e-ph coupling -+!
           Hhf_symm(1,3,ispin,ik) = Hhf_symm(1,3,ispin,ik) + gphn(1)*xphn*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
-          !Hhf_symm(2,3,ispin,ik) = Hhf_symm(2,3,ispin,ik) - gphn(1)*xphn*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
+          Hhf_symm(2,3,ispin,ik) = Hhf_symm(2,3,ispin,ik) - gphn(1)*xphn*(1.d0+exp(xi*dot_product(Rlat,kpt_latt(ik,:))))
           !
           Hhf_symm(3,1,ispin,ik) = conjg(Hhf_symm(1,3,ispin,ik))
-          !Hhf_symm(3,2,ispin,ik) = conjg(Hhf_symm(2,3,ispin,ik))
+          Hhf_symm(3,2,ispin,ik) = conjg(Hhf_symm(2,3,ispin,ik))
           !
           !
           !
@@ -1820,12 +1817,12 @@ contains
           ! Hhf_symm(3,2,ispin,ik) = conjg(Hhf_symm(2,3,ispin,ik))
        end do
     end do
-    do ik=1,Lk
-       do ispin=1,Nspin
-          Hhf_symm(3,2,ispin,ik) = -1d0*Hhf_symm(3,1,ispin,Lk+1-ik)*exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))
-          Hhf_symm(2,3,ispin,ik) = conjg(Hhf_symm(3,2,ispin,ik))
-       end do
-    end do
+    ! do ik=1,Lk
+    !    do ispin=1,Nspin
+    !       Hhf_symm(3,2,ispin,ik) = -1d0*Hhf_symm(3,1,ispin,Lk+1-ik)*exp(-xi*dot_product(Rlat,kpt_latt(ik,:)))
+    !       Hhf_symm(2,3,ispin,ik) = conjg(Hhf_symm(3,2,ispin,ik))
+    !    end do
+    ! end do
     
   end function HF_hamiltonian_symm
 
